@@ -372,8 +372,10 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 	roff = (int ***)alloc_2d_array(img->height, img->width, sizeof(int *));
 	ptr = (int *)alloc_mem((1 - min_dy) * (1 + max_dx - min_dx) * (order + inter_prd_order) * sizeof(int));
 
+	//Cycle that runs for all the pixels
 	for (y = 0; y < img->height; y++) {
 		for (x = 0; x < img->width; x++) {
+			//Conditions to check which references are available for each pixel
 			if (y == 0) {
 				if (x == 0) {
 					roff[y][x] = ptr;
@@ -381,7 +383,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					dy = img->height;
 
 					for (k = 0; k < order; k++) {
-						*ptr++ = dy * img->width + dx;
+						*ptr++ = dy * img->width + dx; //Points to a line filled with 128 (if max_val = 256)
 					}
 					if(inter_prd_order != 0){
 						*ptr++ = -img->width * (img->height + 1);
