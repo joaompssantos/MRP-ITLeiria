@@ -360,6 +360,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 	min_dx = max_dx = min_dy = 0;
 	order = (prd_order > NUM_UPELS)? prd_order : NUM_UPELS;
 
+	//Values to check for special cases
 	for (k = 0; k < order; k++) {
 		dy = dyx[k].y;
 		dx = dyx[k].x;
