@@ -372,6 +372,16 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 		if (dx > max_dx) max_dx = dx;
 	}
 
+	for (k = 0; k < inter_prd_order; k++) {
+		dy = idyx[k].y;
+		dx = idyx[k].x;
+
+		if (dy < min_dy) min_dy = dy;
+		if (dx < min_dx) min_dx = dx;
+		if (dy > max_dy) max_dy = dy;
+		if (dx > max_dx) max_dx = dx;
+	}
+
 	int aux_prd_order = order + inter_prd_order + 1;
 
 	roff = (int ***)alloc_2d_array(img->height, img->width, sizeof(int *));
