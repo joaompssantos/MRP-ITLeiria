@@ -41,6 +41,7 @@
 #include <omp.h>
 
 extern POINT dyx[];
+extern POINT idyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
 
@@ -106,7 +107,7 @@ int pixel_wise_predictor(ENCODER *enc){
 	}
 
 	//write_yuv(img2, "pixel_wise_predictor.yuv");
-	
+
 	for(f = 1; f < enc->frames; f++){
 		for(i = 0; i < enc->height; i++){
 			for(j = 0; j < enc->width; j++){
@@ -114,7 +115,7 @@ int pixel_wise_predictor(ENCODER *enc){
 			}
 		}
 	}
-	
+
 	free(img);
 	return resultado;
 }
@@ -139,46 +140,46 @@ int pixel_wise_search_predictor(ENCODER *enc, int window){
 				}
 				else{
 					dif = 512;
-// 					pos_y = i;
-// 					pos_x = j;
-// 				  
-// 					dif = enc->org[f][i][j - 0] - enc->org[f - 1][i][j - 0];
-// 				  
-// 					if(dif != 0){
-						for(k = i - window; k <= i + window; k++){
-							for(z = j - window; z <= j + window; z++){
-								dif_aux = enc->org[f][i][j - 0] - enc->org[f - 1][k][z - 0];
-								
-								if(abs(dif_aux) < abs(dif)){
-									//if(dif_aux != 0){printf("teste: %d %d\n", dif_aux, dif);getchar();}
-									pos_y = k;
-									pos_x = z;
-									
-									dif = dif_aux;
-								}
+					// 					pos_y = i;
+					// 					pos_x = j;
+					//
+					// 					dif = enc->org[f][i][j - 0] - enc->org[f - 1][i][j - 0];
+					//
+					// 					if(dif != 0){
+					for(k = i - window; k <= i + window; k++){
+						for(z = j - window; z <= j + window; z++){
+							dif_aux = enc->org[f][i][j - 0] - enc->org[f - 1][k][z - 0];
+
+							if(abs(dif_aux) < abs(dif)){
+								//if(dif_aux != 0){printf("teste: %d %d\n", dif_aux, dif);getchar();}
+								pos_y = k;
+								pos_x = z;
+
+								dif = dif_aux;
 							}
 						}
-// 					}
-					
-//  					if(dif != 0) {
-// 						printf("Dif: %d, org: %d, novo: %d, posI: %d %d, posF: %d %d\n", dif, enc->org[f][i][j - 0], enc->org[f - 1][pos_y][pos_x], i, j, pos_y, pos_x);
-// 
-// 						printf("Valor a prever = %d\nMatriz inicial\n\n", enc->org[f][i][j]);
-// 						for(k = i - window; k <= i + window; k++){
-// 							for(z = j - window; z <= j + window; z++){
-// 								printf("%3d ", enc->org[f][k][z]);
-// 							}
-// 							printf("\n");
-// 						}
-// 						printf("Matriz Outra:\n\n");
-// 						for(k = i - window; k <= i + window; k++){
-// 							for(z = j - window; z <= j + window; z++){
-// 								printf("%3d ", enc->org[f - 1][k][z]);
-// 							}
-// 							printf("\n");
-// 						}
-// 						getchar();
-// 					}
+					}
+					// 					}
+
+					//  					if(dif != 0) {
+					// 						printf("Dif: %d, org: %d, novo: %d, posI: %d %d, posF: %d %d\n", dif, enc->org[f][i][j - 0], enc->org[f - 1][pos_y][pos_x], i, j, pos_y, pos_x);
+					//
+					// 						printf("Valor a prever = %d\nMatriz inicial\n\n", enc->org[f][i][j]);
+					// 						for(k = i - window; k <= i + window; k++){
+					// 							for(z = j - window; z <= j + window; z++){
+					// 								printf("%3d ", enc->org[f][k][z]);
+					// 							}
+					// 							printf("\n");
+					// 						}
+					// 						printf("Matriz Outra:\n\n");
+					// 						for(k = i - window; k <= i + window; k++){
+					// 							for(z = j - window; z <= j + window; z++){
+					// 								printf("%3d ", enc->org[f - 1][k][z]);
+					// 							}
+					// 							printf("\n");
+					// 						}
+					// 						getchar();
+					// 					}
 					//printf("diferenca = %d\n", dif);
 					aux = enc->org[f][i][j] - enc->org[f - 1][pos_y][pos_x];
 					if(aux > 128){
@@ -189,7 +190,7 @@ int pixel_wise_search_predictor(ENCODER *enc, int window){
 						aux = -127;
 						resultado = 1;
 					}
-					
+
 					img->val[f][i][j] =  aux + 127;
 					img2->val[f][i][j] = enc->org[f - 1][pos_y][pos_x];
 				}
@@ -198,7 +199,7 @@ int pixel_wise_search_predictor(ENCODER *enc, int window){
 	}
 
 	write_yuv(img2, "pixel_wise_search_predictor.yuv");
-	
+
 	for(f = 1; f < enc->frames; f++){
 		for(i = 0; i < enc->height; i++){
 			for(j = 0; j < enc->width; j++){
@@ -206,7 +207,7 @@ int pixel_wise_search_predictor(ENCODER *enc, int window){
 			}
 		}
 	}
-	
+
 	free(img);
 	return resultado;
 }
@@ -340,7 +341,7 @@ IMAGE *read_yuv(char *filename, int height, int width, int frames){
 	return (img);
 }
 
-/*-----------------------_--- init_ref_offset -----------------------*
+/*--------------------------- init_ref_offset -----------------------*
  |  Function init_ref_offset
  |
  |  Purpose:  Calculates the offset of a reference to a given pixel
@@ -355,24 +356,30 @@ IMAGE *read_yuv(char *filename, int height, int width, int frames){
 int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 	int ***roff, *ptr;
 	int x, y, dx, dy, k;
-	int order, min_dx, max_dx, min_dy;
+	int order, min_dx, max_dx, min_dy, max_dy;
 
-	min_dx = max_dx = min_dy = 0;
+	min_dx = max_dx = min_dy = max_dy = 0;
 	order = (prd_order > NUM_UPELS)? prd_order : NUM_UPELS;
 
 	//Values to check for special cases
 	for (k = 0; k < order; k++) {
 		dy = dyx[k].y;
 		dx = dyx[k].x;
+
 		if (dy < min_dy) min_dy = dy;
 		if (dx < min_dx) min_dx = dx;
+		if (dy > max_dy) max_dy = dy;
 		if (dx > max_dx) max_dx = dx;
 	}
 
-	roff = (int ***)alloc_2d_array(img->height, img->width, sizeof(int *));
-	ptr = (int *)alloc_mem((1 - min_dy) * (1 + max_dx - min_dx) * (order + inter_prd_order) * sizeof(int));
+	int aux_prd_order = order + inter_prd_order + 1;
 
-	//Cycle that runs for all the pixels
+	roff = (int ***)alloc_2d_array(img->height, img->width, sizeof(int *));
+	ptr = (int *)alloc_mem((1 - min_dy + max_dy) * (1 + max_dx - min_dx) * aux_prd_order * sizeof(int));
+
+	int base = -img->width * (img->height + 1);
+
+	//INTRA: Cycle that runs for all the pixels
 	for (y = 0; y < img->height; y++) {
 		for (x = 0; x < img->width; x++) {
 			//Conditions to check which references are available for each pixel
@@ -386,7 +393,19 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 						*ptr++ = dy * img->width + dx; //Points to a line filled with 128 (if max_val = 256)
 					}
 					if(inter_prd_order != 0){
-						*ptr++ = -img->width * (img->height + 1);
+						*ptr++ = base;
+
+						for (k = 1; k < inter_prd_order; k++) {
+							dy = idyx[k].y;
+							dx = idyx[k].x;
+
+							if(y + dy < 0 || x + dx < 0){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
+						}
 					}
 				}
 				else if (x + min_dx <= 0 || x + max_dx >= img->width) {
@@ -402,7 +421,19 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 						*ptr++ = dy * img->width + dx;
 					}
 					if(inter_prd_order != 0){
-						*ptr++ = -img->width * (img->height + 1);
+						*ptr++ = base;
+
+						for (k = 1; k < inter_prd_order; k++) {
+							dy = idyx[k].y;
+							dx = idyx[k].x;
+
+							if(y + dy < 0 || x + dx < 0 || x + dx >= img->width){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
+						}
 					}
 				}
 				else {
@@ -426,7 +457,19 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 						*ptr++ = dy * img->width + dx;
 					}
 					if(inter_prd_order != 0){
-						*ptr++ = -img->width * (img->height + 1);
+						*ptr++ = base;
+
+						for (k = 1; k < inter_prd_order; k++) {
+							dy = idyx[k].y;
+							dx = idyx[k].x;
+
+							if(y + dy < 0 || y + dy >= img->height || x + dx < 0 || x + dx >= img->width){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
+						}
 					}
 				}
 				else if (x + min_dx <= 0 || x + max_dx >= img->width) {
@@ -446,11 +489,82 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 						*ptr++ = dy * img->width + dx;
 					}
 					if(inter_prd_order != 0){
-						*ptr++ = -img->width * (img->height + 1);
+						*ptr++ = base;
+
+						for (k = 1; k < inter_prd_order; k++) {
+							dy = idyx[k].y;
+							dx = idyx[k].x;
+
+							if(y + dy < 0 || y + dy >= img->height || x + dx < 0 || x + dx >= img->width){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
+						}
 					}
 				}
 				else {
 					roff[y][x] = roff[y][x - 1];
+				}
+			}
+			else if (y + max_dy >= img->height) {
+				if (x == 0) {
+					roff[y][x] = ptr;
+
+					for (k = 0; k < order; k++) {
+						dy = dyx[k].y;
+						dx = dyx[k].x;
+
+						if (x + dx < 0) dx = -x;
+
+						*ptr++ = dy * img->width + dx;
+					}
+					if(inter_prd_order != 0){
+						*ptr++ = base;
+
+						for (k = 1; k < inter_prd_order; k++) {
+							dy = idyx[k].y;
+							dx = idyx[k].x;
+
+							if(y + dy >= img->height || x + dx < 0 || x + dx >= img->width){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
+						}
+					}
+				}
+				else if (x + min_dx <= 0 || x + max_dx >= img->width) {
+					roff[y][x] = ptr;
+
+					for (k = 0; k < order; k++) {
+						dy = dyx[k].y;
+						dx = dyx[k].x;
+
+						if (x + dx < 0) dx = -x;
+						else if (x + dx >= img->width) {
+							dx = img->width - x - 1;
+						}
+
+						*ptr++ = dy * img->width + dx;
+					}
+					if(inter_prd_order != 0){
+						*ptr++ = base;
+
+						for (k = 1; k < inter_prd_order; k++) {
+							dy = idyx[k].y;
+							dx = idyx[k].x;
+
+							if(y + dy >= img->height || x + dx < 0 || x + dx >= img->width){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
+						}
+					}
 				}
 			}
 			else {
@@ -2445,7 +2559,7 @@ int encode_image(FILE *fp, ENCODER *enc, int frame){
 				bits += putbits(fp, vlc->len[e], vlc->code[e]);
 			}
 		}
-		
+
 		if(frame == enc->frames - 1){
 			putbits(fp, 7, 0);	/* flush remaining bits */
 		}
@@ -2694,9 +2808,9 @@ int main(int argc, char **argv){
 				break;
 			case 'J':
 				inter_prd_order = atoi(argv[++i]);
-//				if(prd_order <= 0 || prd_order > 72){
-//					prd_order = PRD_ORDER;
-//				}
+				//				if(prd_order <= 0 || prd_order > 72){
+				//					prd_order = PRD_ORDER;
+				//				}
 				break;
 			case 'P':
 				coef_precision = atoi(argv[++i]);
@@ -2820,7 +2934,7 @@ int main(int argc, char **argv){
 
 	// Creates new ENCODER structure
 	enc = init_encoder(img, num_class, num_group, prd_order, inter_prd_order, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy);
-	
+
 	//Prediction type selection
 	if(predicao == 1){
 		resultado = pixel_wise_predictor(enc);
