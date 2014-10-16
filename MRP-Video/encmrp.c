@@ -41,6 +41,7 @@
 #include <omp.h>
 
 extern POINT dyx[];
+extern POINT idyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
 
@@ -356,8 +357,11 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 	int ***roff, *ptr;
 	int x, y, dx, dy, k;
 	int order, min_dx, max_dx, min_dy;
+	int imin_dx, imax_dx, imin_dy, imax_dy;
+	int min_abs_dx, max_abs_dx, min_abs_dy, max_abs_dy;
 
 	min_dx = max_dx = min_dy = 0;
+	imin_dx = imax_dx = imin_dy = imax_dy = 0;
 	order = (prd_order > NUM_UPELS)? prd_order : NUM_UPELS;
 
 	//Values to check for special cases
@@ -368,13 +372,45 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 		if (dx < min_dx) min_dx = dx;
 		if (dx > max_dx) max_dx = dx;
 	}
+	for (k = 0; k < inter_prd_order; k++) {
+		dy = idyx[k].y;
+		dx = idyx[k].x;
+
+		if (dy < imin_dy) imin_dy = dy;
+		if (dy > imax_dy) imax_dy = dy;
+		if (dx < imin_dx) imin_dx = dx;
+		if (dx > imax_dx) imax_dx = dx;
+	}
+
+	max_abs_dy = imax_dy;
+	if(min_dy < imin_dy){
+		min_abs_dy = min_dy;
+	}
+	else{
+		min_abs_dy = imin_dy;
+	}
+
+
+	if(max_dx < imax_dx){
+		max_abs_dx = imax_dx;
+	}
+	else{
+		max_abs_dx = max_dx;
+	}
+	if(min_dx < imin_dx){
+		min_abs_dx = min_dx;
+	}
+	else{
+		min_abs_dx = imin_dx;
+	}
 
 	roff = (int ***)alloc_2d_array(img->height, img->width, sizeof(int *));
-	ptr = (int *)alloc_mem((1 - min_dy) * (1 + max_dx - min_dx) * (order + inter_prd_order) * sizeof(int));
+	//ptr = (int *)alloc_mem((1 - min_abs_dy + max_abs_dy) * (1 + max_abs_dx - min_abs_dx) * (order + inter_prd_order) * sizeof(int));
 
 	//Cycle that runs for all the pixels
 	for (y = 0; y < img->height; y++) {
 		for (x = 0; x < img->width; x++) {
+			ptr = (int *) alloc_mem((order + inter_prd_order) * sizeof(int));
 			//Conditions to check which references are available for each pixel
 			if (y == 0) {
 				if (x == 0) {
@@ -385,11 +421,8 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					for (k = 0; k < order; k++) {
 						*ptr++ = dy * img->width + dx; //Points to a line filled with 128 (if max_val = 256)
 					}
-					if(inter_prd_order != 0){
-						*ptr++ = -img->width * (img->height + 1);
-					}
 				}
-				else if (x + min_dx <= 0 || x + max_dx >= img->width) {
+				else if (x + min_abs_dx <= 0 || x + max_abs_dx >= img->width) {
 					roff[y][x] = ptr;
 					dy = 0;
 
@@ -401,15 +434,12 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 
 						*ptr++ = dy * img->width + dx;
 					}
-					if(inter_prd_order != 0){
-						*ptr++ = -img->width * (img->height + 1);
-					}
 				}
 				else {
 					roff[y][x] = roff[y][x - 1];
 				}
 			}
-			else if (y + min_dy <= 0) {
+			else if (y + min_abs_dy <= 0) {
 				if (x == 0) {
 					roff[y][x] = ptr;
 
@@ -425,11 +455,8 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 
 						*ptr++ = dy * img->width + dx;
 					}
-					if(inter_prd_order != 0){
-						*ptr++ = -img->width * (img->height + 1);
-					}
 				}
-				else if (x + min_dx <= 0 || x + max_dx >= img->width) {
+				else if (x + min_abs_dx <= 0 || x + max_abs_dx >= img->width) {
 					roff[y][x] = ptr;
 
 					for (k = 0; k < order; k++) {
@@ -445,16 +472,114 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 
 						*ptr++ = dy * img->width + dx;
 					}
-					if(inter_prd_order != 0){
-						*ptr++ = -img->width * (img->height + 1);
-					}
 				}
 				else {
 					roff[y][x] = roff[y][x - 1];
 				}
 			}
+			else if (y + max_abs_dy >= img->height) {
+				roff[y][x] = ptr;
+
+				for (k = 0; k < order; k++) {
+					*ptr++ = roff[y - 1][x][k];
+				}
+			}
 			else {
 				roff[y][x] = roff[y - 1][x];
+			}
+
+			//Inter reference offset
+			if(inter_prd_order != 0){
+				int base = -img->width * (img->height + 1);
+
+				if (y == 0) {
+					if (x == 0) {
+						*ptr++ = base;
+
+						for (k = 0; k < inter_prd_order - 1; k++) {
+							dy = idyx[k].y;
+							dx = idyx[k].x;
+
+							if(y + dy < 0 || x + dx < 0){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
+						}
+					}
+					else if (x + min_abs_dx <= 0 || x + max_abs_dx >= img->width) {
+						*ptr++ = base;
+
+						for (k = 0; k < inter_prd_order - 1; k++) {
+							dy = idyx[k].y;
+							dx = idyx[k].x;
+
+							if(y + dy < 0 || x + dx < 0 || x + dx >= img->width){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
+						}
+					}
+					else {
+						roff[y][x] = roff[y][x - 1];
+					}
+				}
+				else if (y + min_abs_dy <= 0) {
+					if (x == 0) {
+						*ptr++ = base;
+
+						for (k = 0; k < inter_prd_order - 1; k++) {
+							dy = idyx[k].y;
+							dx = idyx[k].x;
+
+							if(y + dy < 0 || x + dx < 0){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
+						}
+					}
+					else if (x + min_abs_dx <= 0 || x + max_abs_dx >= img->width) {
+						*ptr++ = base;
+
+						for (k = 0; k < inter_prd_order - 1; k++) {
+							dy = idyx[k].y;
+							dx = idyx[k].x;
+
+							if(x + dx < 0 || x + dx >= img->width){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
+						}
+					}
+					else {
+						roff[y][x] = roff[y][x - 1];
+					}
+				}
+				else if (y + max_abs_dy >= img->height) {
+					*ptr++ = base;
+
+					for (k = 0; k < inter_prd_order - 1; k++) {
+						dy = idyx[k].y;
+						dx = idyx[k].x;
+
+						if(y + dy >= img->height || x + dx < 0 || x + dx >= img->width){
+							*ptr++ = base;
+						}
+						else{
+							*ptr++ = dy * img->width + dx + base;
+						}
+					}
+				}
+				else {
+					roff[y][x] = roff[y - 1][x];
+				}
 			}
 		}
 	}
@@ -536,10 +661,14 @@ ENCODER *init_encoder(IMAGE *img, int num_class, int num_group, int prd_order, i
 	enc->upara = (int ***)alloc_3d_array(enc->height, enc->width, enc->frames, sizeof(int));
 	enc->prd = (int ***)alloc_3d_array(enc->height, enc->width, enc->frames, sizeof(int));
 
-	enc->roff = (int ****) alloc_mem(enc->frames * sizeof(int ***));
-	enc->roff[0] = init_ref_offset(img, enc->prd_order, 0);
-	for(f = 1; f < enc->frames; f++){
-		enc->roff[f] = init_ref_offset(img, enc->prd_order, enc->inter_prd_order);
+	if(enc->frames > 0){
+		enc->roff = (int ****) alloc_mem(2 * sizeof(int ***));
+		enc->roff[0] = init_ref_offset(img, enc->prd_order, 0);
+		enc->roff[1] = init_ref_offset(img, enc->prd_order, enc->inter_prd_order);
+	}
+	else{
+		enc->roff = (int ****) alloc_mem(1 * sizeof(int ***));
+		enc->roff[0] = init_ref_offset(img, enc->prd_order, 0);
 	}
 
 	// Memory allocation for the original image
@@ -925,13 +1054,18 @@ void predict_region(ENCODER *enc, int frame, int tly, int tlx, int bry, int brx)
 	char *class_p;
 
 	int prd_order = enc->prd_order;
-	if(frame > 0) prd_order += enc->inter_prd_order;
+	int acesso = 0;
+
+	if(frame > 0){
+		prd_order += enc->inter_prd_order;
+		acesso = 1;
+	}
 
 	//Runs all the pixels in a frame (due to the used boundaries)
 	for (y = tly; y < bry; y++){
 		class_p = &enc->class[frame][y][tlx];
 		org_p = &enc->org[frame][y][tlx];
-		roff_pp = &enc->roff[frame][y][tlx];
+		roff_pp = &enc->roff[acesso][y][tlx];
 		err_p = &enc->err[frame][y][tlx];
 		prd_p = &enc->prd[frame][y][tlx];
 
@@ -960,8 +1094,14 @@ void predict_region(ENCODER *enc, int frame, int tly, int tlx, int bry, int brx)
 
 int calc_uenc(ENCODER *enc, int frame, int y, int x){
 	int u, k, *err_p, *roff_p, *wt_p;
+
+	int acesso = 0;
+	if(frame > 0){
+		acesso = 1;
+	}
+
 	err_p = &enc->err[frame][y][x];
-	roff_p = enc->roff[frame][y][x];
+	roff_p = enc->roff[acesso][y][x];
 	wt_p = enc->ctx_weight[frame];
 
 	u = 0;
@@ -1037,7 +1177,12 @@ cost_t design_predictor(ENCODER *enc, int frame, int f_mmse){
 	int x, y, i, j, k, cl, gr, pivpos, *index, *roff_p, *org_p;
 
 	int prd_order = enc->prd_order;
-	if(frame > 0) prd_order += enc->inter_prd_order;
+	int acesso = 0;
+
+	if(frame > 0){
+		prd_order += enc->inter_prd_order;
+		acesso = 1;
+	}
 
 	mat = (double **)alloc_2d_array(prd_order, prd_order + 1, sizeof(double));
 	index = (int *)alloc_mem(sizeof(int) * prd_order);
@@ -1071,7 +1216,7 @@ cost_t design_predictor(ENCODER *enc, int frame, int f_mmse){
 				}
 
 				gr = enc->group[frame][y][x];
-				roff_p = enc->roff[frame][y][x]; //This variable has the position of the reference pixels
+				roff_p = enc->roff[acesso][y][x]; //This variable has the position of the reference pixels
 				org_p = &enc->org[frame][y][x];
 
 				//Fills the matrix mat with the reference pixels values
@@ -1374,7 +1519,12 @@ void set_prdbuf(ENCODER *enc, int frame, int **prdbuf, int **errbuf, int tly, in
 	int buf_ptr, org, *org_p, *roff_p;
 
 	int prd_order = enc->prd_order;
-	if(frame > 0) prd_order += enc->inter_prd_order;
+	int acesso = 0;
+
+	if(frame > 0){
+		prd_order += enc->inter_prd_order;
+		acesso = 1;
+	}
 
 	brx = (tlx + bufsize < enc->width) ? (tlx + bufsize) : enc->width;
 	bry = (tly + bufsize < enc->height) ? (tly + bufsize) : enc->height;
@@ -1396,7 +1546,7 @@ void set_prdbuf(ENCODER *enc, int frame, int **prdbuf, int **errbuf, int tly, in
 				}
 				else {
 					coef_p = enc->predictor[frame][cl];
-					roff_p = enc->roff[frame][y][x];
+					roff_p = enc->roff[acesso][y][x];
 					prd = 0;
 
 					for (k = 0; k < prd_order; k++) {
@@ -1628,6 +1778,11 @@ void optimize_coef(ENCODER *enc, int frame, int cl, int pos1, int pos2){
 	coef_p = enc->predictor[frame][cl];
 	k = 0;
 
+	int acesso = 0;
+	if(frame > 0){
+		acesso = 1;
+	}
+
 	for (i = 0; i < SEARCH_RANGE; i++) {
 		y = coef_p[pos1] + i - (SEARCH_RANGE >> 1);
 
@@ -1657,7 +1812,7 @@ void optimize_coef(ENCODER *enc, int frame, int cl, int pos1, int pos2){
 		for (x = 0; x < enc->width; x++) {
 			if (cl != *class_p++) continue;
 
-			roff_p = enc->roff[frame][y][x];
+			roff_p = enc->roff[acesso][y][x];
 			prd = enc->prd[frame][y][x];
 			org_p = &enc->org[frame][y][x];
 			pm_p = enc->pmlist[frame][(int)enc->group[frame][y][x]];
@@ -1733,7 +1888,7 @@ void optimize_coef(ENCODER *enc, int frame, int cl, int pos1, int pos2){
 
 			for (x = 0; x < enc->width; x++) {
 				if (cl == *class_p++) {
-					roff_p = enc->roff[frame][y][x];
+					roff_p = enc->roff[acesso][y][x];
 					org_p = &enc->org[frame][y][x];
 					enc->prd[frame][y][x] += org_p[roff_p[pos1]] * i + org_p[roff_p[pos2]] * j;
 				}
@@ -3118,10 +3273,11 @@ int main(int argc, char **argv){
 		free(enc->th_cost[f]);
 		free(enc->class_cost[f]);
 
-		free(enc->roff[f]);
 		free(enc->pmodels[f]);
 	}
 
+	free(enc->roff[0]);
+	if(enc->frames > 0) free(enc->roff[1]);
 
 	free(img->val);
 	free(img);
