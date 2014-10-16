@@ -62,7 +62,7 @@ DECODER *init_decoder(FILE *fp){
 	dec->predictor = (int ***)malloc(dec->frames * sizeof(int **));
 	i = dec->prd_order * 3 + 4;
 	dec->predictor[0] = (int **) alloc_2d_array(dec->num_class[0], i, sizeof(int));
-	i = (dec->prd_order + dec->inter_prd_order) * 3 + 4;
+	i = (dec->prd_order + dec->inter_prd_order) * 3 + 5;
 	for(f = 1; f < dec->frames; f++){
 		dec->predictor[f] = (int **)alloc_2d_array(dec->num_class[f], i, sizeof(int));
 	}
@@ -243,7 +243,7 @@ void decode_predictor(FILE *fp, DECODER *dec, int frame){
 		scany_p = coef_p + prd_order;
 		scanx_p = scany_p + prd_order;
 		size_p = scanx_p + prd_order;
-		size_p[1] = size_p[2] = size_p[3] = 0;
+		size_p[1] = size_p[2] = size_p[3] = size_p[4] = 0;
 
 		for (k = m = 0; k < dec->prd_order; k++) {
 			if (coef_p[k] != 0) {
@@ -261,10 +261,21 @@ void decode_predictor(FILE *fp, DECODER *dec, int frame){
 		if(frame > 0){
 			for(k = dec->prd_order; k < dec->prd_order + dec->inter_prd_order; k++){
 				coef_p[m] = coef_p[k];
-				scany_p[m] = dec->height;
-				scanx_p[m] = dec->width;
+				scany_p[m] = dyx[k].y;
+				scanx_p[m] = dyx[k].x;
+
+				if (dyx[k].y < size_p[1]) size_p[1] = dyx[k].y;
+				if (dyx[k].x < size_p[2]) size_p[2] = dyx[k].x;
+				if (dyx[k].x > size_p[3]) size_p[3] = dyx[k].x;
+				if (dyx[k].y > size_p[3]) size_p[4] = dyx[k].y;
 
 				m++;
+
+//				coef_p[m] = coef_p[k];
+//				scany_p[m] = dec->height;
+//				scanx_p[m] = dec->width;
+//
+//				m++;
 			}
 		}
 
@@ -272,6 +283,7 @@ void decode_predictor(FILE *fp, DECODER *dec, int frame){
 		size_p[1] = -size_p[1];
 		size_p[2] = -size_p[2];
 		size_p[3] = dec->width - size_p[3];
+		size_p[4] = dec->height - size_p[4];
 	}
 
 	return;
@@ -627,8 +639,12 @@ int calc_prd(IMAGE *img, DECODER *dec, int frame, int cl, int y, int x){
 			prd += (*coef_p++) * img->val[frame][ry][rx];
 		}
 		if(frame > 0){
-			for (k = 0; k < dec->inter_prd_order; k++) {
-				prd += (*coef_p++) * img->val[frame - 1][y][x];
+			prd += (*coef_p++) * img->val[frame - 1][y][x];
+
+			for (k = 0; k < dec->inter_prd_order - 1; k++) {
+				ry = y + (*scany_p++);
+				rx = x + (*scanx_p++);
+				prd += (*coef_p++) * img->val[frame - 1][ry][rx];
 			}
 		}
 	}
@@ -641,8 +657,18 @@ int calc_prd(IMAGE *img, DECODER *dec, int frame, int cl, int y, int x){
 			prd *= ((img->maxval + 1) >> 1);
 
 			if(frame > 0){
-				for (k = 0; k < dec->inter_prd_order; k++) {
-					prd += (*coef_p++) * img->val[frame - 1][y][x];
+				prd += (*coef_p++) * img->val[frame - 1][y][x];
+
+				for (k = 0; k < dec->inter_prd_order - 1; k++) {
+					ry = y + (*scany_p++);
+					rx = x + (*scanx_p++);
+
+					if(ry < 0 || rx < 0){
+						prd += (*coef_p++) * img->val[frame - 1][y][x];
+					}
+					else{
+						prd += (*coef_p++) * img->val[frame - 1][ry][rx];
+					}
 				}
 			}
 		}
@@ -657,9 +683,20 @@ int calc_prd(IMAGE *img, DECODER *dec, int frame, int cl, int y, int x){
 
 				prd += (*coef_p++) * img->val[frame][ry][rx];
 			}
+
 			if(frame > 0){
-				for (k = 0; k < dec->inter_prd_order; k++) {
-					prd += (*coef_p++) * img->val[frame - 1][y][x];
+				prd += (*coef_p++) * img->val[frame - 1][y][x];
+
+				for (k = 0; k < dec->inter_prd_order - 1; k++) {
+					ry = y + (*scany_p++);
+					rx = x + (*scanx_p++);
+
+					if(ry < 0 || rx < 0 || rx > dec->width){
+						prd += (*coef_p++) * img->val[frame - 1][y][x];
+					}
+					else{
+						prd += (*coef_p++) * img->val[frame - 1][ry][rx];
+					}
 				}
 			}
 		}
@@ -678,9 +715,20 @@ int calc_prd(IMAGE *img, DECODER *dec, int frame, int cl, int y, int x){
 
 				prd += (*coef_p++) * img->val[frame][ry][rx];
 			}
+
 			if(frame > 0){
-				for (k = 0; k < dec->inter_prd_order; k++) {
-					prd += (*coef_p++) * img->val[frame - 1][y][x];
+				prd += (*coef_p++) * img->val[frame - 1][y][x];
+
+				for (k = 0; k < dec->inter_prd_order - 1; k++) {
+					ry = y + (*scany_p++);
+					rx = x + (*scanx_p++);
+
+					if(ry < 0 || rx < 0 || ry > dec->height || rx > dec->width){
+						prd += (*coef_p++) * img->val[frame - 1][y][x];
+					}
+					else{
+						prd += (*coef_p++) * img->val[frame - 1][ry][rx];
+					}
 				}
 			}
 		}
@@ -697,9 +745,20 @@ int calc_prd(IMAGE *img, DECODER *dec, int frame, int cl, int y, int x){
 
 				prd += (*coef_p++) * img->val[frame][ry][rx];
 			}
+
 			if(frame > 0){
-				for (k = 0; k < dec->inter_prd_order; k++) {
-					prd += (*coef_p++) * img->val[frame - 1][y][x];
+				prd += (*coef_p++) * img->val[frame - 1][y][x];
+
+				for (k = 0; k < dec->inter_prd_order - 1; k++) {
+					ry = y + (*scany_p++);
+					rx = x + (*scanx_p++);
+
+					if(ry < 0 || rx < 0 || ry > dec->height || rx > dec->width){
+						prd += (*coef_p++) * img->val[frame - 1][y][x];
+					}
+					else{
+						prd += (*coef_p++) * img->val[frame - 1][ry][rx];
+					}
 				}
 			}
 		}
@@ -713,9 +772,6 @@ int calc_prd(IMAGE *img, DECODER *dec, int frame, int cl, int y, int x){
 
 IMAGE *decode_image(FILE *fp, IMAGE *img, DECODER *dec, int frame){
 	int x, y, cl, gr, prd, u, e, E, p;
-
-	//IMAGE *img;
-	//img = alloc_image(dec->width, dec->height, 1, dec->maxval);
 
 	if (dec->f_huffman == 1) {
 		VLC *vlc;
@@ -779,21 +835,6 @@ IMAGE *decode_image(FILE *fp, IMAGE *img, DECODER *dec, int frame){
 	}
 	return (img);
 }
-
-//void write_pgm(IMAGE *img, char *filename)
-//{
-//	int i, j;
-//	FILE *fp;
-//	fp = fileopen(filename, "wb");
-//	fprintf(fp, "P5\n%d %d\n%d\n", img->width, img->height, img->maxval);
-//	for (i = 0; i < img->height; i++) {
-//		for (j = 0; j < img->width; j++) {
-//			putc(img->val[0][i][j], fp);
-//		}
-//	}
-//	fclose(fp);
-//	return;
-//}
 
 void write_yuv(IMAGE *img, char *filename){
 	int i, j, f;
