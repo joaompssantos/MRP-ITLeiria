@@ -4,6 +4,7 @@
 #include "mrp.h"
 
 extern POINT dyx[];
+extern POINT idyx[];
 extern double sigma_h[], sigma_a[];        
 extern double qtree_prob[];
 
@@ -259,18 +260,20 @@ void decode_predictor(FILE *fp, DECODER *dec, int frame){
 			}
 		}
 		if(frame > 0){
-			for(k = dec->prd_order; k < dec->prd_order + dec->inter_prd_order; k++){
-				coef_p[m] = coef_p[k];
-				scany_p[m] = dyx[k].y;
-				scanx_p[m] = dyx[k].x;
+			for(k = 0; k < dec->inter_prd_order; k++){
+				coef_p[m] = coef_p[k + dec->prd_order];
+				scany_p[m] = idyx[k].y;
+				scanx_p[m] = idyx[k].x;
 
-				if (dyx[k].y < size_p[1]) size_p[1] = dyx[k].y;
-				if (dyx[k].x < size_p[2]) size_p[2] = dyx[k].x;
-				if (dyx[k].x > size_p[3]) size_p[3] = dyx[k].x;
-				if (dyx[k].y > size_p[4]) size_p[4] = dyx[k].y;
+				if (idyx[k].y < size_p[1]) size_p[1] = idyx[k].y;
+				if (idyx[k].x < size_p[2]) size_p[2] = idyx[k].x;
+				if (idyx[k].x > size_p[3]) size_p[3] = idyx[k].x;
+				if (idyx[k].y > size_p[4]) size_p[4] = idyx[k].y;
 
 				m++;
 			}
+
+			m -= dec->inter_prd_order;
 		}
 
 		size_p[0] = m;
@@ -624,197 +627,89 @@ int calc_prd(IMAGE *img, DECODER *dec, int frame, int cl, int y, int x){
 	prd_order = size_p[0];
 	prd = 0;
 
-	if(frame > 0) prd_order -= dec->inter_prd_order;
-
-	if(frame == 0){
-		if (y >= size_p[1] && x >= size_p[2] && x < size_p[3]) {
-			for (k = 0; k < prd_order; k++) {
-				ry = y + (*scany_p++);
-				rx = x + (*scanx_p++);
-				prd += (*coef_p++) * img->val[frame][ry][rx];
-			}
+	if (y >= size_p[1] && x >= size_p[2] && x < size_p[3]){
+		for (k = 0; k < prd_order; k++) {
+			ry = y + (*scany_p++);
+			rx = x + (*scanx_p++);
+			prd += (*coef_p++) * img->val[frame][ry][rx];
 		}
-		else if (y == 0) {
-			if (x == 0) {
-				for (k = 0; k < prd_order; k++) {
-					prd += *coef_p++;
-				}
-
-				prd *= ((img->maxval + 1) >> 1);
+	}
+	else if (y == 0) {
+		if (x == 0) {
+			for (k = 0; k < prd_order; k++) {
+				prd += *coef_p++;
 			}
-			else {
-				ry = 0;
 
-				for (k = 0; k < prd_order; k++) {
-					rx = x + (*scanx_p++);
-
-					if (rx < 0) rx = 0;
-					else if (rx >= x) rx = x - 1;
-
-					prd += (*coef_p++) * img->val[frame][ry][rx];
-				}
-			}
+			prd *= ((img->maxval + 1) >> 1);
 		}
 		else {
-			if (x == 0) {
-				for (k = 0; k < prd_order; k++) {
-					ry = y + (*scany_p++);
+			ry = 0;
 
-					if (ry < 0) ry = 0;
-					else if (ry >= y) ry = y - 1;
+			for (k = 0; k < prd_order; k++) {
+				rx = x + (*scanx_p++);
 
-					rx = x + (*scanx_p++);
+				if (rx < 0) rx = 0;
+				else if (rx >= x) rx = x - 1;
 
-					if (rx < 0) rx = 0;
-
-					prd += (*coef_p++) * img->val[frame][ry][rx];
-				}
-			}
-			else {
-				for (k = 0; k < prd_order; k++) {
-					ry = y + (*scany_p++);
-
-					if (ry < 0) ry = 0;
-
-					rx = x + (*scanx_p++);
-
-					if (rx < 0) rx = 0;
-					else if (rx >= img->width) rx = img->width - 1;
-
-					prd += (*coef_p++) * img->val[frame][ry][rx];
-				}
+				prd += (*coef_p++) * img->val[frame][ry][rx];
 			}
 		}
 	}
-	else{
-		if (y >= size_p[1] && x >= size_p[2] && x < size_p[3] && y < size_p[4]) {
+	else {
+		if (x == 0) {
 			for (k = 0; k < prd_order; k++) {
 				ry = y + (*scany_p++);
+
+				if (ry < 0) ry = 0;
+				else if (ry >= y) ry = y - 1;
+
 				rx = x + (*scanx_p++);
+
+				if (rx < 0) rx = 0;
+
 				prd += (*coef_p++) * img->val[frame][ry][rx];
-			}
-			if(frame > 0){
-				prd += (*coef_p++) * img->val[frame - 1][y][x];
-
-				for (k = 0; k < dec->inter_prd_order - 1; k++) {
-					ry = y + (*scany_p++);
-					rx = x + (*scanx_p++);
-					prd += (*coef_p++) * img->val[frame - 1][ry][rx];
-				}
-			}
-		}
-		else if (y == 0) {
-			if (x == 0) {
-				for (k = 0; k < prd_order; k++) {
-					prd += *coef_p++;
-				}
-
-				prd *= ((img->maxval + 1) >> 1);
-
-				if(frame > 0){
-					prd += (*coef_p++) * img->val[frame - 1][y][x];
-
-					for (k = 0; k < dec->inter_prd_order - 1; k++) {
-						ry = y + (*scany_p++);
-						rx = x + (*scanx_p++);
-
-						if(ry < 0 || rx < 0){
-							prd += (*coef_p++) * img->val[frame - 1][y][x];
-						}
-						else{
-							prd += (*coef_p++) * img->val[frame - 1][ry][rx];
-						}
-					}
-				}
-			}
-			else {
-				ry = 0;
-
-				for (k = 0; k < prd_order; k++) {
-					rx = x + (*scanx_p++);
-
-					if (rx < 0) rx = 0;
-					else if (rx >= x) rx = x - 1;
-
-					prd += (*coef_p++) * img->val[frame][ry][rx];
-				}
-
-				if(frame > 0){
-					prd += (*coef_p++) * img->val[frame - 1][y][x];
-
-					for (k = 0; k < dec->inter_prd_order - 1; k++) {
-						ry = y + (*scany_p++);
-						rx = x + (*scanx_p++);
-
-						if(ry < 0 || rx < 0 || rx > dec->width){
-							prd += (*coef_p++) * img->val[frame - 1][y][x];
-						}
-						else{
-							prd += (*coef_p++) * img->val[frame - 1][ry][rx];
-						}
-					}
-				}
 			}
 		}
 		else {
-			if (x == 0) {
-				for (k = 0; k < prd_order; k++) {
-					ry = y + (*scany_p++);
+			for (k = 0; k < prd_order; k++) {
+				ry = y + (*scany_p++);
 
-					if (ry < 0) ry = 0;
-					else if (ry >= y) ry = y - 1;
+				if (ry < 0) ry = 0;
 
-					rx = x + (*scanx_p++);
+				rx = x + (*scanx_p++);
 
-					if (rx < 0) rx = 0;
+				if (rx < 0) rx = 0;
+				else if (rx >= img->width) rx = img->width - 1;
 
-					prd += (*coef_p++) * img->val[frame][ry][rx];
-				}
-
-				if(frame > 0){
-					prd += (*coef_p++) * img->val[frame - 1][y][x];
-
-					for (k = 0; k < dec->inter_prd_order - 1; k++) {
-						ry = y + (*scany_p++);
-						rx = x + (*scanx_p++);
-
-						if(ry < 0 || rx < 0 || ry > dec->height || rx > dec->width){
-							prd += (*coef_p++) * img->val[frame - 1][y][x];
-						}
-						else{
-							prd += (*coef_p++) * img->val[frame - 1][ry][rx];
-						}
-					}
-				}
+				prd += (*coef_p++) * img->val[frame][ry][rx];
 			}
-			else {
-				for (k = 0; k < prd_order; k++) {
-					ry = y + (*scany_p++);
+		}
+	}
 
-					if (ry < 0) ry = 0;
+	//Inter prediction calculation
+	if(frame > 0 && dec->inter_prd_order > 0){
+		if (y >= size_p[1] && x >= size_p[2] && x < size_p[3] && y < size_p[4]){
+			prd += (*coef_p++) * img->val[frame - 1][y][x];
 
-					rx = x + (*scanx_p++);
+			for (k = 0; k < dec->inter_prd_order - 1; k++) {
+				ry = y + (*scany_p++);
+				rx = x + (*scanx_p++);
 
-					if (rx < 0) rx = 0;
-					else if (rx >= img->width) rx = img->width - 1;
+				prd += (*coef_p++) * img->val[frame - 1][ry][rx];
+			}
+		}
+		else{
+			prd += (*coef_p++) * img->val[frame - 1][y][x];
 
-					prd += (*coef_p++) * img->val[frame][ry][rx];
-				}
+			for (k = 0; k < dec->inter_prd_order - 1; k++) {
+				ry = y + (*scany_p++);
+				rx = x + (*scanx_p++);
 
-				if(frame > 0){
+				if(ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width){
 					prd += (*coef_p++) * img->val[frame - 1][y][x];
-
-					for (k = 0; k < dec->inter_prd_order - 1; k++) {
-						ry = y + (*scany_p++);
-						rx = x + (*scanx_p++);
-
-						if(ry < 0 || rx < 0 || ry > dec->height || rx > dec->width){
-							prd += (*coef_p++) * img->val[frame - 1][y][x];
-						}
-						else{
-							prd += (*coef_p++) * img->val[frame - 1][ry][rx];
-						}
-					}
+				}
+				else{
+					prd += (*coef_p++) * img->val[frame - 1][ry][rx];
 				}
 			}
 		}
@@ -969,21 +864,6 @@ int main(int argc, char **argv){
 
 		decode_class(fp, dec, f);
 		decode_predictor(fp, dec, f);
-
-		FILE *teste;
-		teste = fileopen("decoder.txt", "a");
-		int x,y;
-		fprintf(teste, "Frame: %d\n\n", f);
-		for(y = 0; y < dec->num_class[f]; y++){
-			int *coef_p = dec->predictor[f][y];
-			i = *(coef_p + dec->prd_order * 3);
-			if(f > 0) i = *(coef_p + (dec->prd_order + dec->inter_prd_order) * 3);
-			for(x = 0; x < i; x++){
-				 fprintf(teste, "%d ", dec->predictor[f][y][x]);
-			}fprintf(teste, "\n");
-		}fprintf(teste, "\n\n");
-		fclose(teste);
-
 		decode_threshold(fp, dec, f);
 
 		dec->pmodels[f] = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx[f], dec->sigma, dec->maxval + 1);
