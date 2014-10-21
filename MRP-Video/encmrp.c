@@ -2987,15 +2987,15 @@ int main(int argc, char **argv){
 		resultado = pixel_wise_search_predictor(enc, 3);
 	}
 
-	/* 1st loop */
-	//#pragma omp parallel
-	//{
-	//#pragma omp for
 	// Safeguard auxilliary variables
 	prd_save = (int ***)alloc_mem(enc->frames * sizeof(int**));
 	th_save = (int ***)alloc_mem(enc->frames * sizeof(int**));
 	class_save = (char ***)alloc_mem(enc->frames * sizeof(char**));
 
+	/* 1st loop */
+//	#pragma omp parallel
+//	{
+//	#pragma omp for
 	for(f = 0; f < enc->frames; f++){
 		int prd_order = enc->prd_order;
 		if(f > 0) prd_order += enc->inter_prd_order;
@@ -3014,7 +3014,6 @@ int main(int argc, char **argv){
 		// Class initialization for each frame
 		init_class(enc, f);
 
-		// ?
 		prd_save[f] = (int **)alloc_2d_array(enc->num_class[f], prd_order, sizeof(int));
 		th_save[f] = (int **)alloc_2d_array(enc->num_class[f], enc->num_group, sizeof(int));
 		class_save[f] = (char **)alloc_2d_array(enc->height, enc->width, sizeof(char));
@@ -3023,19 +3022,12 @@ int main(int argc, char **argv){
 		enc->optimize_loop = 1;
 		min_cost = INT_MAX;
 
-		//printf("Frame: %d\n", f);
 		for (i = j = 0; i < max_iteration; i++){
-			//printf("\t[%2d] cost =", i);
-
 			cost = design_predictor(enc, f, f_mmse);
-			//printf(" %d ->", (int)cost);
 			cost = optimize_group(enc, f);
-			//printf(" %d ->", (int)cost);
 			cost = optimize_class(enc, f);
-			//printf(" %d", (int)cost);
 
 			if (cost < min_cost){
-				//printf(" *\n");
 				min_cost = cost;
 				j = i;
 
@@ -3055,9 +3047,6 @@ int main(int argc, char **argv){
 					}
 				}
 
-			}
-			else{
-				//printf("\n");
 			}
 
 			if (i - j >= EXTRA_ITERATION) break;
@@ -3083,11 +3072,10 @@ int main(int argc, char **argv){
 		set_cost_rate(enc, f);
 		predict_region(enc, f, 0, 0, enc->height, enc->width);
 		cost = calc_cost(enc, f, 0, 0, enc->height, enc->width);
-		//printf("cost = %d\n", (int)cost);
+
 		printf("Frame: %d --> Cost: %d\n", f, (int)cost);
 	}
-	//}
-	//print_encoder(enc, f);
+//	}
 
 	/* 2nd loop */
 	for(f = 0; f < enc->frames; f++){
