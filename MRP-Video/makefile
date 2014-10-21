@@ -17,7 +17,7 @@ DECOBJ = decmrp.o common.o rc.o
 all : $(ENCODER) $(DECODER)
 
 $(ENCODER) : $(ENCOBJ)
-	$(CC) $(CFLAG) -o $@ $(ENCOBJ) -lm 
+	$(CC) $(CFLAG) -o $@ $(ENCOBJ) -lm
 
 $(DECODER) : $(DECOBJ)
 	$(CC) $(CFLAG) -o $@ $(DECOBJ) -lm

@@ -3085,26 +3085,19 @@ int main(int argc, char **argv){
 		enc->optimize_loop = 2;
 		min_cost = INT_MAX;
 
-		//printf("Frame: %d\n", f);
 		for (i = j = 0; i < max_iteration; i++) {
-			//printf("\t(%2d) cost =", i);
-
 			if (f_optpred) {
 				cost = optimize_predictor(enc, f);
-				//printf(" %d ->", (int)cost);
 			}
 
 			side_cost = encode_predictor(NULL, enc, f);
 			cost = optimize_group(enc, f);
 			side_cost += encode_threshold(NULL, enc, f);
-			//printf(" %d ->", (int)cost);
 			cost = optimize_class(enc, f);
 			side_cost += encode_class(NULL, enc, f);
-			//printf(" %d (%d)", (int)cost, (int)side_cost);
 			cost += side_cost;
 
 			if (cost < min_cost) {
-				//printf(" *\n");
 				min_cost = cost;
 				j = i;
 
@@ -3123,9 +3116,6 @@ int main(int argc, char **argv){
 						}
 					}
 				}
-			}
-			else {
-				//printf("\n");
 			}
 
 			if (f_optpred) {
