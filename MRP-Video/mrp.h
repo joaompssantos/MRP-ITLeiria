@@ -9,6 +9,7 @@
 #define NUM_CLASS       -1
 #define NUM_GROUP       16
 #define PRD_ORDER       -1
+#define INTRA_PRD_ORDER -1
 #define INTER_PRD_ORDER 1
 #define COEF_PRECISION  6
 #define MAX_COEF	(2 << COEF_PRECISION)
@@ -47,13 +48,12 @@
 #define RANGE_TOP  ((range_t)1 << (RANGE_SIZE - 8))
 #define RANGE_BOT  ((range_t)1 << (RANGE_SIZE - 16))
 
-// Video
+// Image
 typedef struct {
     int height;
     int width;
-    int frames;
     int maxval;
-    img_t ***val;
+    img_t **val;
 } IMAGE;
 
 typedef struct {
@@ -89,9 +89,9 @@ typedef struct {
 typedef struct {
     int height; // Image height
     int width; // Image width
-    int frames; // Image frames
+    //int frames; // Image frames
     int maxval; // Image maximum value (255)
-    int *num_class; // Number of classes to use (number of different predictors)
+    int num_class; // Number of classes to use (number of different predictors)
     int num_group; // Number of groups ???? (= 16)
     int prd_order; // Order of the predictors (number of pixels to use)
     int inter_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
@@ -102,35 +102,35 @@ typedef struct {
     int f_huffman; // Huffman coding flag
     int quadtree_depth; // Quadtree depth or deactivation
     int optimize_loop; // First or second optimization loop
-    int ***predictor;
-    int ***th;
-    int ***upara;
-    int ***prd;
-    int ***encval;
-    int ***err;
+    int **predictor;
+    int **th;
+    int **upara;
+    int **prd;
+    int **encval;
+    int **err;
     int ***org; // Original video/image
-    int **ctx_weight;
-    int ****roff;
-    int **qtctx;//[QUADTREE_DEPTH << 3];
-    char ****qtmap; // Quadtree map //[QUADTREE_DEPTH];
-    char ***class;
-    char ***group;
-    char ***uquant;
-    int ***econv;
-    img_t **bconv;
-    img_t **fconv;
-    PMODEL ****pmodels;
-    PMODEL ***pmlist;
-    PMODEL *spm;
-    VLC ***vlcs;
-    RANGECODER **rc;
+    int *ctx_weight;
+    int ***roff;
+    int qtctx[QUADTREE_DEPTH << 3];
+    char **qtmap[QUADTREE_DEPTH];
+    char **class;
+    char **group;
+    char **uquant;
+    int **econv;
+    img_t *bconv;
+    img_t *fconv;
+    PMODEL ***pmodels;
+    PMODEL **pmlist;
+    PMODEL spm;
+    VLC **vlcs;
+    RANGECODER *rc;
     double *sigma;
-    int **mtfbuf;
-    int **coef_m;
-    cost_t ***coef_cost;
-    cost_t **th_cost;
-    cost_t **class_cost;
-    cost_t **qtflag_cost;//[QUADTREE_DEPTH << 3];
+    int *mtfbuf;
+    int *coef_m;
+    cost_t **coef_cost;
+    cost_t *th_cost;
+    cost_t *class_cost;
+    cost_t qtflag_cost[QUADTREE_DEPTH << 3];
 } ENCODER;
 
 // Decoder
@@ -171,7 +171,7 @@ FILE *fileopen(char *, char *);
 void *alloc_mem(size_t);
 void **alloc_2d_array(int, int, int);
 void ***alloc_3d_array(int, int, int, int);
-IMAGE *alloc_image(int, int, int, int);
+IMAGE *alloc_image(int, int, int);
 int *gen_hufflen(uint *, int, int);
 void gen_huffcode(VLC *);
 VLC *make_vlc(uint *, int, int);

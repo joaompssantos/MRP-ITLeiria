@@ -127,7 +127,7 @@ void ***alloc_3d_array(int height, int width, int frames, int size){
 }
 
 // Function to alloc image
-IMAGE *alloc_image(int width, int height, int frames, int maxval){
+IMAGE *alloc_image(int width, int height, int maxval){
 	// Image struct vector
 	IMAGE *img;
 
@@ -137,15 +137,13 @@ IMAGE *alloc_image(int width, int height, int frames, int maxval){
 	// Set image values
 	img->width = width;
 	img->height = height;
-	img->frames = frames;
 	img->maxval = maxval;
 
-	img->val = (img_t ***) alloc_3d_array(img->height, img->width, img->frames, sizeof(img_t));
+	img->val = (img_t **) alloc_2d_array(img->height, img->width, sizeof(img_t));
 	return (img);
 }
 
-int *gen_hufflen(uint *hist, int size, int max_len)
-{
+int *gen_hufflen(uint *hist, int size, int max_len){
 	int i, j, k, l, *len, *index, *bits, *link;
 
 	len = (int *)alloc_mem(size * sizeof(int));

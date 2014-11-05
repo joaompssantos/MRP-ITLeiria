@@ -848,7 +848,8 @@ int main(int argc, char **argv){
 
 	fp = fileopen(infile, "rb");
 	dec = init_decoder(fp);
-	img = alloc_image(dec->width, dec->height, dec->frames, dec->maxval);
+	//img = alloc_image(dec->width, dec->height, dec->frames, dec->maxval);
+	img = alloc_image(dec->width, dec->height, dec->maxval);
 
 	printf("\nMRP-Video Decoder\n\n");
 	// Print file characteristics to screen
