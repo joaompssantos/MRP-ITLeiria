@@ -14,7 +14,7 @@ DECODER = decmrp.exe
 DECOBJ = decmrp.o common.o rc.o
 
 
-all : $(ENCODER) $(DECODER)
+all : $(ENCODER) #$(DECODER)
 
 $(ENCODER) : $(ENCOBJ)
 	$(CC) $(CFLAG) -o $@ $(ENCOBJ) -lm
