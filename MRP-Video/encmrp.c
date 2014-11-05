@@ -2734,15 +2734,78 @@ int main(int argc, char **argv){
 
 		total_bits += bits;
 
+		free(video[1]->val);
 		free(video[1]);
 		if(f > 0){
+			free(video[0]->val);
 			free(video[0]);
 		}
-		free(enc);
 
 		free(class_save);
 		free(prd_save);
 		free(th_save);
+		free(enc->predictor);
+		free(enc->th);
+		free(enc->upara);
+		free(enc->prd);
+		free(enc->org);
+		free(enc->err);
+
+		if (enc->quadtree_depth > 0){
+			for (i = enc->quadtree_depth - 1; i >= 0; i--){
+				free(enc->qtmap[i]);
+			}
+		}
+
+		free(enc->class);
+		free(enc->group);
+		free(enc->uquant);
+		free(enc->econv);
+		free(enc->bconv);
+		free(enc->fconv);
+		free(enc->pmlist);
+		free(enc->spm.freq);
+		free(enc->mtfbuf);
+		free(enc->coef_m);
+		free(enc->coef_cost);
+		free(enc->th_cost);
+		free(enc->class_cost);
+		free(enc->ctx_weight);
+		
+		if (enc->f_huffman == 0){
+			free(enc->rc);
+		}
+		
+		//Cycle that runs for all the pixels
+		// for (i = 0; i < height; i++){
+			// for (j = 0; j < width; j++){
+				// free(enc->roff[i][j]);
+			// }
+		// }
+		free(enc->roff[0][0]);
+		free(enc->roff);
+		
+		int gr;
+		int num_subpm;
+		if(enc->pm_accuracy < 0){
+			num_subpm = 1;
+		}
+		else{
+			num_subpm = 1 << enc->pm_accuracy;
+		}
+		for (gr = 0; gr < enc->num_group; gr++){
+			for (i = 0; i < enc->num_pmodel; i++){
+				for (j = 0; j < num_subpm; j++){
+					PMODEL *aux = &enc->pmodels[gr][i][j];
+					free(aux->freq);
+					free(aux->cost);
+				}
+			}
+		}
+		free(enc->pmodels[0][0]);
+		free(enc->pmodels);
+
+		free(enc);
 	}
 
 	fclose(fp);
