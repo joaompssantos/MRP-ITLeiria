@@ -505,6 +505,7 @@ int *init_ctx_weight(void){
 	double dy, dx;
 
 	ctx_weight = (int *)alloc_mem(NUM_UPELS * sizeof(int));
+
 	for(k = 0; k < NUM_UPELS; k++){
 		dy = dyx[k].y;
 		dx = dyx[k].x;

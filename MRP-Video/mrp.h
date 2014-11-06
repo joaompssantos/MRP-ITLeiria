@@ -141,7 +141,7 @@ typedef struct {
     int maxval;
     int frames;
     int num_comp;
-    int *num_class;
+    int num_class;
     int num_group;
     int prd_order;
     int inter_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
@@ -151,19 +151,19 @@ typedef struct {
     int coef_precision;
     int f_huffman;
     int quadtree_depth;
-    int ***predictor;
-    int ***err;
-    int **ctx_weight;
-    char ****qtmap;//[QUADTREE_DEPTH];
-    char ***class;
-    char ***uquant;
-    int **pm_idx;
-    PMODEL ****pmodels;
-    PMODEL *spm;
-    VLC ***vlcs;
-    RANGECODER **rc;
+    int **predictor;
+    int **err;
+    int *ctx_weight;
+    char **qtmap[QUADTREE_DEPTH];
+    char **class;
+    char **uquant;
+    int *pm_idx;
+    PMODEL ***pmodels;
+    PMODEL spm;
+    VLC **vlcs;
+    RANGECODER *rc;
     double *sigma;
-    int **mtfbuf;
+    int *mtfbuf;
 } DECODER;
 
 /* common.c */
