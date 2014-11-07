@@ -567,7 +567,6 @@ void free_encoder(ENCODER *enc){
 		free(enc->rc);
 	}
 
-
 	min_dx = max_dx = min_dy = 0;
 	imin_dx = imax_dx = imin_dy = imax_dy = 0;
 	order = (enc->prd_order > NUM_UPELS)? enc->prd_order : NUM_UPELS;
@@ -2461,14 +2460,14 @@ char *remove_ext (char* mystr, char dot, char sep){
 void print_results(FILE *res, int frames, int height, int width, int header, int *class_info, int *predictors, int *thresholds, int *errors){
 	int f, rate = 0, total_bits = 0;
 
-	printf("------------------------------\n");
+	printf("\n------------------------------\n");
 	printf("Header info.\t :%10d bits\n", header);
 	fprintf(res, "Header info.\t :%10d bits\n", header);
 	fprintf(res, "Frame\t\tBits\t\tBpp\n");
 
 	for(f = 0; f < frames; f++){
 		// Results output
-		printf("\n------------------------------\n");
+		printf("------------------------------\n");
 		printf("frame [%03d]\n", f);
 		printf("class info\t:%10d bits\n", class_info[f]);
 		printf("predictors\t:%10d bits\n", predictors[f]);
@@ -2483,6 +2482,8 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 		printf("frame coding rate:%10.5f b/p\n", (double)rate / (height * width));
 		fprintf(res, "%d\t%10d\t%10.5f\n", f, rate, (double)rate / (height * width));
 	}
+
+	total_bits += header;
 
 	printf("------------------------------\n");
 	printf("total\t\t :%10d bits\n", total_bits);
@@ -2694,10 +2695,10 @@ int main(int argc, char **argv){
 	printf("M = %d, K = %d, L = %d, J = %d, P = %d, V = %d, A = %d\n\n", num_class, prd_order, intra_prd_order, inter_prd_order, coef_precision, num_pmodel, pm_accuracy);
 
 	//Allocation of print results variables
-	errors = (int *) alloc_mem(frames);
-	class_info = (int *) alloc_mem(frames);
-	predictors = (int *) alloc_mem(frames);
-	thresholds = (int *) alloc_mem(frames);
+	errors = (int *) alloc_mem(frames * sizeof(int));
+	class_info = (int *) alloc_mem(frames * sizeof(int));
+	predictors = (int *) alloc_mem(frames * sizeof(int));
+	thresholds = (int *) alloc_mem(frames * sizeof(int));
 
 	char *aux = remove_ext(outfile, '.', '/');
 	sprintf(resfile, "res_%s.txt", aux);
@@ -2891,17 +2892,12 @@ int main(int argc, char **argv){
 
 		if (enc->f_huffman == 0){
 			enc->rc = rc_init();
-			putbits(fp, 7, 0);	/* byte alignment for the rangecoder */
 		}
 
 		class_info[f] += encode_class(fp, enc);
 		predictors[f] = encode_predictor(fp, enc);
 		thresholds[f] = encode_threshold(fp, enc);
 		errors[f] = encode_image(fp, enc);
-
-		if(enc->f_huffman == 1 && f == frames - 1){
-			putbits(fp, 7, 0);	/* flush remaining bits */
-		}
 
 		free(video[1]->val);
 		free(video[1]);
@@ -2913,6 +2909,10 @@ int main(int argc, char **argv){
 		free(class_save);
 		free(prd_save);
 		free(th_save);
+
+		if(enc->f_huffman == 1){
+			putbits(fp, 7, 0);	/* flush remaining bits */
+		}
 
 		free_encoder(enc);
 	}
