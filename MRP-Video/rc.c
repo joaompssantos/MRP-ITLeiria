@@ -72,7 +72,7 @@ int rc_decode(FILE *fp, RANGECODER *rc, PMODEL *pm, int min, int max){
 	rfreq = (rc->code - rc->low) / rc->range;
 
 	if (rfreq >= totfreq) {
-		fprintf(stderr, "Data is corrupted!\n");
+		fprintf(stderr, "\nData is corrupted!\n");
 		exit(1);
 	}
 

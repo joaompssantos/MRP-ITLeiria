@@ -575,8 +575,9 @@ void decode_class(FILE *fp, DECODER *dec){
 	if (dec->f_huffman == 1) {
 		free_vlc(vlc);
 	}
-
-	free(cpm->freq);
+	else{
+		free(cpm->freq);
+	}
 	
 	return;
 }

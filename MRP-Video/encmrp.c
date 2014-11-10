@@ -1,37 +1,3 @@
-/*=============================================================================
- |   Assignment:  ASSIGNMENT NUMBER AND TITLE
- |
- |       Author:  STUDENT'S NAME HERE
- |     Language:  NAME OF LANGUAGE IN WHICH THE PROGRAM IS WRITTEN AND THE
- |                      NAME OF THE COMPILER USED TO COMPILE IT WHEN IT
- |                      WAS TESTED
- |   To Compile:  EXPLAIN HOW TO COMPILE THIS PROGRAM
- |
- |        Class:  NAME AND TITLE OF THE CLASS FOR WHICH THIS PROGRAM WAS
- |                      WRITTEN
- |   Instructor:  NAME OF YOUR COURSE'S INSTRUCTOR
- |     Due Date:  DATE AND TIME THAT THIS PROGRAM IS/WAS DUE TO BE SUBMITTED
- |
- +-----------------------------------------------------------------------------
- |
- |  Description:  DESCRIBE THE PROBLEM THAT THIS PROGRAM WAS WRITTEN TO
- |      SOLVE.
- |
- |        Input:  DESCRIBE THE INPUT THAT THE PROGRAM REQUIRES.
- |
- |       Output:  DESCRIBE THE OUTPUT THAT THE PROGRAM PRODUCES.
- |
- |    Algorithm:  OUTLINE THE APPROACH USED BY THE PROGRAM TO SOLVE THE
- |      PROBLEM.
- |
- |   Required Features Not Included:  DESCRIBE HERE ANY REQUIREMENTS OF
- |      THE ASSIGNMENT THAT THE PROGRAM DOES NOT ATTEMPT TO SOLVE.
- |
- |   Known Bugs:  IF THE PROGRAM DOES NOT FUNCTION CORRECTLY IN SOME
- |      SITUATIONS, DESCRIBE THE SITUATIONS AND PROBLEMS HERE.
- |
- *===========================================================================*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -130,7 +96,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 		if (dx < min_dx) min_dx = dx;
 		if (dx > max_dx) max_dx = dx;
 	}
-	for (k = 0; k < inter_prd_order; k++){
+	for (k = 0; k < inter_prd_order - 1; k++){
 		dy = idyx[k].y;
 		dx = idyx[k].x;
 
@@ -2911,10 +2877,25 @@ int main(int argc, char **argv){
 		free(th_save);
 
 		if(enc->f_huffman == 1){
-			putbits(fp, 7, 0);	/* flush remaining bits */
+			int gr;
+			VLC *aux;
+			for(gr = 0; gr < num_group; gr++){
+				for(k = 0; k < num_pmodel; k++){
+					aux = &enc->vlcs[gr][k];
+					free(aux->len);
+					free(aux->index);
+					free(aux->off);
+					free(aux->code);
+				}
+			}
+			free(enc->vlcs);
 		}
 
 		free_encoder(enc);
+	}
+
+	if(f_huffman == 1){
+		putbits(fp, 7, 0);	/* flush remaining bits */
 	}
 
 	fclose(fp);
