@@ -40,7 +40,7 @@ DECODER *init_decoder(FILE *fp, int version, int width, int height, int maxval, 
 
 	dec = (DECODER *)alloc_mem(sizeof(DECODER));
 
-	dec->version =version;
+	dec->version = version;
 	dec->width = width;
 	dec->height = height;
 	dec->maxval = maxval;
