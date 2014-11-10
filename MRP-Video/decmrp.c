@@ -909,6 +909,46 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame){
 	return (img);
 }
 
+void print_class(DECODER *dec, int f){
+	int y, x;
+
+	if(f == 0) system("rm decoder_class.txt");
+
+	FILE *teste;
+	teste = fileopen("decoder_class.txt", "a");
+
+	fprintf(teste, "Frame: %d\n\n", f);
+	for(y = 0; y < dec->width; y++){
+		for(x = 0; x < dec->width; x++){
+			fprintf(teste, "%d ", dec->class[y][x]);
+		}fprintf(teste, "\n");
+	}fprintf(teste, "\n\n");
+
+	fclose(teste);
+}
+
+void print_predictors(DECODER *dec, int f){
+	int y, x, i, joao;
+
+	if(f == 0) system("rm decoder_predictors.txt");
+
+	FILE *teste;
+	teste = fileopen("decoder_predictors.txt", "a");
+
+	fprintf(teste, "Frame: %d\n\n", f);
+	for(y = 0; y < dec->num_class; y++){
+		int *coef_p = dec->predictor[y];
+		i = *(coef_p + dec->prd_order * 3);
+			if(f == 0) joao = i;
+		else joao = *(coef_p + (dec->prd_order + dec->inter_prd_order) * 3) + dec->inter_prd_order;
+		for(x = 0; x < joao; x++){
+			  fprintf(teste, "%d ", dec->predictor[y][x]);
+		}fprintf(teste, "\n");
+	}fprintf(teste, "\n\n");
+
+	fclose(teste);
+}
+
 int main(int argc, char **argv){
 	int i, f;
 	int version, width, height, maxval, frames, num_comp, num_group, prd_order, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth;
@@ -981,6 +1021,9 @@ int main(int argc, char **argv){
 		video[1] = decode_image(fp, video, dec);
 
 		write_yuv(video[1], outfile);
+
+		print_class(dec, f);
+		print_predictors(dec, f);
 
 		free(video[1]->val);
 		free(video[1]);

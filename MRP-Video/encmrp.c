@@ -2459,6 +2459,42 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 	fprintf(res, "Total:\n\t%10d\t%10.5f\n", total_bits, (double)total_bits / (height * width * frames));
 }
 
+void print_class(ENCODER *enc, int f){
+	int y, x;
+
+	if(f == 0) system("rm encoder_class.txt");
+
+	FILE *teste;
+	teste = fileopen("encoder_class.txt", "a");
+
+	fprintf(teste, "Frame: %d\n\n", f);
+	for(y = 0; y < enc->width; y++){
+		for(x = 0; x < enc->width; x++){
+			fprintf(teste, "%d ", enc->class[y][x]);
+		}fprintf(teste, "\n");
+	}fprintf(teste, "\n\n");
+
+	fclose(teste);
+}
+
+void print_predictors(ENCODER *enc, int f){
+	int y, x;
+
+	if(f == 0) system("rm encoder_predictors.txt");
+
+	FILE *teste;
+	teste = fileopen("encoder_predictors.txt", "a");
+
+	fprintf(teste, "Frame: %d\n\n", f);
+	for(y = 0; y < enc->num_class; y++){
+		for(x = 0; x < enc->prd_order + enc->inter_prd_order; x++){
+			if(x >= enc->prd_order || enc->predictor[y][x] != 0) fprintf(teste, "%d ", enc->predictor[y][x]);
+		}fprintf(teste, "\n");
+	}fprintf(teste, "\n\n");
+
+	fclose(teste);
+}
+
 int main(int argc, char **argv){
 	// Variable declaration
 	cost_t cost, min_cost, side_cost;
@@ -2865,6 +2901,9 @@ int main(int argc, char **argv){
 		thresholds[f] = encode_threshold(fp, enc);
 		errors[f] = encode_image(fp, enc);
 
+		print_class(enc, f);
+		print_predictors(enc, f);
+
 		free(video[1]->val);
 		free(video[1]);
 		if(f > 0){
@@ -2882,10 +2921,11 @@ int main(int argc, char **argv){
 			for(gr = 0; gr < num_group; gr++){
 				for(k = 0; k < num_pmodel; k++){
 					aux = &enc->vlcs[gr][k];
-					free(aux->len);
-					free(aux->index);
-					free(aux->off);
-					free(aux->code);
+					free_vlc(aux);
+//					free(aux->len);
+//					free(aux->index);
+//					free(aux->off);
+//					free(aux->code);
 				}
 			}
 			free(enc->vlcs);
