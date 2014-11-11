@@ -57,7 +57,7 @@ DECODER *init_decoder(FILE *fp, int version, int width, int height, int maxval, 
 
 	dec->num_class = read_class(fp);
 
-	i = (dec->prd_order + inter_prd_order) * 3 + 5;
+	i = (dec->prd_order + dec->inter_prd_order) * 3 + 5;
 	dec->predictor = (int **)alloc_2d_array(dec->num_class, i, sizeof(int));
 
 	dec->err = (int **)alloc_2d_array(dec->height, dec->width, sizeof(int));
