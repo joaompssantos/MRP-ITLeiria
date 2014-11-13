@@ -115,26 +115,26 @@ DECODER *init_decoder(FILE *fp, int version, int width, int height, int maxval, 
 
 void free_decoder(DECODER *dec){
 	int i, j, gr, num_subpm;
-	
+
 	free(dec->predictor);
 	free(dec->err);
 	free(dec->ctx_weight);
-	
+
 	if (dec->quadtree_depth > 0){
 		for (i = dec->quadtree_depth - 1; i >= 0; i--){
 			free(dec->qtmap[i]);
 		}
 	}
-	
+
 	free(dec->class);
 	free(dec->uquant);
-	
+
 	if (dec->num_pmodel > 1){
 		free(dec->pm_idx);
 	}
-	
+
 	free(dec->spm.freq);
-	
+
 	if(dec->pm_accuracy < 0){
 		num_subpm = 1;
 	}
@@ -149,13 +149,13 @@ void free_decoder(DECODER *dec){
 	}
 	free(dec->pmodels[0][0]);
 	free(dec->pmodels);
-	
+
 	free(dec->mtfbuf);
-	
+
 	if (dec->f_huffman == 0){
 		free(dec->rc);
 	}
-	
+
 	free(dec);
 }
 
@@ -578,13 +578,12 @@ void decode_class(FILE *fp, DECODER *dec){
 	else{
 		free(cpm->freq);
 	}
-	
+
 	return;
 }
 
 
-int calc_udec(DECODER *dec, int y, int x)
-{
+int calc_udec(DECODER *dec, int y, int x){
 	int rx, ry, k, u;
 	int **err, *wt_p;
 
@@ -1031,7 +1030,7 @@ int main(int argc, char **argv){
 			free(video[0]->val);
 			free(video[0]);
 		}
-		
+
 		free_decoder(dec);
 
 		printf(" --> Process completed\n");
@@ -1040,6 +1039,6 @@ int main(int argc, char **argv){
 	fclose(fp);
 
 	printf("\ncpu time: %.2f sec.\n", cpu_time());
-	
+
 	return(0);
 }

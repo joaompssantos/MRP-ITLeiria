@@ -85,7 +85,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 
 	min_dx = max_dx = min_dy = 0;
 	imin_dx = imax_dx = imin_dy = imax_dy = 0;
-	order = (prd_order > NUM_UPELS)? prd_order : NUM_UPELS;
+	order = (prd_order > NUM_UPELS) ? prd_order : NUM_UPELS;
 
 	//Values to check for special cases
 	for (k = 0; k < order; k++){
@@ -495,7 +495,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int num_class, int num_group, 
 }
 
 void free_encoder(ENCODER *enc){
-	int dy, dx, order, min_dx, max_dx, min_dy, i, j, k;
+	int dy, dx, order, min_dx, max_dx, min_dy, x, y, i, j, k;
 	int imin_dx, imax_dx, imin_dy, imax_dy;
 	int min_abs_dx, max_abs_dx, min_abs_dy, max_abs_dy;
 	int gr;
@@ -509,8 +509,8 @@ void free_encoder(ENCODER *enc){
 	free(enc->err);
 
 	if (enc->quadtree_depth > 0){
-		for (i = enc->quadtree_depth - 1; i >= 0; i--){
-			free(enc->qtmap[i]);
+		for (x = enc->quadtree_depth - 1; x >= 0; x--){
+			free(enc->qtmap[x]);
 		}
 	}
 
@@ -578,27 +578,21 @@ void free_encoder(ENCODER *enc){
 	}
 
 	//Cycle that runs for all the pixels
-	for (i = 0; i < enc->height; i++){
-		for (j = 0; j < enc->width; j++){
+	for (y = 0; y < enc->height; y++){
+		for (x = 0; x < enc->width; x++){
 			//Conditions to check which references are available for each pijel
-			if (i == 0){
-				if (j == 0){
-					free(enc->roff[i][j]);
-				}
-				else if (j + min_abs_dx <= 0 || j + max_abs_dx >= enc->width){
-					free(enc->roff[i][j]);
+			if (y == 0){
+				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
+					free(enc->roff[y][x]);
 				}
 			}
-			else if (i + min_abs_dy <= 0){
-				if (j == 0){
-					free(enc->roff[i][j]);
-				}
-				else if (j + min_abs_dx <= 0 || j + max_abs_dx >= enc->width){
-					free(enc->roff[i][j]);
+			else if (y + min_abs_dy <= 0){
+				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
+					free(enc->roff[y][x]);
 				}
 			}
-			else if (i + max_abs_dy >= enc->height){
-				free(enc->roff[i][j]);
+			else if (y + max_abs_dy >= enc->height){
+				free(enc->roff[y][x]);
 			}
 		}
 	}
@@ -879,7 +873,7 @@ int calc_uenc(ENCODER *enc, int y, int x){
 
 	u = 0;
 
-	for (k =0; k < NUM_UPELS; k++){
+	for (k = 0; k < NUM_UPELS; k++){
 		u += err_p[*roff_p++] * (*wt_p++);
 	}
 
@@ -2697,7 +2691,7 @@ int main(int argc, char **argv){
 	printf("M = %d, K = %d, L = %d, J = %d, P = %d, V = %d, A = %d\n\n", num_class, prd_order, intra_prd_order, inter_prd_order, coef_precision, num_pmodel, pm_accuracy);
 
 	//Allocation of print results variables
-	errors = (int *) alloc_mem(frames * sizeof(int));
+	errors 	   = (int *) alloc_mem(frames * sizeof(int));
 	class_info = (int *) alloc_mem(frames * sizeof(int));
 	predictors = (int *) alloc_mem(frames * sizeof(int));
 	thresholds = (int *) alloc_mem(frames * sizeof(int));
@@ -2931,7 +2925,7 @@ int main(int argc, char **argv){
 			free(enc->vlcs);
 		}
 
-		free_encoder(enc);
+		//free_encoder(enc);
 	}
 
 	if(f_huffman == 1){
