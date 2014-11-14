@@ -107,7 +107,7 @@ typedef struct {
     int **upara;
     int **prd;
     int **encval;
-    int **err;
+    int ***err;
     int ***org; // Original video/image
     int *ctx_weight;
     int ***roff;
@@ -180,7 +180,7 @@ void free_vlc(VLC *);
 VLC **init_vlcs(PMODEL ***, int, int);
 PMODEL ***init_pmodels(int, int, int, int *, double *, int);
 void set_spmodel(PMODEL *, int, int);
-int *init_ctx_weight(void);
+int *init_ctx_weight(int, int);
 int e2E(int, int, int, int);
 int E2e(int, int, int, int);
 void mtf_classlabel(char **, int *, int, int, int, int, int);

@@ -79,13 +79,21 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame){
 int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 	int ***roff, *ptr;
 	int x, y, dx, dy, k;
-	int order, min_dx, max_dx, min_dy;
+	int order, iorder, min_dx, max_dx, min_dy;
 	int imin_dx, imax_dx, imin_dy, imax_dy;
 	int min_abs_dx, max_abs_dx, min_abs_dy, max_abs_dy;
 
 	min_dx = max_dx = min_dy = 0;
 	imin_dx = imax_dx = imin_dy = imax_dy = 0;
-	order = (prd_order > NUM_UPELS) ? prd_order : NUM_UPELS;
+
+	if(inter_prd_order == 0){
+		order = (prd_order > NUM_UPELS) ? prd_order : NUM_UPELS;
+		iorder = 0;
+	}
+	else{
+		order = prd_order;
+		iorder = (prd_order + inter_prd_order > NUM_UPELS) ? inter_prd_order : NUM_UPELS - prd_order;
+	}
 
 	//Values to check for special cases
 	for (k = 0; k < order; k++){
@@ -96,7 +104,8 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 		if (dx < min_dx) min_dx = dx;
 		if (dx > max_dx) max_dx = dx;
 	}
-	for (k = 0; k < inter_prd_order - 1; k++){
+
+	for (k = 0; k < iorder - 1; k++){
 		dy = idyx[k].y;
 		dx = idyx[k].x;
 
@@ -132,7 +141,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 	//Cycle that runs for all the pixels
 	for (y = 0; y < img->height; y++){
 		for (x = 0; x < img->width; x++){
-			ptr = (int *) alloc_mem((order + inter_prd_order) * sizeof(int));
+			ptr = (int *) alloc_mem((order + iorder) * sizeof(int));
 			//Conditions to check which references are available for each pixel
 			if (y == 0){
 				if (x == 0){
@@ -221,7 +230,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					if (x == 0){
 						*ptr++ = base;
 
-						for (k = 0; k < inter_prd_order - 1; k++){
+						for (k = 0; k < iorder - 1; k++){
 							dy = idyx[k].y;
 							dx = idyx[k].x;
 
@@ -236,7 +245,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					else if (x + min_abs_dx <= 0 || x + max_abs_dx >= img->width){
 						*ptr++ = base;
 
-						for (k = 0; k < inter_prd_order - 1; k++){
+						for (k = 0; k < iorder - 1; k++){
 							dy = idyx[k].y;
 							dx = idyx[k].x;
 
@@ -256,7 +265,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					if (x == 0){
 						*ptr++ = base;
 
-						for (k = 0; k < inter_prd_order - 1; k++){
+						for (k = 0; k < iorder - 1; k++){
 							dy = idyx[k].y;
 							dx = idyx[k].x;
 
@@ -271,7 +280,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					else if (x + min_abs_dx <= 0 || x + max_abs_dx >= img->width){
 						*ptr++ = base;
 
-						for (k = 0; k < inter_prd_order - 1; k++){
+						for (k = 0; k < iorder - 1; k++){
 							dy = idyx[k].y;
 							dx = idyx[k].x;
 
@@ -290,7 +299,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 				else if (y + max_abs_dy >= img->height){
 					*ptr++ = base;
 
-					for (k = 0; k < inter_prd_order - 1; k++){
+					for (k = 0; k < iorder - 1; k++){
 						dy = idyx[k].y;
 						dx = idyx[k].x;
 
@@ -331,7 +340,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
  |
  |  Returns:  ENCODER* --> returns a encoder type structure
  *-------------------------------------------------------------------*/
-ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int num_class, int num_group, int prd_order, int inter_prd_order, int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel, int pm_accuracy){
+ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int **error, int num_class, int num_group, int prd_order, int inter_prd_order, int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel, int pm_accuracy){
 	//Declare new encoder struct
 	ENCODER *enc;
 	int x, y, i, j;
@@ -377,7 +386,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int num_class, int num_group, 
 	// Memory allocation for the original image
 	enc->org = (int ***)alloc_3d_array(enc->height + 1, enc->width, 2, sizeof(int));
 	// Memory allocation for the error image ??
-	enc->err = (int **)alloc_2d_array(enc->height + 1, enc->width, sizeof(int));
+	enc->err = (int ***)alloc_3d_array(enc->height + 1, enc->width, 2, sizeof(int));
 
 	// Quadtree map what?
 	if (enc->quadtree_depth > 0){
@@ -391,7 +400,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int num_class, int num_group, 
 	}
 
 	// ?
-	enc->ctx_weight = init_ctx_weight();
+	enc->ctx_weight = init_ctx_weight(enc->prd_order, enc->inter_prd_order);
 
 	// Class and group arrays
 	enc->class = (char **)alloc_2d_array(enc->height, enc->width, sizeof(char));
@@ -413,10 +422,19 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int num_class, int num_group, 
 		}
 	}
 
+	if(error != NULL){
+		for (y = 0; y < enc->height; y++){
+			for (x = 0; x < enc->width; x++){
+				enc->err[0][y][x] = error[y][x];
+			}
+		}
+	}
+
 	// Auxiliary values
 	enc->org[1][enc->height][0] = (enc->maxval + 1) >> 1;
 	enc->org[0][enc->height][0] = (enc->maxval + 1) >> 1;
-	enc->err[enc->height][0] = (enc->maxval + 1) >> 2;
+	enc->err[1][enc->height][0] = (enc->maxval + 1) >> 2;
+	enc->err[0][enc->height][0] = (enc->maxval + 1) >> 2;
 
 	// ?
 	enc->uquant = (char **)alloc_2d_array(enc->num_class, MAX_UPARA + 1, sizeof(char));
@@ -494,8 +512,21 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int num_class, int num_group, 
 	return (enc);
 }
 
+int **get_enc_err(ENCODER *enc, int pos){
+	int y, x;
+	int **error = (int **)alloc_2d_array(enc->height + 1, enc->width, sizeof(int));
+
+	for (y = 0; y < enc->height; y++){
+		for (x = 0; x < enc->width; x++){
+			error[y][x] = enc->err[pos][y][x];
+		}
+	}
+
+	return error;
+}
+
 void free_encoder(ENCODER *enc){
-	int dy, dx, order, min_dx, max_dx, min_dy, x, y, i, j, k;
+	int dy, dx, order, iorder, min_dx, max_dx, min_dy, x, y, i, j, k;
 	int imin_dx, imax_dx, imin_dy, imax_dy;
 	int min_abs_dx, max_abs_dx, min_abs_dy, max_abs_dy;
 	int gr;
@@ -535,7 +566,15 @@ void free_encoder(ENCODER *enc){
 
 	min_dx = max_dx = min_dy = 0;
 	imin_dx = imax_dx = imin_dy = imax_dy = 0;
-	order = (enc->prd_order > NUM_UPELS)? enc->prd_order : NUM_UPELS;
+
+	if(enc->inter_prd_order == 0){
+		order = (enc->prd_order > NUM_UPELS) ? enc->prd_order : NUM_UPELS;
+		iorder = 0;
+	}
+	else{
+		order = enc->prd_order;
+		iorder = (enc->prd_order + enc->inter_prd_order > NUM_UPELS) ? enc->inter_prd_order : NUM_UPELS - enc->prd_order;
+	}
 
 	//Values to check for special cases
 	for (k = 0; k < order; k++){
@@ -546,7 +585,7 @@ void free_encoder(ENCODER *enc){
 		if (dx < min_dx) min_dx = dx;
 		if (dx > max_dx) max_dx = dx;
 	}
-	for (k = 0; k < enc->inter_prd_order; k++){
+	for (k = 0; k < iorder; k++){
 		dy = idyx[k].y;
 		dx = idyx[k].x;
 
@@ -708,7 +747,7 @@ void set_cost_model(ENCODER *enc, int f_mmse){
 		}
 	}
 
-	enc->encval = enc->err;
+	enc->encval = enc->err[1];
 
 	for (gr = 0; gr < enc->num_group; gr++){
 		var = enc->sigma[gr] * enc->sigma[gr];
@@ -839,7 +878,7 @@ void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx){
 		class_p = &enc->class[y][tlx];
 		org_p = &enc->org[1][y][tlx];
 		roff_pp = &enc->roff[y][tlx];
-		err_p = &enc->err[y][tlx];
+		err_p = &enc->err[1][y][tlx];
 		prd_p = &enc->prd[y][tlx];
 
 		for (x = tlx; x < brx; x++){
@@ -867,14 +906,16 @@ void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx){
 
 int calc_uenc(ENCODER *enc, int y, int x){
 	int u, k, *err_p, *roff_p, *wt_p;
-	err_p = &enc->err[y][x];
+	err_p = &enc->err[1][y][x];
 	roff_p = enc->roff[y][x];
 	wt_p = enc->ctx_weight;
 
 	u = 0;
 
 	for (k = 0; k < NUM_UPELS; k++){
-		u += err_p[*roff_p++] * (*wt_p++);
+		int aux1 = err_p[*roff_p++];
+		int aux2 = (*wt_p++);
+		u += aux1 * aux2;
 	}
 
 	u >>= 6;
@@ -1295,7 +1336,7 @@ void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int 
 			for(x = tlx; x < brx; x++){
 				if(cl == enc->class[y][x]){
 					*prdbuf_p++ = enc->prd[y][x];
-					*errbuf_p++ = enc->err[y][x];
+					*errbuf_p++ = enc->err[1][y][x];
 					org_p++;
 				}
 				else {
@@ -1338,7 +1379,7 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int b
 			class_p = &enc->class[y][tlx];
 			prd_p = &enc->prd[y][tlx];
 			prdbuf_p = &prdbuf[cl][bufptr];
-			err_p = &enc->err[y][tlx];
+			err_p = &enc->err[1][y][tlx];
 			errbuf_p = &errbuf[cl][bufptr];
 			bufptr += bufsize;
 
@@ -1362,7 +1403,7 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int b
 		class_p = &enc->class[y][tlx];
 		prd_p = &enc->prd[y][tlx];
 		prdbuf_p = &prdbuf[min_cl][bufptr];
-		err_p = &enc->err[y][tlx];
+		err_p = &enc->err[1][y][tlx];
 		errbuf_p = &errbuf[min_cl][bufptr];
 		bufptr += bufsize;
 		for (x = tlx; x < brx; x++) {
@@ -1447,7 +1488,7 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int
 				class_p = &enc->class[y][tlx];
 				prd_p = &enc->prd[y][tlx];
 				prdbuf_p = &prdbuf[cl][bufptr];
-				err_p = &enc->err[y][tlx];
+				err_p = &enc->err[1][y][tlx];
 				errbuf_p = &errbuf[cl][bufptr];
 				bufptr += bufsize;
 
@@ -2492,7 +2533,7 @@ void print_predictors(ENCODER *enc, int f){
 int main(int argc, char **argv){
 	// Variable declaration
 	cost_t cost, min_cost, side_cost;
-	int i, j, f, k, x, y, cl, **prd_save, **th_save;
+	int i, j, f, k, x, y, cl, **prd_save, **th_save, **error;
 	char **class_save;
 	IMAGE *video[2];
 	ENCODER *enc;
@@ -2713,14 +2754,16 @@ int main(int argc, char **argv){
 			// Read input file
 			video[1] = read_yuv(infile, height, width, f);
 
-			enc = init_encoder(video[1], NULL, num_class, num_group, prd_order, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy);
+			enc = init_encoder(video[1], NULL, NULL, num_class, num_group, prd_order, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy);
 		}
 		else{
 			// Read input file
 			video[0] = read_yuv(infile, height, width, f - 1);
 			video[1] = read_yuv(infile, height, width, f);
 
-			enc = init_encoder(video[1], video[0], num_class, num_group, intra_prd_order, inter_prd_order, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy);
+			enc = init_encoder(video[1], video[0], error, num_class, num_group, intra_prd_order, inter_prd_order, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy);
+
+			free(error);
 		}
 
 		//Initiation of the reference offset
@@ -2916,16 +2959,13 @@ int main(int argc, char **argv){
 				for(k = 0; k < num_pmodel; k++){
 					aux = &enc->vlcs[gr][k];
 					free_vlc(aux);
-//					free(aux->len);
-//					free(aux->index);
-//					free(aux->off);
-//					free(aux->code);
 				}
 			}
 			free(enc->vlcs);
 		}
 
-		//free_encoder(enc);
+		error = get_enc_err(enc, 1);
+		//fre_encoder(enc);
 	}
 
 	if(f_huffman == 1){
