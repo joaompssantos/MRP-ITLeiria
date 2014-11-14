@@ -2461,24 +2461,24 @@ char *remove_ext (char* mystr, char dot, char sep){
 void print_results(FILE *res, int frames, int height, int width, int header, int *class_info, int *predictors, int *thresholds, int *errors){
 	int f, rate = 0, total_bits = 0;
 
-	printf("\n------------------------------\n");
+	printf("\n---------------------------------\n");
 	printf("Header info.\t :%10d bits\n", header);
 	fprintf(res, "Header info.\t :%10d bits\n", header);
 	fprintf(res, "Frame\t\tBits\t\tBpp\n");
 
 	for(f = 0; f < frames; f++){
 		// Results output
-		printf("------------------------------\n");
+		printf("---------------------------------\n");
 		printf("frame [%03d]\n", f);
-		printf("class info\t:%10d bits\n", class_info[f]);
-		printf("predictors\t:%10d bits\n", predictors[f]);
-		printf("thresholds\t:%10d bits\n", thresholds[f]);
-		printf("pred. errors\t:%10d bits\n", errors[f]);
+		printf("class info\t :%10d bits\n", class_info[f]);
+		printf("predictors\t :%10d bits\n", predictors[f]);
+		printf("thresholds\t :%10d bits\n", thresholds[f]);
+		printf("pred. errors\t :%10d bits\n", errors[f]);
 
 		rate = class_info[f] + predictors[f] + thresholds[f] + errors[f];
 		total_bits += rate;
 
-		printf("------------------------------\n");
+		printf("---------------------------------\n");
 		printf("total frame [%2d] :%10d bits\n", f, rate);
 		printf("frame coding rate:%10.5f b/p\n", (double)rate / (height * width));
 		fprintf(res, "%d\t%10d\t%10.5f\n", f, rate, (double)rate / (height * width));
@@ -2486,11 +2486,11 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 
 	total_bits += header;
 
-	printf("------------------------------\n");
+	printf("---------------------------------\n");
 	printf("total\t\t :%10d bits\n", total_bits);
 	printf("total coding rate:%10.5f b/p\n", (double)total_bits / (height * width * frames));
 
-	fprintf(res, "---------------------------------------------\n");
+	fprintf(res, "------------------------------------------------\n");
 	fprintf(res, "Total:\n\t%10d\t%10.5f\n", total_bits, (double)total_bits / (height * width * frames));
 }
 
