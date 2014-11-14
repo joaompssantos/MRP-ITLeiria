@@ -2473,7 +2473,7 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 		printf("class info\t:%10d bits\n", class_info[f]);
 		printf("predictors\t:%10d bits\n", predictors[f]);
 		printf("thresholds\t:%10d bits\n", thresholds[f]);
-		printf("pred. errors\t :%10d bits\n", errors[f]);
+		printf("pred. errors\t:%10d bits\n", errors[f]);
 
 		rate = class_info[f] + predictors[f] + thresholds[f] + errors[f];
 		total_bits += rate;
