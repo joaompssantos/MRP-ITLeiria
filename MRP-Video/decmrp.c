@@ -34,7 +34,7 @@ int read_class(FILE *fp){
 	return(getbits(fp, 8));
 }
 
-DECODER *init_decoder(FILE *fp, int version, int width, int height, int maxval, int num_comp, int num_group, int prd_order, int inter_prd_order, int num_pmodel, int coef_precision, int pm_accuracy, int f_huffman, int quadtree_depth){
+DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height, int maxval, int num_comp, int num_group, int prd_order, int inter_prd_order, int num_pmodel, int coef_precision, int pm_accuracy, int f_huffman, int quadtree_depth){
 	DECODER *dec;
 	int i;
 
@@ -60,9 +60,19 @@ DECODER *init_decoder(FILE *fp, int version, int width, int height, int maxval, 
 	i = (dec->prd_order + dec->inter_prd_order) * 3 + 5;
 	dec->predictor = (int **)alloc_2d_array(dec->num_class, i, sizeof(int));
 
-	dec->err = (int **)alloc_2d_array(dec->height, dec->width, sizeof(int));
+	dec->err = (int ***)alloc_3d_array(dec->height, dec->width, 2, sizeof(int));
 
-	dec->ctx_weight = init_ctx_weight();
+	if(error != NULL){
+		int y, x;
+
+		for(y = 0; y < dec->height; y++){
+			for(x = 0; x < dec->width; x++){
+				dec->err[0][y][x] = error[y][x];
+			}
+		}
+	}
+
+	dec->ctx_weight = init_ctx_weight(dec->prd_order, dec->inter_prd_order);
 
 	// Quadtree map
 	if (dec->quadtree_depth > 0){
@@ -112,6 +122,20 @@ DECODER *init_decoder(FILE *fp, int version, int width, int height, int maxval, 
 
 	return (dec);
 }
+
+int **get_dec_err(DECODER *dec, int pos){
+	int y, x;
+	int **error = (int **)alloc_2d_array(dec->height + 1, dec->width, sizeof(int));
+
+	for (y = 0; y < dec->height; y++){
+		for (x = 0; x < dec->width; x++){
+			error[y][x] = dec->err[pos][y][x];
+		}
+	}
+
+	return error;
+}
+
 
 void free_decoder(DECODER *dec){
 	int i, j, gr, num_subpm;
@@ -588,11 +612,17 @@ int calc_udec(DECODER *dec, int y, int x){
 	int **err, *wt_p;
 
 	u = 0;
-	err = dec->err;
+	err = dec->err[1];
 	wt_p = dec->ctx_weight;
 
+	int order = NUM_UPELS;
+
+	if(dec->prd_order < NUM_UPELS && dec->inter_prd_order != 0){
+		order = dec->prd_order;
+	}
+
 	if (y >= UPEL_DIST && x >= UPEL_DIST && x <= dec->width - UPEL_DIST){
-		for (k = 0; k < NUM_UPELS; k++){
+		for (k = 0; k < order; k++){
 			ry = y + dyx[k].y;
 			rx = x + dyx[k].x;
 			u += err[ry][rx] * (*wt_p++);
@@ -607,7 +637,7 @@ int calc_udec(DECODER *dec, int y, int x){
 		else{
 			ry = 0;
 
-			for (k =0; k < NUM_UPELS; k++){
+			for (k =0; k < order; k++){
 				rx = x + dyx[k].x;
 
 				if (rx < 0) rx = 0;
@@ -619,7 +649,7 @@ int calc_udec(DECODER *dec, int y, int x){
 	}
 	else{
 		if (x == 0){
-			for (k = 0; k < NUM_UPELS; k++){
+			for (k = 0; k < order; k++){
 				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
@@ -633,7 +663,7 @@ int calc_udec(DECODER *dec, int y, int x){
 			}
 		}
 		else{
-			for (k = 0; k < NUM_UPELS; k++){
+			for (k = 0; k < order; k++){
 				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
@@ -644,6 +674,36 @@ int calc_udec(DECODER *dec, int y, int x){
 				else if (rx >= dec->width) rx = dec->width - 1;
 
 				u += err[ry][rx] * (*wt_p++);
+			}
+		}
+	}
+
+	//laskjdaslkdj
+	if(dec->prd_order < NUM_UPELS && dec->inter_prd_order != 0){
+		order = NUM_UPELS - dec->prd_order;
+		err = dec->err[0];
+
+		u += err[y][x] * (*wt_p++);
+
+		if (y >= UPEL_DIST && x >= UPEL_DIST && x < dec->width - UPEL_DIST && y < dec->height - UPEL_DIST){
+			for (k = 0; k < order - 1; k++){
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				u += err[ry][rx] * (*wt_p++);
+			}
+		}
+		else{
+			for (k = 0; k < order - 1; k++){
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				if(ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width){
+					u += err[y][x] * (*wt_p++);
+				}
+				else{
+					u += err[ry][rx] * (*wt_p++);
+				}
 			}
 		}
 	}
@@ -774,7 +834,7 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[2], DECODER *dec){
 				prd >>= (dec->coef_precision - 1);
 				p = (prd + 1) >> 1;
 				vlc = &dec->vlcs[gr][0];
-				dec->err[y][x] = E = decode_vlc(fp, vlc);
+				dec->err[1][y][x] = E = decode_vlc(fp, vlc);
 				e = E2e(E, p, prd & 1, dec->maxval);
 				video[1]->val[y][x] = p + e;
 			}
@@ -792,7 +852,7 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[2], DECODER *dec){
 					prd >>= (dec->coef_precision - 1);
 					p = (prd + 1) >> 1;
 					pm = dec->pmodels[gr][0];
-					dec->err[y][x] = E = rc_decode(fp, dec->rc, pm, 0, pm->size);
+					dec->err[1][y][x] = E = rc_decode(fp, dec->rc, pm, 0, pm->size);
 					e = E2e(E, p, prd & 1, dec->maxval);
 					video[1]->val[y][x] = p + e;
 				}
@@ -816,7 +876,7 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[2], DECODER *dec){
 					video[1]->val[y][x] = p;
 					prd >>= (dec->coef_precision - 1);
 					e = (p << 1) - prd;
-					dec->err[y][x] = (e > 0)? (e - 1) : (-e);
+					dec->err[1][y][x] = (e > 0)? (e - 1) : (-e);
 				}
 			}
 		}
@@ -949,7 +1009,7 @@ void print_predictors(DECODER *dec, int f){
 }
 
 int main(int argc, char **argv){
-	int i, f;
+	int i, f, **error;
 	int version, width, height, maxval, frames, num_comp, num_group, prd_order, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth;
 	IMAGE *video[2];
 	DECODER *dec;
@@ -997,12 +1057,13 @@ int main(int argc, char **argv){
 		printf("Decoding frame: %03d", f);
 
 		if(f == 0){
-			dec = init_decoder(fp, version, width, height, maxval, num_comp, num_group, prd_order, 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth);
+			dec = init_decoder(fp, NULL, version, width, height, maxval, num_comp, num_group, prd_order, 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth);
 		}
 		else{
 			video[0] = read_yuv(outfile, height, width, f - 1);
 
-			dec = init_decoder(fp, version, width, height, maxval, num_comp, num_group, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth);
+			dec = init_decoder(fp, error, version, width, height, maxval, num_comp, num_group, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth);
+			free(error);
 		}
 
 		if (dec->f_huffman == 0){
@@ -1031,6 +1092,7 @@ int main(int argc, char **argv){
 			free(video[0]);
 		}
 
+		error = get_dec_err(dec, 1);
 		free_decoder(dec);
 
 		printf(" --> Process completed\n");

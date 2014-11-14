@@ -152,7 +152,7 @@ typedef struct {
     int f_huffman;
     int quadtree_depth;
     int **predictor;
-    int **err;
+    int ***err;
     int *ctx_weight;
     char **qtmap[QUADTREE_DEPTH];
     char **class;
