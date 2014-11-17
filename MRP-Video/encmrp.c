@@ -585,7 +585,7 @@ void free_encoder(ENCODER *enc){
 		if (dx < min_dx) min_dx = dx;
 		if (dx > max_dx) max_dx = dx;
 	}
-	for (k = 0; k < iorder; k++){
+	for (k = 0; k < iorder - 1; k++){
 		dy = idyx[k].y;
 		dx = idyx[k].x;
 
@@ -619,7 +619,7 @@ void free_encoder(ENCODER *enc){
 	//Cycle that runs for all the pixels
 	for (y = 0; y < enc->height; y++){
 		for (x = 0; x < enc->width; x++){
-			//Conditions to check which references are available for each pijel
+			//Conditions to check which references are available for each pixel
 			if (y == 0){
 				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
 					free(enc->roff[y][x]);
@@ -2965,7 +2965,7 @@ int main(int argc, char **argv){
 		}
 
 		error = get_enc_err(enc, 1);
-		//fre_encoder(enc);
+		free_encoder(enc);
 	}
 
 	if(f_huffman == 1){
