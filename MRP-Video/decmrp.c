@@ -678,7 +678,7 @@ int calc_udec(DECODER *dec, int y, int x){
 		}
 	}
 
-	//laskjdaslkdj
+	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
 	if(dec->prd_order < NUM_UPELS && dec->inter_prd_order != 0){
 		order = NUM_UPELS - dec->prd_order;
 		err = dec->err[0];
