@@ -1098,6 +1098,7 @@ int main(int argc, char **argv){
 		printf(" --> Process completed\n");
 	}
 
+	free(error);
 	fclose(fp);
 
 	printf("\ncpu time: %.2f sec.\n", cpu_time());
