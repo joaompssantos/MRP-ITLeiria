@@ -606,14 +606,12 @@ void decode_class(FILE *fp, DECODER *dec){
 	return;
 }
 
-
 int calc_udec(DECODER *dec, int y, int x){
 	int rx, ry, k, u;
-	int **err, *wt_p;
+	int **err;
 
 	u = 0;
 	err = dec->err[1];
-	wt_p = dec->ctx_weight;
 
 	int order = NUM_UPELS;
 
@@ -625,13 +623,13 @@ int calc_udec(DECODER *dec, int y, int x){
 		for (k = 0; k < order; k++){
 			ry = y + dyx[k].y;
 			rx = x + dyx[k].x;
-			u += err[ry][rx] * (*wt_p++);
+			u += err[ry][rx] * dec->ctx_weight[k];
 		}
 	}
 	else if (y == 0){
 		if (x == 0){
 			for (k = 0; k < NUM_UPELS; k++){
-				u += ((dec->maxval + 1) >> 2) * (*wt_p++);
+				u += ((dec->maxval + 1) >> 2) * dec->ctx_weight[k];
 			}
 		}
 		else{
@@ -643,7 +641,7 @@ int calc_udec(DECODER *dec, int y, int x){
 				if (rx < 0) rx = 0;
 				else if (rx >= x) rx = x - 1;
 
-				u += err[ry][rx] * (*wt_p++);
+				u += err[ry][rx] * dec->ctx_weight[k];
 			}
 		}
 	}
@@ -659,7 +657,7 @@ int calc_udec(DECODER *dec, int y, int x){
 
 				if (rx < 0) rx = 0;
 
-				u += err[ry][rx] * (*wt_p++);
+				u += err[ry][rx] * dec->ctx_weight[k];
 			}
 		}
 		else{
@@ -673,36 +671,37 @@ int calc_udec(DECODER *dec, int y, int x){
 				if (rx < 0) rx = 0;
 				else if (rx >= dec->width) rx = dec->width - 1;
 
-				u += err[ry][rx] * (*wt_p++);
+				u += err[ry][rx] * dec->ctx_weight[k];
 			}
 		}
 	}
 
 	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
 	if(dec->prd_order < NUM_UPELS && dec->inter_prd_order != 0){
-		order = NUM_UPELS - dec->prd_order;
+		int iorder = NUM_UPELS - dec->prd_order;
+
 		err = dec->err[0];
 
-		u += err[y][x] * (*wt_p++);
+		u += err[y][x] * dec->ctx_weight[order];
 
 		if (y >= UPEL_DIST && x >= UPEL_DIST && x < dec->width - UPEL_DIST && y < dec->height - UPEL_DIST){
-			for (k = 0; k < order - 1; k++){
+			for (k = 0; k < iorder - 1; k++){
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
-				u += err[ry][rx] * (*wt_p++);
+				u += err[ry][rx] * dec->ctx_weight[order + k + 1];
 			}
 		}
 		else{
-			for (k = 0; k < order - 1; k++){
+			for (k = 0; k < iorder - 1; k++){
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
 				if(ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width){
-					u += err[y][x] * (*wt_p++);
+					u += err[y][x] * dec->ctx_weight[order + k + 1];
 				}
 				else{
-					u += err[ry][rx] * (*wt_p++);
+					u += err[ry][rx] * dec->ctx_weight[order + k + 1];
 				}
 			}
 		}
