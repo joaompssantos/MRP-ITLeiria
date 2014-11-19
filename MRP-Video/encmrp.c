@@ -656,6 +656,21 @@ void free_encoder(ENCODER *enc){
 	free(enc->pmodels[0][0]);
 	free(enc->pmodels);
 
+	if(enc->f_huffman == 1){
+		int gr;
+		VLC *aux;
+		for(gr = 0; gr < enc->num_group; gr++){
+			for(k = 0; k < enc->num_pmodel; k++){
+				aux = &enc->vlcs[gr][k];
+				free(aux->code);
+				free(aux->off);
+				free(aux->index);
+				free(aux->len);
+			}
+		}
+		free(enc->vlcs);
+	}
+
 	free(enc);
 }
 
@@ -2951,18 +2966,6 @@ int main(int argc, char **argv){
 		free(class_save);
 		free(prd_save);
 		free(th_save);
-
-		if(enc->f_huffman == 1){
-			int gr;
-			VLC *aux;
-			for(gr = 0; gr < num_group; gr++){
-				for(k = 0; k < num_pmodel; k++){
-					aux = &enc->vlcs[gr][k];
-					free_vlc(aux);
-				}
-			}
-			free(enc->vlcs);
-		}
 
 		error = get_enc_err(enc, 1);
 		free_encoder(enc);
