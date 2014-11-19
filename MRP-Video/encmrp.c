@@ -2752,14 +2752,14 @@ int main(int argc, char **argv){
 		// Creates new ENCODER structure
 		if(f == 0){
 			// Read input file
-			video[1] = read_yuv(infile, height, width, f + 82);
+			video[1] = read_yuv(infile, height, width, f);
 
 			enc = init_encoder(video[1], NULL, NULL, num_class, num_group, prd_order, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy);
 		}
 		else{
 			// Read input file
-			video[0] = read_yuv(infile, height, width, f + 82 - 1);
-			video[1] = read_yuv(infile, height, width, f + 82);
+			video[0] = read_yuv(infile, height, width, f - 1);
+			video[1] = read_yuv(infile, height, width, f);
 
 			enc = init_encoder(video[1], video[0], error, num_class, num_group, intra_prd_order, inter_prd_order, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy);
 
