@@ -1336,6 +1336,7 @@ void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int 
 
 	int prd_order = enc->prd_order + enc-> inter_prd_order;
 
+	//Check the boundaries of the block (mainly for pictures not multiple of bufsize)
 	brx = (tlx + bufsize < enc->width) ? (tlx + bufsize) : enc->width;
 	bry = (tly + bufsize < enc->height) ? (tly + bufsize) : enc->height;
 
@@ -2545,6 +2546,338 @@ void print_predictors(ENCODER *enc, int f){
 	fclose(teste);
 }
 
+int calc_udec(ENCODER *enc, int y, int x){
+	int rx, ry, k, u;
+	int **err;
+
+	u = 0;
+	err = enc->err[1];
+
+	int order = NUM_UPELS;
+
+	if(enc->prd_order < NUM_UPELS && enc->inter_prd_order != 0){
+		order = enc->prd_order;
+	}
+
+	if (y >= UPEL_DIST && x >= UPEL_DIST && x <= enc->width - UPEL_DIST){
+		for (k = 0; k < order; k++){
+			ry = y + dyx[k].y;
+			rx = x + dyx[k].x;
+			u += err[ry][rx] * enc->ctx_weight[k];
+		}
+	}
+	else if (y == 0){
+		if (x == 0){
+			for (k = 0; k < NUM_UPELS; k++){
+				u += ((enc->maxval + 1) >> 2) * enc->ctx_weight[k];
+			}
+		}
+		else{
+			ry = 0;
+
+			for (k =0; k < order; k++){
+				rx = x + dyx[k].x;
+
+				if (rx < 0) rx = 0;
+				else if (rx >= x) rx = x - 1;
+
+				u += err[ry][rx] * enc->ctx_weight[k];
+			}
+		}
+	}
+	else{
+		if (x == 0){
+			for (k = 0; k < order; k++){
+				ry = y + dyx[k].y;
+
+				if (ry < 0) ry = 0;
+				else if (ry >= y) ry = y - 1;
+
+				rx = x + dyx[k].x;
+
+				if (rx < 0) rx = 0;
+
+				u += err[ry][rx] * enc->ctx_weight[k];
+			}
+		}
+		else{
+			for (k = 0; k < order; k++){
+				ry = y + dyx[k].y;
+
+				if (ry < 0) ry = 0;
+
+				rx = x + dyx[k].x;
+
+				if (rx < 0) rx = 0;
+				else if (rx >= enc->width) rx = enc->width - 1;
+
+				u += err[ry][rx] * enc->ctx_weight[k];
+			}
+		}
+	}
+
+	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
+	if(enc->prd_order < NUM_UPELS && enc->inter_prd_order != 0){
+		int iorder = NUM_UPELS - enc->prd_order;
+
+		err = enc->err[0];
+
+		u += err[y][x] * enc->ctx_weight[order];
+
+		if (y >= UPEL_DIST && x >= UPEL_DIST && x < enc->width - UPEL_DIST && y < enc->height - UPEL_DIST){
+			for (k = 0; k < iorder - 1; k++){
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				u += err[ry][rx] * enc->ctx_weight[order + k + 1];
+			}
+		}
+		else{
+			for (k = 0; k < iorder - 1; k++){
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				if(ry < 0 || rx < 0 || ry >= enc->height || rx >= enc->width){
+					u += err[y][x] * enc->ctx_weight[order + k + 1];
+				}
+				else{
+					u += err[ry][rx] * enc->ctx_weight[order + k + 1];
+				}
+			}
+		}
+	}
+
+	u >>= 6;
+
+	if (u > MAX_UPARA) u = MAX_UPARA;
+
+	return (u);
+}
+
+int calc_prd(IMAGE *video[2], ENCODER *enc, int cl, int y, int x){
+	int k, prd, rx, ry;
+
+	int min_dx, max_dx, min_dy, dx, dy;
+	int imin_dx, imax_dx, imin_dy, imax_dy;
+
+	min_dx = max_dx = min_dy = 0;
+	imin_dx = imax_dx = imin_dy = imax_dy = 0;
+
+	//Values to check for special cases
+	for (k = 0; k < enc->prd_order; k++){
+		dy = dyx[k].y;
+		dx = dyx[k].x;
+
+		if (dy < min_dy) min_dy = dy;
+		if (dx < min_dx) min_dx = dx;
+		if (dx > max_dx) max_dx = dx;
+	}
+
+	for (k = 0; k < enc->inter_prd_order - 1; k++){
+		dy = idyx[k].y;
+		dx = idyx[k].x;
+
+		if (dy < imin_dy) imin_dy = dy;
+		if (dy > imax_dy) imax_dy = dy;
+		if (dx < imin_dx) imin_dx = dx;
+		if (dx > imax_dx) imax_dx = dx;
+	}
+
+	prd = 0;
+
+	if (y >= -min_dy && x >= -min_dx && x < enc->width - min_dx){
+		for (k = 0; k < enc->prd_order; k++){
+			ry = y + dyx[k].y;//(*scany_p++);
+			rx = x + dyx[k].x;//(*scanx_p++);
+			prd += enc->predictor[cl][k] * video[1]->val[ry][rx];
+		}
+	}
+	else if (y == 0){
+		if (x == 0){
+			for (k = 0; k < enc->prd_order; k++){
+				prd += enc->predictor[cl][k];
+			}
+
+			prd *= ((video[1]->maxval + 1) >> 1);
+		}
+		else{
+			ry = 0;
+
+			for (k = 0; k < enc->prd_order; k++){
+				rx = x + dyx[k].x;//(*scanx_p++);
+
+				if (rx < 0) rx = 0;
+				else if (rx >= x) rx = x - 1;
+
+				prd += enc->predictor[cl][k] * video[1]->val[ry][rx];
+			}
+		}
+	}
+	else{
+		if (x == 0){
+			for (k = 0; k < enc->prd_order; k++){
+				ry = y + dyx[k].y;//(*scany_p++);
+
+				if (ry < 0) ry = 0;
+				else if (ry >= y) ry = y - 1;
+
+				rx = x + dyx[k].x;//(*scanx_p++);
+
+				if (rx < 0) rx = 0;
+
+				prd += enc->predictor[cl][k] * video[1]->val[ry][rx];
+			}
+		}
+		else{
+			for (k = 0; k < enc->prd_order; k++){
+				ry = y + dyx[k].y;//(*scany_p++);
+
+				if (ry < 0) ry = 0;
+
+				rx = x + dyx[k].x;//(*scanx_p++);
+
+				if (rx < 0) rx = 0;
+				else if (rx >= video[1]->width) rx = video[1]->width - 1;
+
+				prd += enc->predictor[cl][k] * video[1]->val[ry][rx];
+			}
+		}
+	}
+
+	//Inter prediction calculation
+	if(enc->inter_prd_order > 0){
+		prd += enc->predictor[cl][0] * video[0]->val[y][x];
+		if (y >= -imin_dy && x >= -imin_dx && x < enc->width - imax_dx && y < enc->height - imax_dx){
+			for (k = 0; k < enc->inter_prd_order - 1; k++){
+				ry = y + idyx[k].y;//(*scany_p++);
+				rx = x + idyx[k].x;//(*scanx_p++);
+
+				prd += enc->predictor[cl][k + 1] * video[0]->val[ry][rx];
+			}
+		}
+		else{
+			for (k = 0; k < enc->inter_prd_order - 1; k++){
+				ry = y + idyx[k].y;//(*scany_p++);
+				rx = x + idyx[k].x;//(*scanx_p++);
+
+				if(ry < 0 || rx < 0 || ry >= enc->height || rx >= enc->width){
+					prd += enc->predictor[cl][k + 1] * video[0]->val[y][x];
+				}
+				else{
+					prd += enc->predictor[cl][k + 1] * video[0]->val[ry][rx];
+				}
+			}
+		}
+	}
+
+	if (prd < 0) prd = 0;
+	else if (prd > enc->maxprd) prd = enc->maxprd;
+
+	return (prd);
+}
+
+IMAGE *decode_image(IMAGE *video[2], ENCODER *enc){
+	int x, y, cl, prd, e, p;
+
+	if (enc->f_huffman == 1){
+		for (y = 0; y < enc->height; y++){
+			for (x = 0; x < enc->width; x++){
+				cl = enc->class[y][x];
+				//u = calc_udec(enc, y, x);
+				//gr = enc->uquant[cl][u];
+				prd = calc_prd(video, enc, cl, y, x);
+				prd >>= (enc->coef_precision - 1);
+				p = (prd + 1) >> 1;
+				//vlc = &enc->vlcs[gr][0];
+				//enc->err[1][y][x] = E = decode_vlc(fp, vlc);
+				//e = E2e(E, p, prd & 1, enc->maxval);
+				video[1]->val[y][x] = p + E2e(enc->err[1][y][x], p, prd & 1, enc->maxval);//e;
+			}
+		}
+	}
+	else{
+		//PMODEL *pm;
+		if (enc->pm_accuracy < 0){
+			for (y = 0; y < enc->height; y++){
+				for (x = 0; x < enc->width; x++){
+					cl = enc->class[y][x];
+					//u = calc_udec(enc, y, x);
+					//gr = enc->uquant[cl][u];
+					prd = calc_prd(video, enc, cl, y, x);
+					prd >>= (enc->coef_precision - 1);
+					p = (prd + 1) >> 1;
+					//pm = enc->pmodels[gr][0];
+					//enc->err[1][y][x] = E = rc_decode(fp, enc->rc, pm, 0, pm->size);
+					//e = E2e(E, p, prd & 1, enc->maxval);
+					video[1]->val[y][x] = p + E2e(enc->err[1][y][x], p, prd & 1, enc->maxval);//e;
+				}
+			}
+		}
+		else{
+			int shift, base;
+			//mask = (1 << enc->pm_accuracy) - 1;
+			shift = enc->coef_precision - enc->pm_accuracy;
+
+			for (y = 0; y < enc->height; y++){
+				for (x = 0; x < enc->width; x++){
+					cl = enc->class[y][x];
+					//u = calc_udec(enc, y, x);
+					//gr = enc->uquant[cl][u];
+					prd = calc_prd(video, enc, cl, y, x);
+					base = (enc->maxprd - prd + (1 << shift) / 2) >> shift;
+					//pm = enc->pmodels[gr][0] + (base & mask);
+					base >>= enc->pm_accuracy;
+					//p = rc_decode(fp, enc->rc, pm, base, base+enc->maxval+1) - base;
+					video[1]->val[y][x] = E2e(enc->err[1][y][x], p, prd & 1, enc->maxval) - base;//p;
+					prd >>= (enc->coef_precision - 1);
+					e = (p << 1) - prd;
+					enc->err[1][y][x] = (e > 0)? (e - 1) : (-e);
+				}
+			}
+		}
+	}
+
+	return (video[1]);
+}
+
+void write_yuv(IMAGE *img, char *filename){
+	int i, j;
+	FILE *fp;
+
+	fp = fileopen(filename, "ab");
+
+	for (i = 0; i < img->height; i++){
+		for (j = 0; j < img->width; j++){
+			putc(img->val[i][j], fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++){
+		for (j = 0; j < img->width / 2; j++){
+			putc(128, fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++){
+		for (j = 0; j < img->width / 2; j++){
+			putc(128, fp);
+		}
+	}
+
+	fclose(fp);
+
+	return;
+}
+
+void test_decoding(ENCODER *enc, int f, IMAGE* video[2]){
+	//enc->pmodels = init_pmodels(enc->num_group, enc->num_pmodel, enc->pm_accuracy, dec->pm_idx, enc->sigma, enc->maxval + 1);
+	enc->pmodels = init_pmodels(enc->num_group, enc->num_pmodel, enc->pm_accuracy, NULL, enc->sigma, enc->maxval + 1);
+
+	video[1] = decode_image(video, enc);
+
+	write_yuv(video[1], "decoding_in_encoder.yuv");
+}
+
 int main(int argc, char **argv){
 	// Variable declaration
 	cost_t cost, min_cost, side_cost;
@@ -2955,6 +3288,8 @@ int main(int argc, char **argv){
 
 		print_class(enc, f);
 		print_predictors(enc, f);
+
+		//test_decoding(enc, f, video);
 
 		free(video[1]->val);
 		free(video[1]);
