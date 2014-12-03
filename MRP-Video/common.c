@@ -333,6 +333,7 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
 	int i, j, n;
 
 	if(center == 0) sigma *= 2.0;
+
 	if(idx < 0){
 		shape = 2.0;
 	}
@@ -357,9 +358,11 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
 			x = (double)(i - (double)center + 0.5) * sw;
 			pdfsamp[i + 1] = exp(-pow(beta * x, shape));
 		}
+
 		for(i = 0; i <= center; i++){
 			pdfsamp[center - i] =  pdfsamp[center + i + 1];
 		}
+
 		for(i = 0; i < n; i++){
 			if(i == center){
 				pdfsamp[i] = (2.0 + pdfsamp[i] + pdfsamp[i + 1]) / 2.0;
@@ -384,6 +387,7 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
 			pm->freq[i] = norm * pdfsamp[i * num_subpm + j] + MIN_FREQ;
 			pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
 		}
+
 		pm++;
 	}
 	return;
@@ -557,11 +561,11 @@ int e2E(int e, int prd, int flag, int maxval){
 	return (E);
 }
 
-int E2e(int E, int prd, int flag, int maxval)
-{
+int E2e(int E, int prd, int flag, int maxval){
 	int e, th;
 
 	th = (prd < ((maxval + 1) >> 1))? prd : maxval - prd;
+
 	if (E > (th << 1)) {
 		e = (prd < ((maxval + 1) >> 1))? E - th : th - E;
 	} else if (flag) {
@@ -569,6 +573,7 @@ int E2e(int E, int prd, int flag, int maxval)
 	} else {
 		e = (E & 1)? (E >> 1) + 1 : -(E >> 1);
 	}
+
 	return (e);
 }
 
