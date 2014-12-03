@@ -64,7 +64,7 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame){
 	return (img);
 }
 
-/*-----------------------_--- init_ref_offset -----------------------*
+/*--------------------------- init_ref_offset -----------------------*
  |  Function init_ref_offset
  |
  |  Purpose:  Calculates the offset of a reference to a given pixel
@@ -79,24 +79,15 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame){
 int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 	int ***roff, *ptr;
 	int x, y, dx, dy, k;
-	int order, iorder, min_dx, max_dx, min_dy;
+	int min_dx, max_dx, min_dy;
 	int imin_dx, imax_dx, imin_dy, imax_dy;
 	int min_abs_dx, max_abs_dx, min_abs_dy, max_abs_dy;
 
 	min_dx = max_dx = min_dy = 0;
 	imin_dx = imax_dx = imin_dy = imax_dy = 0;
 
-	if(inter_prd_order == 0){
-		order = (prd_order > NUM_UPELS) ? prd_order : NUM_UPELS;
-		iorder = 0;
-	}
-	else{
-		order = prd_order;
-		iorder = (prd_order + inter_prd_order > NUM_UPELS) ? inter_prd_order : NUM_UPELS - prd_order;
-	}
-
 	//Values to check for special cases
-	for (k = 0; k < order; k++){
+	for (k = 0; k < prd_order; k++){
 		dy = dyx[k].y;
 		dx = dyx[k].x;
 
@@ -105,7 +96,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 		if (dx > max_dx) max_dx = dx;
 	}
 
-	for (k = 0; k < iorder - 1; k++){
+	for (k = 0; k < inter_prd_order - 1; k++){
 		dy = idyx[k].y;
 		dx = idyx[k].x;
 
@@ -116,6 +107,8 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 	}
 
 	max_abs_dy = imax_dy;
+	if(inter_prd_order <= 1) max_abs_dy = img->height;
+
 	if(min_dy < imin_dy){
 		min_abs_dy = min_dy;
 	}
@@ -141,7 +134,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 	//Cycle that runs for all the pixels
 	for (y = 0; y < img->height; y++){
 		for (x = 0; x < img->width; x++){
-			ptr = (int *) alloc_mem((order + iorder) * sizeof(int));
+			ptr = (int *) alloc_mem((prd_order + inter_prd_order) * sizeof(int));
 			//Conditions to check which references are available for each pixel
 			if (y == 0){
 				if (x == 0){
@@ -149,7 +142,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					dx = 0;
 					dy = img->height;
 
-					for (k = 0; k < order; k++){
+					for (k = 0; k < prd_order; k++){
 						*ptr++ = dy * img->width + dx; //Points to a line filled with 128 (if max_val = 256)
 					}
 				}
@@ -157,7 +150,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					roff[y][x] = ptr;
 					dy = 0;
 
-					for (k = 0; k < order; k++){
+					for (k = 0; k < prd_order; k++){
 						dx = dyx[k].x;
 
 						if (x + dx < 0) dx = -x;
@@ -175,7 +168,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 				if (x == 0){
 					roff[y][x] = ptr;
 
-					for (k = 0; k < order; k++){
+					for (k = 0; k < prd_order; k++){
 						dy = dyx[k].y;
 
 						if (y + dy < 0) dy = -y;
@@ -191,7 +184,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 				else if (x + min_abs_dx <= 0 || x + max_abs_dx >= img->width){
 					roff[y][x] = ptr;
 
-					for (k = 0; k < order; k++){
+					for (k = 0; k < prd_order; k++){
 						dy = dyx[k].y;
 
 						if (y + dy < 0) dy = -y;
@@ -211,10 +204,16 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 				}
 			}
 			else if (y + max_abs_dy >= img->height){
-				roff[y][x] = ptr;
+				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= img->width){
+					roff[y][x] = ptr;
 
-				for (k = 0; k < order; k++){
-					*ptr++ = roff[y - 1][x][k];
+					for (k = 0; k < prd_order; k++){
+						*ptr++ = roff[y - 1][x][k];
+					}
+				}
+				else{
+					roff[y][x] = roff[y][x - 1];
+					free(ptr);
 				}
 			}
 			else {
@@ -230,7 +229,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					if (x == 0){
 						*ptr++ = base;
 
-						for (k = 0; k < iorder - 1; k++){
+						for (k = 0; k < inter_prd_order - 1; k++){
 							dy = idyx[k].y;
 							dx = idyx[k].x;
 
@@ -245,7 +244,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					else if (x + min_abs_dx <= 0 || x + max_abs_dx >= img->width){
 						*ptr++ = base;
 
-						for (k = 0; k < iorder - 1; k++){
+						for (k = 0; k < inter_prd_order - 1; k++){
 							dy = idyx[k].y;
 							dx = idyx[k].x;
 
@@ -265,7 +264,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					if (x == 0){
 						*ptr++ = base;
 
-						for (k = 0; k < iorder - 1; k++){
+						for (k = 0; k < inter_prd_order - 1; k++){
 							dy = idyx[k].y;
 							dx = idyx[k].x;
 
@@ -280,11 +279,11 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					else if (x + min_abs_dx <= 0 || x + max_abs_dx >= img->width){
 						*ptr++ = base;
 
-						for (k = 0; k < iorder - 1; k++){
+						for (k = 0; k < inter_prd_order - 1; k++){
 							dy = idyx[k].y;
 							dx = idyx[k].x;
 
-							if(x + dx < 0 || x + dx >= img->width){
+							if(y + dy < 0 || x + dx < 0 || x + dx >= img->width){
 								*ptr++ = base;
 							}
 							else{
@@ -297,18 +296,23 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 					}
 				}
 				else if (y + max_abs_dy >= img->height){
-					*ptr++ = base;
+					if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= img->width){
+						*ptr++ = base;
 
-					for (k = 0; k < iorder - 1; k++){
-						dy = idyx[k].y;
-						dx = idyx[k].x;
+						for (k = 0; k < inter_prd_order - 1; k++){
+							dy = idyx[k].y;
+							dx = idyx[k].x;
 
-						if(y + dy >= img->height || x + dx < 0 || x + dx >= img->width){
-							*ptr++ = base;
+							if(y + dy >= img->height || x + dx < 0 || x + dx >= img->width){
+								*ptr++ = base;
+							}
+							else{
+								*ptr++ = dy * img->width + dx + base;
+							}
 						}
-						else{
-							*ptr++ = dy * img->width + dx + base;
-						}
+					}
+					else{
+						roff[y][x] = roff[y][x - 1];
 					}
 				}
 				else {
@@ -436,7 +440,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int **error, int num_class, in
 	enc->err[1][enc->height][0] = (enc->maxval + 1) >> 2;
 	enc->err[0][enc->height][0] = (enc->maxval + 1) >> 2;
 
-	// ?
+	// Table used for the quantization of the context variable
 	enc->uquant = (char **)alloc_2d_array(enc->num_class, MAX_UPARA + 1, sizeof(char));
 
 	for (i = 0; i < enc->num_class; i++){
@@ -567,14 +571,8 @@ void free_encoder(ENCODER *enc){
 	min_dx = max_dx = min_dy = 0;
 	imin_dx = imax_dx = imin_dy = imax_dy = 0;
 
-	if(enc->inter_prd_order == 0){
-		order = (enc->prd_order > NUM_UPELS) ? enc->prd_order : NUM_UPELS;
-		iorder = 0;
-	}
-	else{
-		order = enc->prd_order;
-		iorder = (enc->prd_order + enc->inter_prd_order > NUM_UPELS) ? enc->inter_prd_order : NUM_UPELS - enc->prd_order;
-	}
+	order = enc->prd_order;
+	iorder = enc->inter_prd_order;
 
 	//Values to check for special cases
 	for (k = 0; k < order; k++){
@@ -596,6 +594,8 @@ void free_encoder(ENCODER *enc){
 	}
 
 	max_abs_dy = imax_dy;
+	if(enc->inter_prd_order <= 1) max_abs_dy = enc->height;
+
 	if(min_dy < imin_dy){
 		min_abs_dy = min_dy;
 	}
@@ -620,22 +620,37 @@ void free_encoder(ENCODER *enc){
 	for (y = 0; y < enc->height; y++){
 		for (x = 0; x < enc->width; x++){
 			//Conditions to check which references are available for each pixel
-			if (y == 0){
-				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
-					free(enc->roff[y][x]);
-				}
-			}
-			else if (y + min_abs_dy <= 0){
-				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
-					free(enc->roff[y][x]);
-				}
-			}
-			else if (y + max_abs_dy >= enc->height){
+			if ((y == 0 && (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width)) || \
+				(y + min_abs_dy <= 0 && (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width)) || \
+				(y + max_abs_dy >= enc->height && (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width))){
 				free(enc->roff[y][x]);
 			}
 		}
 	}
 	free(enc->roff);
+
+	//Cycle that runs for all the pixels
+//	for (y = 0; y < enc->height; y++){
+//		for (x = 0; x < enc->width; x++){
+//			//Conditions to check which references are available for each pixel
+//			if (y == 0){
+//				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
+//					free(enc->roff[y][x]);
+//				}
+//			}
+//			else if (y + min_abs_dy <= 0){
+//				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
+//					free(enc->roff[y][x]);
+//				}
+//			}
+//			else if (y + max_abs_dy >= enc->height){
+//				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
+//					free(enc->roff[y][x]);
+//				}
+//			}
+//		}
+//	}
+//	free(enc->roff);
 
 
 	if(enc->pm_accuracy < 0){
@@ -878,7 +893,7 @@ void set_cost_rate(ENCODER *enc){
  |
  |  Returns:  void
  *-------------------------------------------------------------------*/
-void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx){
+void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx, int modo){
 	int x, y, k, cl, prd, org;
 	int *coef_p;
 	int *prd_p;
@@ -920,17 +935,100 @@ void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx){
 }
 
 int calc_uenc(ENCODER *enc, int y, int x){
-	int u, k, *err_p, *roff_p, *wt_p;
-	err_p = &enc->err[1][y][x];
-	roff_p = enc->roff[y][x];
-	wt_p = enc->ctx_weight;
+	int ry, rx, u, k;
 
 	u = 0;
 
-	for (k = 0; k < NUM_UPELS; k++){
-		int aux1 = err_p[*roff_p++];
-		int aux2 = (*wt_p++);
-		u += aux1 * aux2;
+	int order = NUM_UPELS;
+
+	if(enc->prd_order < NUM_UPELS && enc->inter_prd_order != 0){
+		order = enc->prd_order;
+	}
+
+	if (y >= UPEL_DIST && x >= UPEL_DIST && x <= enc->width - UPEL_DIST){
+		for (k = 0; k < order; k++){
+			ry = y + dyx[k].y;
+			rx = x + dyx[k].x;
+			u += enc->err[1][ry][rx] * enc->ctx_weight[k];
+		}
+	}
+	else if (y == 0){
+		if (x == 0){
+			for (k = 0; k < NUM_UPELS; k++){
+				u += ((enc->maxval + 1) >> 2) * enc->ctx_weight[k];
+			}
+		}
+		else{
+			ry = 0;
+
+			for (k =0; k < order; k++){
+				rx = x + dyx[k].x;
+
+				if (rx < 0) rx = 0;
+				else if (rx >= x) rx = x - 1;
+
+				u += enc->err[1][ry][rx] * enc->ctx_weight[k];
+			}
+		}
+	}
+	else{
+		if (x == 0){
+			for (k = 0; k < order; k++){
+				ry = y + dyx[k].y;
+
+				if (ry < 0) ry = 0;
+				else if (ry >= y) ry = y - 1;
+
+				rx = x + dyx[k].x;
+
+				if (rx < 0) rx = 0;
+
+				u += enc->err[1][ry][rx] * enc->ctx_weight[k];
+			}
+		}
+		else{
+			for (k = 0; k < order; k++){
+				ry = y + dyx[k].y;
+
+				if (ry < 0) ry = 0;
+
+				rx = x + dyx[k].x;
+
+				if (rx < 0) rx = 0;
+				else if (rx >= enc->width) rx = enc->width - 1;
+
+				u += enc->err[1][ry][rx] * enc->ctx_weight[k];
+			}
+		}
+	}
+
+	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
+	if(enc->prd_order < NUM_UPELS && enc->inter_prd_order != 0){
+		int iorder = NUM_UPELS - enc->prd_order;
+
+		u += enc->err[0][y][x] * enc->ctx_weight[order];
+
+		if (y >= UPEL_DIST && x >= UPEL_DIST && x < enc->width - UPEL_DIST && y < enc->height - UPEL_DIST){
+			for (k = 0; k < iorder - 1; k++){
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				u += enc->err[0][ry][rx] * enc->ctx_weight[order + k + 1];
+			}
+		}
+		else{
+			for (k = 0; k < iorder - 1; k++){
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				if(ry < 0 || rx < 0 || ry >= enc->height || rx >= enc->width){
+					u += enc->err[0][y][x] * enc->ctx_weight[order + k + 1];
+				}
+				else{
+					u += enc->err[0][ry][rx] * enc->ctx_weight[order + k + 1];
+				}
+			}
+		}
 	}
 
 	u >>= 6;
@@ -1144,7 +1242,7 @@ cost_t design_predictor(ENCODER *enc, int f_mmse){
 	free(index);
 	free(mat);
 
-	predict_region(enc, 0, 0, enc->height, enc->width);
+	predict_region(enc, 0, 0, enc->height, enc->width, 0);
 
 	return (calc_cost(enc, 0, 0, enc->height, enc->width));
 }
@@ -1330,19 +1428,37 @@ cost_t optimize_group(ENCODER *enc){
 	return (cost);
 }
 
+/*---------------------------- set_prdbuf --------------------------*
+ |  Function set_prdbuf
+ |
+ |  Purpose: Calculates and stores the prediction and residue for all classes for a given block
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN)
+ |		prdbuf			--> Struct to store the prediction value (IN/OUT)
+ |		errbuf          --> Struct to store the residue value (IN/OUT)
+ |		tly				--> Top left corner y position of the current block (IN)
+ |		tlx             --> Top left corner x position of the current block (IN)
+ |		bufsize			--> Size of the block (IN)
+ |
+ |  Returns:  ENCODER* --> returns a encoder type structure
+ *-------------------------------------------------------------------*/
 void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int bufsize){
 	int x, y, brx, bry, cl, k, prd, *prdbuf_p, *errbuf_p, *coef_p;
 	int buf_ptr, org, *org_p, *roff_p;
 
+	//Prediction order determination
 	int prd_order = enc->prd_order + enc-> inter_prd_order;
 
 	//Check the boundaries of the block (mainly for pictures not multiple of bufsize)
 	brx = (tlx + bufsize < enc->width) ? (tlx + bufsize) : enc->width;
 	bry = (tly + bufsize < enc->height) ? (tly + bufsize) : enc->height;
 
-	for (cl = 0; cl < enc->num_class; cl++) {
+	//
+	for (cl = 0; cl < enc->num_class; cl++){
 		buf_ptr = bufsize * (tly % bufsize) + tlx % bufsize;
 
+		//Run all pixels in the given block
 		for (y = tly; y < bry; y++) {
 			prdbuf_p = &prdbuf[cl][buf_ptr];
 			errbuf_p = &errbuf[cl][buf_ptr];
@@ -1350,11 +1466,13 @@ void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int 
 			org_p = &enc->org[1][y][tlx];
 
 			for(x = tlx; x < brx; x++){
+				//If the pixel is of the current class just copy
 				if(cl == enc->class[y][x]){
 					*prdbuf_p++ = enc->prd[y][x];
 					*errbuf_p++ = enc->err[1][y][x];
 					org_p++;
 				}
+				//If not do the calculations
 				else {
 					coef_p = enc->predictor[cl];
 					roff_p = enc->roff[y][x];
@@ -1432,6 +1550,23 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int b
 	return (min_cl);
 }
 
+/*------------------------------ vbs_class --------------------------*
+ |  Function vbs_class
+ |
+ |  Purpose:
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN)
+ |		prdbuf			--> Struct to store the prediction value (IN/OUT)
+ |		errbuf          --> Struct to store the residue value (IN/OUT)
+ |		tly				--> Top left corner y position of the current block (IN)
+ |		tlx             --> Top left corner x position of the current block (IN)
+ |		blksize			--> Size of the block (IN)
+ |		width			--> Image width (IN)
+ |		level			--> Level of the quadtree (IN)
+ |
+ |  Returns:  cost_t --> The class and partition cost
+ *-------------------------------------------------------------------*/
 cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int blksize, int width, int level){
 	int y, x, k, bry, brx, cl, bufsize, bufptr, ctx;
 	int mtf_save[MAX_CLASS];
@@ -1440,6 +1575,8 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int
 	char *class_p;
 	int *prd_p, *prdbuf_p, *err_p, *errbuf_p;
 
+	//Sets the max block size depending on the current loop
+	//and if the quadtree is active
 	if (enc->quadtree_depth >= 0 && enc->optimize_loop > 1) {
 		bufsize = MAX_BSIZE;
 	}
@@ -1447,19 +1584,29 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int
 		bufsize = BASE_BSIZE;
 	}
 
+	//Check the boundaries of the block (mainly for pictures not multiple of bufsize)
 	brx = (tlx + blksize < enc->width) ? (tlx + blksize) : enc->width;
 	bry = (tly + blksize < enc->height) ? (tly + blksize) : enc->height;
 
+	//Safeguard condition
 	if (tlx >= brx || tly >= bry) return (0);
 
+	//Auxiliary variable that stores class order
 	for (k = 0; k < enc->num_class; k++) {
 		mtf_save[k] = enc->mtfbuf[k];
 	}
 
+	//In the case of the first loop or if we are not using quadtree
+	//Reorders classes to favor the modes chosen by the neighboring blocks.
 	mtf_classlabel(enc->class, enc->mtfbuf, tly, tlx, blksize, width, enc->num_class);
+	//Finds the class that returns the minimum cost for the block
 	cl = find_class(enc, prdbuf, errbuf, tly, tlx, bry, brx, bufsize);
+	//Return the class cost
 	qtcost = enc->class_cost[enc->mtfbuf[cl]];
-	if (level > 0) {
+
+	//In the case of the second loop and if we are using quadtree
+	//Check the best block partitioning
+	if (level > 0){
 		/* context for quad-tree flag */
 		ctx = 0;
 		qtmap = enc->qtmap[level - 1];
@@ -1538,40 +1685,59 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int
 			qtmap[y][x] = 1;
 		}
 	}
+
 	return (qtcost);
 }
 
+/*--------------------------- optimize_class ------------------------*
+ |  Function optimize_class
+ |
+ |  Purpose: Optimizes the prediction class for each block in the picture
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |
+ |  Returns:  ENCODER* --> returns a encoder type structure
+ *-------------------------------------------------------------------*/
 cost_t optimize_class(ENCODER *enc){
 	int y, x, i, blksize, level;
 	int **prdbuf, **errbuf;
 
-
+	//Sets the max block size depending on the current loop
+	//and if the quadtree is active
 	if(enc->quadtree_depth >= 0 && enc->optimize_loop > 1){
 		level = enc->quadtree_depth;
-		blksize = MAX_BSIZE;
+		blksize = MAX_BSIZE; //32
 	}
 	else{
 		level = 0;
-		blksize = BASE_BSIZE;
+		blksize = BASE_BSIZE; //8
 	}
 
+	//Initialize buffer with the class numbers
 	for(i = 0; i < enc->num_class; i++){
 		enc->mtfbuf[i] = i;
 	}
 
+	//Auxiliary structures, prediction and residue buffer
 	prdbuf =(int **) alloc_2d_array(enc->num_class, blksize * blksize, sizeof(int));
 	errbuf =(int **) alloc_2d_array(enc->num_class, blksize * blksize, sizeof(int));
 
+	//Cycle to run all picture blocks
 	for(y = 0; y < enc->height; y += blksize){
 		for(x = 0; x < enc->width; x += blksize){
+			//Calculates and stores the prediction and residue for all classes for a given block
 			set_prdbuf(enc, prdbuf, errbuf, y, x, blksize);
+			//
 			vbs_class(enc, prdbuf, errbuf, y, x, blksize, enc->width, level);
 		}
 	}
 
+	//Free auxiliary pointers
 	free(errbuf);
 	free(prdbuf);
 
+	//Returns cost...
 	return (calc_cost(enc, 0, 0, enc->height, enc->width));
 }
 
@@ -1727,7 +1893,7 @@ cost_t optimize_predictor(ENCODER *enc, IMAGE *video[2]){
 		}
 	}
 
-	predict_region(enc, 0, 0, enc->height, enc->width);
+	predict_region(enc, 0, 0, enc->height, enc->width, 0);
 	return (calc_cost(enc, 0, 0, enc->height, enc->width));
 }
 
@@ -2421,6 +2587,9 @@ int encode_image(FILE *fp, ENCODER *enc){
 				base = enc->bconv[prd];
 				pm = enc->pmlist[gr] + enc->fconv[prd];
 				cumbase = pm->cumfreq[base];
+
+				//print_contexts(-1, /*pm->cumfreq[base + e] - cumbase*/ 4, 2/*pm->freq[base + e]*/, pm->cumfreq[base + enc->maxval + 1] - cumbase, base + enc->maxval + 1, base, prd);
+
 				rc_encode(fp, enc->rc, pm->cumfreq[base + e] - cumbase, pm->freq[base + e], pm->cumfreq[base + enc->maxval + 1] - cumbase);
 			}
 		}
@@ -2432,15 +2601,15 @@ int encode_image(FILE *fp, ENCODER *enc){
 	return (bits);
 }
 
-// remove_ext: removes the "extension" from a file spec.
-//   mystr is the string to process.
-//   dot is the extension separator.
-//   sep is the path separator (0 means to ignore).
-// Returns an allocated string identical to the original but
-//   with the extension removed. It must be freed when you're
-//   finished with it.
-// If you pass in NULL or the new string can't be allocated,
-//   it returns NULL.
+/* 	remove_ext: removes the "extension" from a file spec.
+   	   mystr is the string to process.
+   	   dot is the extension separator.
+   	   sep is the path separator (0 means to ignore).
+	Returns an allocated string identical to the original but
+   	   with the extension removed. It must be freed when you're
+   	   finished with it.
+	If you pass in NULL or the new string can't be allocated,
+   	   it returns NULL. */
 char *remove_ext (char* mystr, char dot, char sep){
 	char *retstr, *lastdot, *lastsep;
 
@@ -2510,335 +2679,6 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 	fprintf(res, "Total:\n\t%10d\t%10.5f\n", total_bits, (double)total_bits / (height * width * frames));
 }
 
-void print_class(ENCODER *enc, int f){
-	int y, x;
-
-	if(f == 0) system("rm encoder_class.txt");
-
-	FILE *teste;
-	teste = fileopen("encoder_class.txt", "a");
-
-	fprintf(teste, "Frame: %d\n\n", f);
-	for(y = 0; y < enc->width; y++){
-		for(x = 0; x < enc->width; x++){
-			fprintf(teste, "%d ", enc->class[y][x]);
-		}fprintf(teste, "\n");
-	}fprintf(teste, "\n\n");
-
-	fclose(teste);
-}
-
-void print_predictors(ENCODER *enc, int f){
-	int y, x;
-
-	if(f == 0) system("rm encoder_predictors.txt");
-
-	FILE *teste;
-	teste = fileopen("encoder_predictors.txt", "a");
-
-	fprintf(teste, "Frame: %d\n\n", f);
-	for(y = 0; y < enc->num_class; y++){
-		for(x = 0; x < enc->prd_order + enc->inter_prd_order; x++){
-			if(x >= enc->prd_order || enc->predictor[y][x] != 0) fprintf(teste, "%d ", enc->predictor[y][x]);
-		}fprintf(teste, "\n");
-	}fprintf(teste, "\n\n");
-
-	fclose(teste);
-}
-
-int calc_udec(ENCODER *enc, int y, int x){
-	int rx, ry, k, u;
-	int **err;
-
-	u = 0;
-	err = enc->err[1];
-
-	int order = NUM_UPELS;
-
-	if(enc->prd_order < NUM_UPELS && enc->inter_prd_order != 0){
-		order = enc->prd_order;
-	}
-
-	if (y >= UPEL_DIST && x >= UPEL_DIST && x <= enc->width - UPEL_DIST){
-		for (k = 0; k < order; k++){
-			ry = y + dyx[k].y;
-			rx = x + dyx[k].x;
-			u += err[ry][rx] * enc->ctx_weight[k];
-		}
-	}
-	else if (y == 0){
-		if (x == 0){
-			for (k = 0; k < NUM_UPELS; k++){
-				u += ((enc->maxval + 1) >> 2) * enc->ctx_weight[k];
-			}
-		}
-		else{
-			ry = 0;
-
-			for (k =0; k < order; k++){
-				rx = x + dyx[k].x;
-
-				if (rx < 0) rx = 0;
-				else if (rx >= x) rx = x - 1;
-
-				u += err[ry][rx] * enc->ctx_weight[k];
-			}
-		}
-	}
-	else{
-		if (x == 0){
-			for (k = 0; k < order; k++){
-				ry = y + dyx[k].y;
-
-				if (ry < 0) ry = 0;
-				else if (ry >= y) ry = y - 1;
-
-				rx = x + dyx[k].x;
-
-				if (rx < 0) rx = 0;
-
-				u += err[ry][rx] * enc->ctx_weight[k];
-			}
-		}
-		else{
-			for (k = 0; k < order; k++){
-				ry = y + dyx[k].y;
-
-				if (ry < 0) ry = 0;
-
-				rx = x + dyx[k].x;
-
-				if (rx < 0) rx = 0;
-				else if (rx >= enc->width) rx = enc->width - 1;
-
-				u += err[ry][rx] * enc->ctx_weight[k];
-			}
-		}
-	}
-
-	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
-	if(enc->prd_order < NUM_UPELS && enc->inter_prd_order != 0){
-		int iorder = NUM_UPELS - enc->prd_order;
-
-		err = enc->err[0];
-
-		u += err[y][x] * enc->ctx_weight[order];
-
-		if (y >= UPEL_DIST && x >= UPEL_DIST && x < enc->width - UPEL_DIST && y < enc->height - UPEL_DIST){
-			for (k = 0; k < iorder - 1; k++){
-				ry = y + idyx[k].y;
-				rx = x + idyx[k].x;
-
-				u += err[ry][rx] * enc->ctx_weight[order + k + 1];
-			}
-		}
-		else{
-			for (k = 0; k < iorder - 1; k++){
-				ry = y + idyx[k].y;
-				rx = x + idyx[k].x;
-
-				if(ry < 0 || rx < 0 || ry >= enc->height || rx >= enc->width){
-					u += err[y][x] * enc->ctx_weight[order + k + 1];
-				}
-				else{
-					u += err[ry][rx] * enc->ctx_weight[order + k + 1];
-				}
-			}
-		}
-	}
-
-	u >>= 6;
-
-	if (u > MAX_UPARA) u = MAX_UPARA;
-
-	return (u);
-}
-
-int calc_prd(IMAGE *video[2], ENCODER *enc, int cl, int y, int x){
-	int k, prd, rx, ry;
-
-	int min_dx, max_dx, min_dy, dx, dy;
-	int imin_dx, imax_dx, imin_dy, imax_dy;
-
-	min_dx = max_dx = min_dy = 0;
-	imin_dx = imax_dx = imin_dy = imax_dy = 0;
-
-	//Values to check for special cases
-	for (k = 0; k < enc->prd_order; k++){
-		dy = dyx[k].y;
-		dx = dyx[k].x;
-
-		if (dy < min_dy) min_dy = dy;
-		if (dx < min_dx) min_dx = dx;
-		if (dx > max_dx) max_dx = dx;
-	}
-
-	for (k = 0; k < enc->inter_prd_order - 1; k++){
-		dy = idyx[k].y;
-		dx = idyx[k].x;
-
-		if (dy < imin_dy) imin_dy = dy;
-		if (dy > imax_dy) imax_dy = dy;
-		if (dx < imin_dx) imin_dx = dx;
-		if (dx > imax_dx) imax_dx = dx;
-	}
-
-	prd = 0;
-
-	if (y >= -min_dy && x >= -min_dx && x < enc->width - min_dx){
-		for (k = 0; k < enc->prd_order; k++){
-			ry = y + dyx[k].y;//(*scany_p++);
-			rx = x + dyx[k].x;//(*scanx_p++);
-			prd += enc->predictor[cl][k] * video[1]->val[ry][rx];
-		}
-	}
-	else if (y == 0){
-		if (x == 0){
-			for (k = 0; k < enc->prd_order; k++){
-				prd += enc->predictor[cl][k];
-			}
-
-			prd *= ((video[1]->maxval + 1) >> 1);
-		}
-		else{
-			ry = 0;
-
-			for (k = 0; k < enc->prd_order; k++){
-				rx = x + dyx[k].x;//(*scanx_p++);
-
-				if (rx < 0) rx = 0;
-				else if (rx >= x) rx = x - 1;
-
-				prd += enc->predictor[cl][k] * video[1]->val[ry][rx];
-			}
-		}
-	}
-	else{
-		if (x == 0){
-			for (k = 0; k < enc->prd_order; k++){
-				ry = y + dyx[k].y;//(*scany_p++);
-
-				if (ry < 0) ry = 0;
-				else if (ry >= y) ry = y - 1;
-
-				rx = x + dyx[k].x;//(*scanx_p++);
-
-				if (rx < 0) rx = 0;
-
-				prd += enc->predictor[cl][k] * video[1]->val[ry][rx];
-			}
-		}
-		else{
-			for (k = 0; k < enc->prd_order; k++){
-				ry = y + dyx[k].y;//(*scany_p++);
-
-				if (ry < 0) ry = 0;
-
-				rx = x + dyx[k].x;//(*scanx_p++);
-
-				if (rx < 0) rx = 0;
-				else if (rx >= video[1]->width) rx = video[1]->width - 1;
-
-				prd += enc->predictor[cl][k] * video[1]->val[ry][rx];
-			}
-		}
-	}
-
-	//Inter prediction calculation
-	if(enc->inter_prd_order > 0){
-		prd += enc->predictor[cl][0] * video[0]->val[y][x];
-		if (y >= -imin_dy && x >= -imin_dx && x < enc->width - imax_dx && y < enc->height - imax_dx){
-			for (k = 0; k < enc->inter_prd_order - 1; k++){
-				ry = y + idyx[k].y;//(*scany_p++);
-				rx = x + idyx[k].x;//(*scanx_p++);
-
-				prd += enc->predictor[cl][k + 1] * video[0]->val[ry][rx];
-			}
-		}
-		else{
-			for (k = 0; k < enc->inter_prd_order - 1; k++){
-				ry = y + idyx[k].y;//(*scany_p++);
-				rx = x + idyx[k].x;//(*scanx_p++);
-
-				if(ry < 0 || rx < 0 || ry >= enc->height || rx >= enc->width){
-					prd += enc->predictor[cl][k + 1] * video[0]->val[y][x];
-				}
-				else{
-					prd += enc->predictor[cl][k + 1] * video[0]->val[ry][rx];
-				}
-			}
-		}
-	}
-
-	if (prd < 0) prd = 0;
-	else if (prd > enc->maxprd) prd = enc->maxprd;
-
-	return (prd);
-}
-
-IMAGE *decode_image(IMAGE *video[2], ENCODER *enc){
-	int x, y, cl, prd, e, p;
-
-	if (enc->f_huffman == 1){
-		for (y = 0; y < enc->height; y++){
-			for (x = 0; x < enc->width; x++){
-				cl = enc->class[y][x];
-				//u = calc_udec(enc, y, x);
-				//gr = enc->uquant[cl][u];
-				prd = calc_prd(video, enc, cl, y, x);
-				prd >>= (enc->coef_precision - 1);
-				p = (prd + 1) >> 1;
-				//vlc = &enc->vlcs[gr][0];
-				//enc->err[1][y][x] = E = decode_vlc(fp, vlc);
-				//e = E2e(E, p, prd & 1, enc->maxval);
-				video[1]->val[y][x] = p + E2e(enc->err[1][y][x], p, prd & 1, enc->maxval);//e;
-			}
-		}
-	}
-	else{
-		//PMODEL *pm;
-		if (enc->pm_accuracy < 0){
-			for (y = 0; y < enc->height; y++){
-				for (x = 0; x < enc->width; x++){
-					cl = enc->class[y][x];
-					//u = calc_udec(enc, y, x);
-					//gr = enc->uquant[cl][u];
-					prd = calc_prd(video, enc, cl, y, x);
-					prd >>= (enc->coef_precision - 1);
-					p = (prd + 1) >> 1;
-					//pm = enc->pmodels[gr][0];
-					//enc->err[1][y][x] = E = rc_decode(fp, enc->rc, pm, 0, pm->size);
-					//e = E2e(E, p, prd & 1, enc->maxval);
-					video[1]->val[y][x] = p + E2e(enc->err[1][y][x], p, prd & 1, enc->maxval);//e;
-				}
-			}
-		}
-		else{
-			int shift, base;
-			//mask = (1 << enc->pm_accuracy) - 1;
-			shift = enc->coef_precision - enc->pm_accuracy;
-
-			for (y = 0; y < enc->height; y++){
-				for (x = 0; x < enc->width; x++){
-					cl = enc->class[y][x];
-					//u = calc_udec(enc, y, x);
-					//gr = enc->uquant[cl][u];
-					prd = calc_prd(video, enc, cl, y, x);
-					base = (enc->maxprd - prd + (1 << shift) / 2) >> shift;
-					//pm = enc->pmodels[gr][0] + (base & mask);
-					base >>= enc->pm_accuracy;
-					//p = rc_decode(fp, enc->rc, pm, base, base+enc->maxval+1) - base;
-					video[1]->val[y][x] = E2e(enc->err[1][y][x], p, prd & 1, enc->maxval) - base;//p;
-					prd >>= (enc->coef_precision - 1);
-					e = (p << 1) - prd;
-					enc->err[1][y][x] = (e > 0)? (e - 1) : (-e);
-				}
-			}
-		}
-	}
-
-	return (video[1]);
-}
 
 void write_yuv(IMAGE *img, char *filename){
 	int i, j;
@@ -2867,15 +2707,6 @@ void write_yuv(IMAGE *img, char *filename){
 	fclose(fp);
 
 	return;
-}
-
-void test_decoding(ENCODER *enc, int f, IMAGE* video[2]){
-	//enc->pmodels = init_pmodels(enc->num_group, enc->num_pmodel, enc->pm_accuracy, dec->pm_idx, enc->sigma, enc->maxval + 1);
-	enc->pmodels = init_pmodels(enc->num_group, enc->num_pmodel, enc->pm_accuracy, NULL, enc->sigma, enc->maxval + 1);
-
-	video[1] = decode_image(video, enc);
-
-	write_yuv(video[1], "decoding_in_encoder.yuv");
 }
 
 int main(int argc, char **argv){
@@ -2944,21 +2775,21 @@ int main(int argc, char **argv){
 				break;
 			case 'K':
 				prd_order = atoi(argv[++i]);
-				if(prd_order <= 0 || prd_order > 72){
+				if(prd_order < 0 || prd_order > 72){
 					prd_order = PRD_ORDER;
 				}
 				break;
 			case 'L':
 				intra_prd_order = atoi(argv[++i]);
-				//				if(prd_order <= 0 || prd_order > 72){
-				//					prd_order = PRD_ORDER;
-				//				}
+				if(intra_prd_order < 0 || intra_prd_order > 72){
+					intra_prd_order = PRD_ORDER;
+				}
 				break;
 			case 'J':
 				inter_prd_order = atoi(argv[++i]);
-				//				if(prd_order <= 0 || prd_order > 72){
-				//					prd_order = PRD_ORDER;
-				//				}
+				if(inter_prd_order < 0 || inter_prd_order > 72){
+					inter_prd_order = 1;
+				}
 				break;
 			case 'P':
 				coef_precision = atoi(argv[++i]);
@@ -3188,7 +3019,7 @@ int main(int argc, char **argv){
 		}
 
 		set_cost_rate(enc);
-		predict_region(enc, 0, 0, enc->height, enc->width);
+		predict_region(enc, 0, 0, enc->height, enc->width, 0);
 		cost = calc_cost(enc, 0, 0, enc->height, enc->width);
 
 		printf("Frame: %d\n\t1st optimization --> Cost: %d\n", f, (int)cost);
@@ -3261,7 +3092,7 @@ int main(int argc, char **argv){
 				}
 			}
 
-			predict_region(enc, 0, 0, enc->height, enc->width);
+			predict_region(enc, 0, 0, enc->height, enc->width, 0);
 			calc_cost(enc, 0, 0, enc->height, enc->width);
 			optimize_class(enc);
 		}
@@ -3281,15 +3112,15 @@ int main(int argc, char **argv){
 			enc->rc = rc_init();
 		}
 
+		//print_contexts(f, 0, 0, 0, 0, 0, 0);
+
 		class_info[f] += encode_class(fp, enc);
 		predictors[f] = encode_predictor(fp, enc);
 		thresholds[f] = encode_threshold(fp, enc);
 		errors[f] = encode_image(fp, enc);
 
-		print_class(enc, f);
-		print_predictors(enc, f);
-
-		//test_decoding(enc, f, video);
+//		print_class(enc, f);
+//		print_predictors(enc, f);
 
 		free(video[1]->val);
 		free(video[1]);

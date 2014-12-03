@@ -57,8 +57,7 @@ DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height,
 
 	dec->num_class = read_class(fp);
 
-	i = (dec->prd_order + dec->inter_prd_order) * 3 + 5;
-	dec->predictor = (int **)alloc_2d_array(dec->num_class, i, sizeof(int));
+	dec->predictor = (int **)alloc_2d_array(dec->num_class, dec->prd_order + dec->inter_prd_order, sizeof(int));
 
 	dec->err = (int ***)alloc_3d_array(dec->height, dec->width, 2, sizeof(int));
 
@@ -244,8 +243,8 @@ int decode_golomb(FILE *fp, int m){
 	return (v);
 }
 
-void decode_predictor(FILE *fp, DECODER *dec){
-	int k, m, cl, coef, sgn, *coef_p, *scany_p, *scanx_p, *size_p;
+void decode_predictor(FILE *fp, DECODER *dec, int f){
+	int k, m, cl, coef, sgn;
 
 	int prd_order = dec->prd_order + dec->inter_prd_order;
 
@@ -298,50 +297,6 @@ void decode_predictor(FILE *fp, DECODER *dec){
 				dec->predictor[cl][k] = coef;
 			}
 		}
-	}
-
-	for (cl = 0; cl < dec->num_class; cl++){
-		coef_p = dec->predictor[cl];
-		scany_p = coef_p + prd_order;
-		scanx_p = scany_p + prd_order;
-		size_p = scanx_p + prd_order;
-		size_p[1] = size_p[2] = size_p[3] = size_p[4] = 0;
-
-		for (k = m = 0; k < dec->prd_order; k++){
-			if (coef_p[k] != 0){
-				coef_p[m] = coef_p[k];
-				scany_p[m] = dyx[k].y;
-				scanx_p[m] = dyx[k].x;
-
-				if (dyx[k].y < size_p[1]) size_p[1] = dyx[k].y;
-				if (dyx[k].x < size_p[2]) size_p[2] = dyx[k].x;
-				if (dyx[k].x > size_p[3]) size_p[3] = dyx[k].x;
-
-				m++;
-			}
-		}
-		if(dec->inter_prd_order > 0){
-			for(k = 0; k < dec->inter_prd_order; k++){
-				coef_p[m] = coef_p[k + dec->prd_order];
-				scany_p[m] = idyx[k].y;
-				scanx_p[m] = idyx[k].x;
-
-				if (idyx[k].y < size_p[1]) size_p[1] = idyx[k].y;
-				if (idyx[k].x < size_p[2]) size_p[2] = idyx[k].x;
-				if (idyx[k].x > size_p[3]) size_p[3] = idyx[k].x;
-				if (idyx[k].y > size_p[4]) size_p[4] = idyx[k].y;
-
-				m++;
-			}
-
-			m -= dec->inter_prd_order;
-		}
-
-		size_p[0] = m;
-		size_p[1] = -size_p[1];
-		size_p[2] = -size_p[2];
-		size_p[3] = dec->width - size_p[3];
-		size_p[4] = dec->height - size_p[4];
 	}
 
 	return;
@@ -607,11 +562,7 @@ void decode_class(FILE *fp, DECODER *dec){
 }
 
 int calc_udec(DECODER *dec, int y, int x){
-	int rx, ry, k, u;
-	int **err;
-
-	u = 0;
-	err = dec->err[1];
+	int rx, ry, k, u = 0;
 
 	int order = NUM_UPELS;
 
@@ -623,7 +574,7 @@ int calc_udec(DECODER *dec, int y, int x){
 		for (k = 0; k < order; k++){
 			ry = y + dyx[k].y;
 			rx = x + dyx[k].x;
-			u += err[ry][rx] * dec->ctx_weight[k];
+			u += dec->err[1][ry][rx] * dec->ctx_weight[k];
 		}
 	}
 	else if (y == 0){
@@ -641,7 +592,7 @@ int calc_udec(DECODER *dec, int y, int x){
 				if (rx < 0) rx = 0;
 				else if (rx >= x) rx = x - 1;
 
-				u += err[ry][rx] * dec->ctx_weight[k];
+				u += dec->err[1][ry][rx] * dec->ctx_weight[k];
 			}
 		}
 	}
@@ -657,7 +608,7 @@ int calc_udec(DECODER *dec, int y, int x){
 
 				if (rx < 0) rx = 0;
 
-				u += err[ry][rx] * dec->ctx_weight[k];
+				u += dec->err[1][ry][rx] * dec->ctx_weight[k];
 			}
 		}
 		else{
@@ -671,7 +622,7 @@ int calc_udec(DECODER *dec, int y, int x){
 				if (rx < 0) rx = 0;
 				else if (rx >= dec->width) rx = dec->width - 1;
 
-				u += err[ry][rx] * dec->ctx_weight[k];
+				u += dec->err[1][ry][rx] * dec->ctx_weight[k];
 			}
 		}
 	}
@@ -680,16 +631,14 @@ int calc_udec(DECODER *dec, int y, int x){
 	if(dec->prd_order < NUM_UPELS && dec->inter_prd_order != 0){
 		int iorder = NUM_UPELS - dec->prd_order;
 
-		err = dec->err[0];
-
-		u += err[y][x] * dec->ctx_weight[order];
+		u += dec->err[0][y][x] * dec->ctx_weight[order];
 
 		if (y >= UPEL_DIST && x >= UPEL_DIST && x < dec->width - UPEL_DIST && y < dec->height - UPEL_DIST){
 			for (k = 0; k < iorder - 1; k++){
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
-				u += err[ry][rx] * dec->ctx_weight[order + k + 1];
+				u += dec->err[0][ry][rx] * dec->ctx_weight[order + k + 1];
 			}
 		}
 		else{
@@ -698,10 +647,10 @@ int calc_udec(DECODER *dec, int y, int x){
 				rx = x + idyx[k].x;
 
 				if(ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width){
-					u += err[y][x] * dec->ctx_weight[order + k + 1];
+					u += dec->err[0][y][x] * dec->ctx_weight[order + k + 1];
 				}
 				else{
-					u += err[ry][rx] * dec->ctx_weight[order + k + 1];
+					u += dec->err[0][ry][rx] * dec->ctx_weight[order + k + 1];
 				}
 			}
 		}
@@ -715,28 +664,72 @@ int calc_udec(DECODER *dec, int y, int x){
 }
 
 int calc_prd(IMAGE *video[2], DECODER *dec, int cl, int y, int x){
-	int k, prd, prd_order, rx, ry, *coef_p, *scany_p, *scanx_p, *size_p;
+	int k, prd, rx, ry;
 
-	prd_order = dec->prd_order + dec->inter_prd_order;
+	int dy, dx, min_dx, max_dx, min_dy;
+	int imin_dx, imax_dx, imin_dy, imax_dy;
+	int min_abs_dx, max_abs_dx, min_abs_dy, max_abs_dy;
 
-	coef_p = dec->predictor[cl];
-	scany_p = coef_p + prd_order;
-	scanx_p = scany_p + prd_order;
-	size_p = scanx_p + prd_order;
-	prd_order = size_p[0];
+	min_dx = max_dx = min_dy = 0;
+	imin_dx = imax_dx = imin_dy = imax_dy = 0;
+
+	//Values to check for special cases
+	for (k = 0; k < dec->prd_order; k++){
+		dy = dyx[k].y;
+		dx = dyx[k].x;
+
+		if (dy < min_dy) min_dy = dy;
+		if (dx < min_dx) min_dx = dx;
+		if (dx > max_dx) max_dx = dx;
+	}
+
+	for (k = 0; k < dec->inter_prd_order - 1; k++){
+		dy = idyx[k].y;
+		dx = idyx[k].x;
+
+		if (dy < imin_dy) imin_dy = dy;
+		if (dy > imax_dy) imax_dy = dy;
+		if (dx < imin_dx) imin_dx = dx;
+		if (dx > imax_dx) imax_dx = dx;
+	}
+
+	max_abs_dy = dec->height - imax_dy;
+	if(dec->inter_prd_order <= 1) max_abs_dy = dec->height;
+
+	if(min_dy < imin_dy){
+		min_abs_dy = -min_dy;
+	}
+	else{
+		min_abs_dy = -imin_dy;
+	}
+
+	if(max_dx < imax_dx){
+		max_abs_dx = dec->width - imax_dx;
+	}
+	else{
+		max_abs_dx = dec->width - max_dx;
+	}
+	if(min_dx < imin_dx){
+		min_abs_dx = -min_dx;
+	}
+	else{
+		min_abs_dx = -imin_dx;
+	}
+
 	prd = 0;
 
-	if (y >= size_p[1] && x >= size_p[2] && x < size_p[3]){
-		for (k = 0; k < prd_order; k++){
-			ry = y + (*scany_p++);
-			rx = x + (*scanx_p++);
-			prd += (*coef_p++) * video[1]->val[ry][rx];
+	if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy){
+		for (k = 0; k < dec->prd_order; k++){
+			ry = y + dyx[k].y;
+			rx = x + dyx[k].x;
+
+			prd += dec->predictor[cl][k] * video[1]->val[ry][rx];
 		}
 	}
 	else if (y == 0){
 		if (x == 0){
-			for (k = 0; k < prd_order; k++){
-				prd += *coef_p++;
+			for (k = 0; k < dec->prd_order; k++){
+				prd += dec->predictor[cl][k];
 			}
 
 			prd *= ((video[1]->maxval + 1) >> 1);
@@ -744,68 +737,72 @@ int calc_prd(IMAGE *video[2], DECODER *dec, int cl, int y, int x){
 		else{
 			ry = 0;
 
-			for (k = 0; k < prd_order; k++){
-				rx = x + (*scanx_p++);
+			for (k = 0; k < dec->prd_order; k++){
+				rx = x + dyx[k].x;
 
 				if (rx < 0) rx = 0;
 				else if (rx >= x) rx = x - 1;
 
-				prd += (*coef_p++) * video[1]->val[ry][rx];
+				prd += dec->predictor[cl][k] * video[1]->val[ry][rx];
 			}
 		}
 	}
 	else{
 		if (x == 0){
-			for (k = 0; k < prd_order; k++){
-				ry = y + (*scany_p++);
+			for (k = 0; k < dec->prd_order; k++){
+				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
 				else if (ry >= y) ry = y - 1;
 
-				rx = x + (*scanx_p++);
+				rx = x + dyx[k].x;
 
 				if (rx < 0) rx = 0;
 
-				prd += (*coef_p++) * video[1]->val[ry][rx];
+				prd += dec->predictor[cl][k] * video[1]->val[ry][rx];
 			}
 		}
 		else{
-			for (k = 0; k < prd_order; k++){
-				ry = y + (*scany_p++);
+			for (k = 0; k < dec->prd_order; k++){
+				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
 
-				rx = x + (*scanx_p++);
+				rx = x + dyx[k].x;
 
 				if (rx < 0) rx = 0;
 				else if (rx >= video[1]->width) rx = video[1]->width - 1;
 
-				prd += (*coef_p++) * video[1]->val[ry][rx];
+				prd += dec->predictor[cl][k] * video[1]->val[ry][rx];
 			}
 		}
 	}
 
 	//Inter prediction calculation
-	if(dec->inter_prd_order > 0){
-		prd += (*coef_p++) * video[0]->val[y][x];
-		if (y >= size_p[1] && x >= size_p[2] && x < size_p[3] && y < size_p[4]){
-			for (k = 0; k < dec->inter_prd_order - 1; k++){
-				ry = y + (*scany_p++);
-				rx = x + (*scanx_p++);
+	if(dec->inter_prd_order == 1){
+		prd += dec->predictor[cl][dec->prd_order] * video[0]->val[y][x];
+	}
+	if(dec->inter_prd_order > 1){
+		prd += dec->predictor[cl][dec->prd_order] * video[0]->val[y][x];
 
-				prd += (*coef_p++) * video[0]->val[ry][rx];
+		if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy){
+			for (k = 0; k < dec->inter_prd_order - 1; k++){
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				prd += dec->predictor[cl][k + dec->prd_order + 1] * video[0]->val[ry][rx];
 			}
 		}
 		else{
 			for (k = 0; k < dec->inter_prd_order - 1; k++){
-				ry = y + (*scany_p++);
-				rx = x + (*scanx_p++);
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
 
 				if(ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width){
-					prd += (*coef_p++) * video[0]->val[y][x];
+					prd += dec->predictor[cl][k + dec->prd_order + 1] * video[0]->val[y][x];
 				}
 				else{
-					prd += (*coef_p++) * video[0]->val[ry][rx];
+					prd += dec->predictor[cl][k + dec->prd_order + 1] * video[0]->val[ry][rx];
 				}
 			}
 		}
@@ -819,6 +816,8 @@ int calc_prd(IMAGE *video[2], DECODER *dec, int cl, int y, int x){
 
 IMAGE *decode_image(FILE *fp, IMAGE *video[2], DECODER *dec){
 	int x, y, cl, gr, prd, u, e, E, p;
+
+	video[1] = alloc_image(dec->width, dec->height, dec->maxval);
 
 	if (dec->f_huffman == 1){
 		VLC *vlc;
@@ -967,46 +966,6 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame){
 	return (img);
 }
 
-void print_class(DECODER *dec, int f){
-	int y, x;
-
-	if(f == 0) system("rm decoder_class.txt");
-
-	FILE *teste;
-	teste = fileopen("decoder_class.txt", "a");
-
-	fprintf(teste, "Frame: %d\n\n", f);
-	for(y = 0; y < dec->width; y++){
-		for(x = 0; x < dec->width; x++){
-			fprintf(teste, "%d ", dec->class[y][x]);
-		}fprintf(teste, "\n");
-	}fprintf(teste, "\n\n");
-
-	fclose(teste);
-}
-
-void print_predictors(DECODER *dec, int f){
-	int y, x, i, joao;
-
-	if(f == 0) system("rm decoder_predictors.txt");
-
-	FILE *teste;
-	teste = fileopen("decoder_predictors.txt", "a");
-
-	fprintf(teste, "Frame: %d\n\n", f);
-	for(y = 0; y < dec->num_class; y++){
-		int *coef_p = dec->predictor[y];
-		i = *(coef_p + dec->prd_order * 3);
-			if(f == 0) joao = i;
-		else joao = *(coef_p + (dec->prd_order + dec->inter_prd_order) * 3) + dec->inter_prd_order;
-		for(x = 0; x < joao; x++){
-			  fprintf(teste, "%d ", dec->predictor[y][x]);
-		}fprintf(teste, "\n");
-	}fprintf(teste, "\n\n");
-
-	fclose(teste);
-}
-
 int main(int argc, char **argv){
 	int i, f, **error;
 	int version, width, height, maxval, frames, num_comp, num_group, prd_order, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth;
@@ -1071,18 +1030,14 @@ int main(int argc, char **argv){
 		}
 
 		decode_class(fp, dec);
-		decode_predictor(fp, dec);
+		decode_predictor(fp, dec, f);
 		decode_threshold(fp, dec);
 
 		dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
 
-		video[1] = alloc_image(dec->width, dec->height, dec->maxval);
 		video[1] = decode_image(fp, video, dec);
 
 		write_yuv(video[1], outfile);
-
-		print_class(dec, f);
-		print_predictors(dec, f);
 
 		free(video[1]->val);
 		free(video[1]);

@@ -3,6 +3,7 @@ ifeq ($(CC), icc)
   CFLAG = -O3 -tpp7 -xW -axW -unroll
 else
   CFLAG = -O0 -g -funroll-loops -Wall
+  #CFLAG = -O3 -funroll-loops -Wall
   ifeq ($(shell uname -m), i686)
     CFLAG += -march=pentiumpro
   endif
