@@ -9,39 +9,6 @@ extern POINT idyx[];
 extern double sigma_h[], sigma_a[];        
 extern double qtree_prob[];
 
-int pixel_wise_predictor(ENCODER *enc){
-	int f, i, j, aux;
-	int resultado = 0;
-
-	IMAGE *img = alloc_image(enc->width, enc->height, enc->frames, 255);
-
-	for(f = 0; f < enc->frames; f++){
-		for(i = 0; i < enc->height; i++){
-			for(j = 0; j < enc->width; j++){
-				if(f == 0){
-					img->val[f][i][j] = enc->org[f][i][j];
-				}
-				else{
-					aux = enc->org[f][i][j] + enc->org[f - 1][i][j];
-
-					img->val[f][i][j] =  aux - 127;
-				}
-			}
-		}
-	}
-
-	for(f = 1; f < enc->frames; f++){
-		for(i = 0; i < enc->height; i++){
-			for(j = 0; j < enc->width; j++){
-				enc->org[f][i][j] = img->val[f][i][j];
-			}
-		}
-	}
-
-	free(img);
-	return resultado;
-}
-
 uint getbits(FILE *fp, int n){
 	static int bitpos = 0;
 	static uint bitbuf = 0;
