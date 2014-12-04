@@ -10,6 +10,50 @@ extern POINT idyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
 
+int pixel_wise_predictor(ENCODER *enc){
+	int f, i, j, aux;
+	int resultado = 0;
+	IMAGE *img = alloc_image(enc->width, enc->height, enc->frames, 255);
+	IMAGE *img2 = alloc_image(enc->width, enc->height, enc->frames, 255);
+
+	for(f = 0; f < enc->frames; f++){
+		for(i = 0; i < enc->height; i++){
+			for(j = 0; j < enc->width; j++){
+				if(f == 0){
+					img->val[f][i][j] = enc->org[f][i][j];
+					img2->val[f][i][j] = enc->org[f][i][j];
+				}
+				else{
+					aux = enc->org[f][i][j] - enc->org[f - 1][i][j];
+					if(aux > 128){
+						aux = 128;
+						resultado = 1;
+					}
+					else if(aux < -127){
+						aux = -127;
+						resultado = 1;
+					}
+					img->val[f][i][j] =  aux + 127;
+					img2->val[f][i][j] = enc->org[f - 1][i][j];
+				}
+			}
+		}
+	}
+
+	//write_yuv(img2, "pixel_wise_predictor.yuv");
+
+	for(f = 1; f < enc->frames; f++){
+		for(i = 0; i < enc->height; i++){
+			for(j = 0; j < enc->width; j++){
+				enc->org[f][i][j] = img->val[f][i][j];
+			}
+		}
+	}
+
+	free(img);
+	return resultado;
+}
+
 /*------------------------------- read_yuv --------------------------*
  |  Function read_yuv
  |
