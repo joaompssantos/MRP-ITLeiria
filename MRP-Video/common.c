@@ -127,7 +127,7 @@ void ***alloc_3d_array(int height, int width, int frames, int size){
 }
 
 // Function to alloc image
-IMAGE *alloc_image(int width, int height, int frames, int maxval){
+IMAGE *alloc_image(int width, int height, int maxval){
 	// Image struct vector
 	IMAGE *img;
 
@@ -137,15 +137,13 @@ IMAGE *alloc_image(int width, int height, int frames, int maxval){
 	// Set image values
 	img->width = width;
 	img->height = height;
-	img->frames = frames;
 	img->maxval = maxval;
 
-	img->val = (img_t ***) alloc_3d_array(img->height, img->width, img->frames, sizeof(img_t));
+	img->val = (img_t **) alloc_2d_array(img->height, img->width, sizeof(img_t));
 	return (img);
 }
 
-int *gen_hufflen(uint *hist, int size, int max_len)
-{
+int *gen_hufflen(uint *hist, int size, int max_len){
 	int i, j, k, l, *len, *index, *bits, *link;
 
 	len = (int *)alloc_mem(size * sizeof(int));
@@ -224,8 +222,7 @@ int *gen_hufflen(uint *hist, int size, int max_len)
 	return (len);
 }
 
-void gen_huffcode(VLC *vlc)
-{
+void gen_huffcode(VLC *vlc){
 	int i, j, *idx, *len;
 	uint k;
 
@@ -233,10 +230,12 @@ void gen_huffcode(VLC *vlc)
 	vlc->off = (int *)alloc_mem(vlc->max_len * sizeof(int));
 	vlc->code = (uint *)alloc_mem(vlc->size * sizeof(int));
 	len = vlc->len;
+
 	/* sort in increasing order of code length */
 	for (i = 0; i < vlc->size; i++) {
 		idx[i] = i;
 	}
+
 	for (i = vlc->size -1; i > 0; i--) {
 		for (j = 0; j < i; j++) {
 			if (len[idx[j]] > len[idx[j + 1]]) {
@@ -246,24 +245,29 @@ void gen_huffcode(VLC *vlc)
 			}
 		}
 	}
+
 	k = 0;
+
 	for (j = 0; j < vlc->max_len; j++) {
 		vlc->off[j] = -1;
 	}
+
 	j = len[idx[0]];
+
 	for (i = 0; i < vlc->size; i++) {
 		if (j < len[idx[i]]) {
 			k <<= (len[idx[i]] - j);
 			j = len[idx[i]];
 		}
+
 		vlc->code[idx[i]] = k++;
 		vlc->off[j - 1] = i;
 	}
+
 	return;
 }
 
-VLC *make_vlc(uint *hist, int size, int max_len)
-{
+VLC *make_vlc(uint *hist, int size, int max_len){
 	VLC *vlc;
 
 	vlc = (VLC *)alloc_mem(sizeof(VLC));
@@ -329,6 +333,7 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
 	int i, j, n;
 
 	if(center == 0) sigma *= 2.0;
+
 	if(idx < 0){
 		shape = 2.0;
 	}
@@ -353,9 +358,11 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
 			x = (double)(i - (double)center + 0.5) * sw;
 			pdfsamp[i + 1] = exp(-pow(beta * x, shape));
 		}
+
 		for(i = 0; i <= center; i++){
 			pdfsamp[center - i] =  pdfsamp[center + i + 1];
 		}
+
 		for(i = 0; i < n; i++){
 			if(i == center){
 				pdfsamp[i] = (2.0 + pdfsamp[i] + pdfsamp[i + 1]) / 2.0;
@@ -380,6 +387,7 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
 			pm->freq[i] = norm * pdfsamp[i * num_subpm + j] + MIN_FREQ;
 			pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
 		}
+
 		pm++;
 	}
 	return;
@@ -502,16 +510,35 @@ void set_spmodel(PMODEL *pm, int size, int m){
 }
 
 // ?
-int *init_ctx_weight(void){
+int *init_ctx_weight(int prd_order, int inter_prd_order){
 	int *ctx_weight, k;
 	double dy, dx;
 
 	ctx_weight = (int *)alloc_mem(NUM_UPELS * sizeof(int));
-	for(k = 0; k < NUM_UPELS; k++){
-		dy = dyx[k].y;
-		dx = dyx[k].x;
-		ctx_weight[k] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
+
+	if(prd_order >= NUM_UPELS || inter_prd_order == 0){
+		for(k = 0; k < NUM_UPELS; k++){
+			dy = dyx[k].y;
+			dx = dyx[k].x;
+
+			ctx_weight[k] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
+		}
 	}
+	else{
+		for(k = 0; k < prd_order; k++){
+			dy = dyx[k].y;
+			dx = dyx[k].x;
+
+			ctx_weight[k] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
+		}
+		for(k = 0; k < NUM_UPELS - prd_order; k++){
+			dy = idyx[k].y;
+			dx = idyx[k].x;
+
+			ctx_weight[k + prd_order] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
+		}
+	}
+
 	return (ctx_weight);
 }
 
@@ -534,11 +561,11 @@ int e2E(int e, int prd, int flag, int maxval){
 	return (E);
 }
 
-int E2e(int E, int prd, int flag, int maxval)
-{
+int E2e(int E, int prd, int flag, int maxval){
 	int e, th;
 
 	th = (prd < ((maxval + 1) >> 1))? prd : maxval - prd;
+
 	if (E > (th << 1)) {
 		e = (prd < ((maxval + 1) >> 1))? E - th : th - E;
 	} else if (flag) {
@@ -546,25 +573,25 @@ int E2e(int E, int prd, int flag, int maxval)
 	} else {
 		e = (E & 1)? (E >> 1) + 1 : -(E >> 1);
 	}
+
 	return (e);
 }
 
-void mtf_classlabel(char **class, int *mtfbuf, int y, int x,
-		int bsize, int width, int num_class)
-{
+void mtf_classlabel(char **class, int *mtfbuf, int y, int x, int bsize, int width, int num_class){
 	int i, j, k, ref[3];
 
 	if (y == 0) {
 		if (x == 0) {
 			ref[0] = ref[1] = ref[2] = 0;
-		} else {
+		}
+		else {
 			ref[0] = ref[1] = ref[2] = class[y][x-1];
 		}
-	} else {
+	}
+	else {
 		ref[0] = class[y-1][x];
 		ref[1] = (x == 0)? class[y-1][x] : class[y][x-1];
-		ref[2] = (x + bsize >= width)?
-				class[y-1][x] : class[y-1][x+bsize];
+		ref[2] = (x + bsize >= width)? class[y-1][x] : class[y-1][x+bsize];
 		if (ref[1] == ref[2]) {
 			ref[2] = ref[0];
 			ref[0] = ref[1];
@@ -574,13 +601,16 @@ void mtf_classlabel(char **class, int *mtfbuf, int y, int x,
 	/* move to front */
 	for (k = 2; k >= 0; k--) {
 		if ((j = mtfbuf[ref[k]]) == 0) continue;
+
 		for (i = 0; i < num_class; i++) {
 			if (mtfbuf[i] < j) {
 				mtfbuf[i]++;
 			}
 		}
+
 		mtfbuf[ref[k]] = 0;
 	}
+
 	return;
 }
 
