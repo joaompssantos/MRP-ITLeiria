@@ -34,7 +34,7 @@ int read_class(FILE *fp){
 	return(getbits(fp, 8));
 }
 
-DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height, int maxval, int num_comp, int num_group, int prd_order, int inter_prd_order, int num_pmodel, int coef_precision, int pm_accuracy, int f_huffman, int quadtree_depth){
+DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height, int maxval, int num_comp, int num_group, int prd_order, int inter_prd_order, int num_pmodel, int coef_precision, int pm_accuracy, int f_huffman, int quadtree_depth, int delta){
 	DECODER *dec;
 	int i;
 
@@ -54,6 +54,7 @@ DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height,
 	dec->f_huffman = f_huffman;
 	dec->quadtree_depth = quadtree_depth;
 	dec->maxprd = dec->maxval << dec->coef_precision;
+	dec->delta = delta;
 
 	dec->num_class = read_class(fp);
 
@@ -71,7 +72,7 @@ DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height,
 		}
 	}
 
-	dec->ctx_weight = init_ctx_weight(dec->prd_order, dec->inter_prd_order);
+	dec->ctx_weight = init_ctx_weight(dec->prd_order, dec->inter_prd_order, dec->delta);
 
 	// Quadtree map
 	if (dec->quadtree_depth > 0){
@@ -182,7 +183,7 @@ void free_decoder(DECODER *dec){
 	free(dec);
 }
 
-void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *num_comp, int *num_group, int *prd_order, int *intra_prd_order, int *inter_prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth){
+void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *num_comp, int *num_group, int *prd_order, int *intra_prd_order, int *inter_prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta){
 	if (getbits(fp, 16) != MAGIC_NUMBER){
 		fprintf(stderr, "Not a compressed file!\n");
 		exit(1);
@@ -198,6 +199,7 @@ void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, i
 	*prd_order = getbits(fp, 7);
 	*intra_prd_order = getbits(fp, 8);
 	*inter_prd_order = getbits(fp, 8);
+	*delta = getbits(fp, 8);
 	*num_pmodel = getbits(fp, 6) + 1;
 	*coef_precision = getbits(fp, 4) + 1;
 	*pm_accuracy = getbits(fp, 3) - 1;
@@ -562,16 +564,46 @@ void decode_class(FILE *fp, DECODER *dec){
 }
 
 int calc_udec(DECODER *dec, int y, int x){
-	int rx, ry, k, u = 0;
+	int ry, rx, u, k;
+	u = 0;
 
-	int order = NUM_UPELS;
+	int min_dx, max_dx, min_dy;
+	int imin_dx, imax_dx, imin_dy, imax_dy;
 
-	if(dec->prd_order < NUM_UPELS && dec->inter_prd_order != 0){
-		order = dec->prd_order;
+	min_dx = max_dx = min_dy = 0;
+	imin_dx = imax_dx = imin_dy = imax_dy = 0;
+
+	//Values to check for special cases
+	for (k = 0; k < dec->prd_order; k++){
+		ry = dyx[k].y;
+		rx = dyx[k].x;
+
+		if (ry < min_dy) min_dy = ry;
+		if (rx < min_dx) min_dx = rx;
+		if (rx > max_dx) max_dx = rx;
 	}
 
-	if (y >= UPEL_DIST && x >= UPEL_DIST && x <= dec->width - UPEL_DIST){
-		for (k = 0; k < order; k++){
+	for (k = 0; k < dec->inter_prd_order - 1; k++){
+		ry = idyx[k].y;
+		rx = idyx[k].x;
+
+		if (ry < imin_dy) imin_dy = ry;
+		if (ry > imax_dy) imax_dy = ry;
+		if (rx < imin_dx) imin_dx = rx;
+		if (rx > imax_dx) imax_dx = rx;
+	}
+
+	min_dy = -min_dy;
+	min_dx = -min_dx;
+	max_dx = dec->width - max_dx;
+
+	imin_dy = -imin_dy;
+	imin_dx = -imin_dx;
+	imax_dx = dec->width - imax_dx;
+	imax_dy = dec->height - imax_dy;
+
+	if (y >= min_dy && x >= min_dx && x <= max_dx){
+		for (k = 0; k < dec->prd_order; k++){
 			ry = y + dyx[k].y;
 			rx = x + dyx[k].x;
 			u += dec->err[1][ry][rx] * dec->ctx_weight[k];
@@ -579,14 +611,14 @@ int calc_udec(DECODER *dec, int y, int x){
 	}
 	else if (y == 0){
 		if (x == 0){
-			for (k = 0; k < NUM_UPELS; k++){
+			for (k = 0; k < dec->prd_order; k++){
 				u += ((dec->maxval + 1) >> 2) * dec->ctx_weight[k];
 			}
 		}
 		else{
 			ry = 0;
 
-			for (k =0; k < order; k++){
+			for (k =0; k < dec->prd_order; k++){
 				rx = x + dyx[k].x;
 
 				if (rx < 0) rx = 0;
@@ -598,7 +630,7 @@ int calc_udec(DECODER *dec, int y, int x){
 	}
 	else{
 		if (x == 0){
-			for (k = 0; k < order; k++){
+			for (k = 0; k < dec->prd_order; k++){
 				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
@@ -612,7 +644,7 @@ int calc_udec(DECODER *dec, int y, int x){
 			}
 		}
 		else{
-			for (k = 0; k < order; k++){
+			for (k = 0; k < dec->prd_order; k++){
 				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
@@ -628,29 +660,27 @@ int calc_udec(DECODER *dec, int y, int x){
 	}
 
 	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
-	if(dec->prd_order < NUM_UPELS && dec->inter_prd_order != 0){
-		int iorder = NUM_UPELS - dec->prd_order;
+	if(dec->inter_prd_order > 0){
+		u += dec->err[0][y][x] * dec->ctx_weight[dec->prd_order];
 
-		u += dec->err[0][y][x] * dec->ctx_weight[order];
-
-		if (y >= UPEL_DIST && x >= UPEL_DIST && x < dec->width - UPEL_DIST && y < dec->height - UPEL_DIST){
-			for (k = 0; k < iorder - 1; k++){
+		if (y >= imin_dy && x >= imin_dx && x <= imax_dx && y < imax_dy){
+			for (k = 0; k < dec->inter_prd_order - 1; k++){
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
-				u += dec->err[0][ry][rx] * dec->ctx_weight[order + k + 1];
+				u += dec->err[0][ry][rx] * dec->ctx_weight[k + dec->prd_order + 1];
 			}
 		}
 		else{
-			for (k = 0; k < iorder - 1; k++){
+			for (k = 0; k < dec->inter_prd_order - 1; k++){
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
 				if(ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width){
-					u += dec->err[0][y][x] * dec->ctx_weight[order + k + 1];
+					u += dec->err[0][y][x] * dec->ctx_weight[k + dec->prd_order + 1];
 				}
 				else{
-					u += dec->err[0][ry][rx] * dec->ctx_weight[order + k + 1];
+					u += dec->err[0][ry][rx] * dec->ctx_weight[k + dec->prd_order + 1];
 				}
 			}
 		}
@@ -968,7 +998,7 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame){
 
 int main(int argc, char **argv){
 	int i, f, **error;
-	int version, width, height, maxval, frames, num_comp, num_group, prd_order, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth;
+	int version, width, height, maxval, frames, num_comp, num_group, prd_order, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta;
 	IMAGE *video[2];
 	DECODER *dec;
 	char *infile, *outfile;
@@ -1003,7 +1033,7 @@ int main(int argc, char **argv){
 	}
 
 	fp = fileopen(infile, "rb");
-	read_header(fp, &version, &width, &height, &maxval, &frames, &num_comp, &num_group, &prd_order, &intra_prd_order, &inter_prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth);
+	read_header(fp, &version, &width, &height, &maxval, &frames, &num_comp, &num_group, &prd_order, &intra_prd_order, &inter_prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta);
 
 	printf("\nMRP-Video Decoder\n\n");
 	// Print file characteristics to screen
@@ -1015,12 +1045,12 @@ int main(int argc, char **argv){
 		printf("Decoding frame: %03d", f);
 
 		if(f == 0){
-			dec = init_decoder(fp, NULL, version, width, height, maxval, num_comp, num_group, prd_order, 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth);
+			dec = init_decoder(fp, NULL, version, width, height, maxval, num_comp, num_group, prd_order, 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
 		}
 		else{
 			video[0] = read_yuv(outfile, height, width, f - 1);
 
-			dec = init_decoder(fp, error, version, width, height, maxval, num_comp, num_group, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth);
+			dec = init_decoder(fp, error, version, width, height, maxval, num_comp, num_group, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
 			free(error);
 		}
 

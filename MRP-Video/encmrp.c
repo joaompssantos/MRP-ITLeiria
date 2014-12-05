@@ -345,7 +345,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
  |
  |  Returns:  ENCODER* --> returns a encoder type structure
  *-------------------------------------------------------------------*/
-ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int **error, int num_class, int num_group, int prd_order, int inter_prd_order, int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel, int pm_accuracy){
+ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int **error, int num_class, int num_group, int prd_order, int inter_prd_order, int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel, int pm_accuracy, int delta){
 	//Declare new encoder struct
 	ENCODER *enc;
 	int x, y, i, j;
@@ -370,6 +370,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int **error, int num_class, in
 	enc->num_pmodel = num_pmodel; // V
 	enc->pm_accuracy = pm_accuracy; // A
 	enc->maxprd = enc->maxval << enc->coef_precision; // ??
+	enc->delta = delta;
 
 	// Alloc memory to predictors array
 	enc->predictor = (int **)alloc_2d_array(enc->num_class, enc->prd_order + enc->inter_prd_order, sizeof(int));
@@ -405,7 +406,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *aux_img, int **error, int num_class, in
 	}
 
 	// ?
-	enc->ctx_weight = init_ctx_weight(enc->prd_order, enc->inter_prd_order);
+	enc->ctx_weight = init_ctx_weight(enc->prd_order, enc->inter_prd_order, enc->delta);
 
 	// Class and group arrays
 	enc->class = (char **)alloc_2d_array(enc->height, enc->width, sizeof(char));
@@ -937,17 +938,45 @@ void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx, int modo){
 
 int calc_uenc(ENCODER *enc, int y, int x){
 	int ry, rx, u, k;
-
 	u = 0;
 
-	int order = NUM_UPELS;
+	int min_dx, max_dx, min_dy;
+	int imin_dx, imax_dx, imin_dy, imax_dy;
 
-	if(enc->prd_order < NUM_UPELS && enc->inter_prd_order != 0){
-		order = enc->prd_order;
+	min_dx = max_dx = min_dy = 0;
+	imin_dx = imax_dx = imin_dy = imax_dy = 0;
+
+	//Values to check for special cases
+	for (k = 0; k < enc->prd_order; k++){
+		ry = dyx[k].y;
+		rx = dyx[k].x;
+
+		if (ry < min_dy) min_dy = ry;
+		if (rx < min_dx) min_dx = rx;
+		if (rx > max_dx) max_dx = rx;
 	}
 
-	if (y >= UPEL_DIST && x >= UPEL_DIST && x <= enc->width - UPEL_DIST){
-		for (k = 0; k < order; k++){
+	for (k = 0; k < enc->inter_prd_order - 1; k++){
+		ry = idyx[k].y;
+		rx = idyx[k].x;
+
+		if (ry < imin_dy) imin_dy = ry;
+		if (ry > imax_dy) imax_dy = ry;
+		if (rx < imin_dx) imin_dx = rx;
+		if (rx > imax_dx) imax_dx = rx;
+	}
+
+	min_dy = -min_dy;
+	min_dx = -min_dx;
+	max_dx = enc->width - max_dx;
+
+	imin_dy = -imin_dy;
+	imin_dx = -imin_dx;
+	imax_dx = enc->width - imax_dx;
+	imax_dy = enc->height - imax_dy;
+
+	if (y >= min_dy && x >= min_dx && x <= max_dx){
+		for (k = 0; k < enc->prd_order; k++){
 			ry = y + dyx[k].y;
 			rx = x + dyx[k].x;
 			u += enc->err[1][ry][rx] * enc->ctx_weight[k];
@@ -955,14 +984,14 @@ int calc_uenc(ENCODER *enc, int y, int x){
 	}
 	else if (y == 0){
 		if (x == 0){
-			for (k = 0; k < NUM_UPELS; k++){
+			for (k = 0; k < enc->prd_order; k++){
 				u += ((enc->maxval + 1) >> 2) * enc->ctx_weight[k];
 			}
 		}
 		else{
 			ry = 0;
 
-			for (k =0; k < order; k++){
+			for (k =0; k < enc->prd_order; k++){
 				rx = x + dyx[k].x;
 
 				if (rx < 0) rx = 0;
@@ -974,7 +1003,7 @@ int calc_uenc(ENCODER *enc, int y, int x){
 	}
 	else{
 		if (x == 0){
-			for (k = 0; k < order; k++){
+			for (k = 0; k < enc->prd_order; k++){
 				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
@@ -988,7 +1017,7 @@ int calc_uenc(ENCODER *enc, int y, int x){
 			}
 		}
 		else{
-			for (k = 0; k < order; k++){
+			for (k = 0; k < enc->prd_order; k++){
 				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
@@ -1004,29 +1033,27 @@ int calc_uenc(ENCODER *enc, int y, int x){
 	}
 
 	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
-	if(enc->prd_order < NUM_UPELS && enc->inter_prd_order != 0){
-		int iorder = NUM_UPELS - enc->prd_order;
+	if(enc->inter_prd_order > 0){
+		u += enc->err[0][y][x] * enc->ctx_weight[enc->prd_order];
 
-		u += enc->err[0][y][x] * enc->ctx_weight[order];
-
-		if (y >= UPEL_DIST && x >= UPEL_DIST && x < enc->width - UPEL_DIST && y < enc->height - UPEL_DIST){
-			for (k = 0; k < iorder - 1; k++){
+		if (y >= imin_dy && x >= imin_dx && x <= imax_dx && y < imax_dy){
+			for (k = 0; k < enc->inter_prd_order - 1; k++){
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
-				u += enc->err[0][ry][rx] * enc->ctx_weight[order + k + 1];
+				u += enc->err[0][ry][rx] * enc->ctx_weight[k + enc->prd_order + 1];
 			}
 		}
 		else{
-			for (k = 0; k < iorder - 1; k++){
+			for (k = 0; k < enc->inter_prd_order - 1; k++){
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
 				if(ry < 0 || rx < 0 || ry >= enc->height || rx >= enc->width){
-					u += enc->err[0][y][x] * enc->ctx_weight[order + k + 1];
+					u += enc->err[0][y][x] * enc->ctx_weight[k + enc->prd_order + 1];
 				}
 				else{
-					u += enc->err[0][ry][rx] * enc->ctx_weight[order + k + 1];
+					u += enc->err[0][ry][rx] * enc->ctx_weight[k + enc->prd_order + 1];
 				}
 			}
 		}
@@ -1989,6 +2016,7 @@ int write_header(ENCODER *enc, int prd_order, int intra_prd_order, int inter_prd
 	bits += putbits(fp, 7, prd_order);
 	bits += putbits(fp, 8, intra_prd_order);
 	bits += putbits(fp, 8, inter_prd_order);
+	bits += putbits(fp, 8, enc->delta);
 	bits += putbits(fp, 6, enc->num_pmodel - 1);
 	bits += putbits(fp, 4, enc->coef_precision - 1);
 	bits += putbits(fp, 3, enc->pm_accuracy + 1);
@@ -2738,6 +2766,7 @@ int main(int argc, char **argv){
 	FILE *fp, *res;
 	//Print results variables
 	int header, *class_info, *predictors, *thresholds, *errors;
+	int delta;
 
 	cpu_time();
 	setbuf(stdout, 0);
@@ -2827,6 +2856,12 @@ int main(int argc, char **argv){
 				break;
 			case 'f':
 				quadtree_depth = -1;
+				break;
+			case 'D':
+				delta = atoi(argv[++i]);
+				if(delta <= 0){
+					delta = 1;
+				}
 				break;
 			default:
 				fprintf(stderr, "Unknown option: %s!\n", argv[i]);
@@ -2934,14 +2969,14 @@ int main(int argc, char **argv){
 			// Read input file
 			video[1] = read_yuv(infile, height, width, f);
 
-			enc = init_encoder(video[1], NULL, NULL, num_class, num_group, prd_order, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy);
+			enc = init_encoder(video[1], NULL, NULL, num_class, num_group, prd_order, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
 		}
 		else{
 			// Read input file
 			video[0] = read_yuv(infile, height, width, f - 1);
 			video[1] = read_yuv(infile, height, width, f);
 
-			enc = init_encoder(video[1], video[0], error, num_class, num_group, intra_prd_order, inter_prd_order, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy);
+			enc = init_encoder(video[1], video[0], error, num_class, num_group, intra_prd_order, inter_prd_order, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
 
 			free(error);
 		}

@@ -90,6 +90,7 @@ typedef struct {
     int height; // Image height
     int width; // Image width
     //int frames; // Image frames
+    int delta;
     int maxval; // Image maximum value (255)
     int num_class; // Number of classes to use (number of different predictors)
     int num_group; // Number of groups ???? (= 16)
@@ -140,6 +141,7 @@ typedef struct {
     int width;
     int maxval;
     int frames;
+    int delta;
     int num_comp;
     int num_class;
     int num_group;
@@ -180,7 +182,7 @@ void free_vlc(VLC *);
 VLC **init_vlcs(PMODEL ***, int, int);
 PMODEL ***init_pmodels(int, int, int, int *, double *, int);
 void set_spmodel(PMODEL *, int, int);
-int *init_ctx_weight(int, int);
+int *init_ctx_weight(int, int, int);
 int e2E(int, int, int, int);
 int E2e(int, int, int, int);
 void mtf_classlabel(char **, int *, int, int, int, int, int);

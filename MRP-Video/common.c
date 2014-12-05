@@ -510,32 +510,27 @@ void set_spmodel(PMODEL *pm, int size, int m){
 }
 
 // ?
-int *init_ctx_weight(int prd_order, int inter_prd_order){
+int *init_ctx_weight(int prd_order, int inter_prd_order, int delta){
 	int *ctx_weight, k;
 	double dy, dx;
 
-	ctx_weight = (int *)alloc_mem(NUM_UPELS * sizeof(int));
+	ctx_weight = (int *)alloc_mem((prd_order + inter_prd_order) * sizeof(int));
 
-	if(prd_order >= NUM_UPELS || inter_prd_order == 0){
-		for(k = 0; k < NUM_UPELS; k++){
-			dy = dyx[k].y;
-			dx = dyx[k].x;
+	for(k = 0; k < prd_order; k++){
+		dy = dyx[k].y;
+		dx = dyx[k].x;
 
-			ctx_weight[k] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
-		}
+		ctx_weight[k] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
 	}
-	else{
-		for(k = 0; k < prd_order; k++){
-			dy = dyx[k].y;
-			dx = dyx[k].x;
 
-			ctx_weight[k] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
-		}
-		for(k = 0; k < NUM_UPELS - prd_order; k++){
+	if(inter_prd_order > 0){
+		ctx_weight[prd_order] = 64.0 / sqrt(delta * delta) + 0.5;
+
+		for(k = 0; k < inter_prd_order - 1; k++){
 			dy = idyx[k].y;
 			dx = idyx[k].x;
 
-			ctx_weight[k + prd_order] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
+			ctx_weight[k + prd_order + 1] = 64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5;
 		}
 	}
 
