@@ -631,30 +631,6 @@ void free_encoder(ENCODER *enc){
 	}
 	free(enc->roff);
 
-	//Cycle that runs for all the pixels
-//	for (y = 0; y < enc->height; y++){
-//		for (x = 0; x < enc->width; x++){
-//			//Conditions to check which references are available for each pixel
-//			if (y == 0){
-//				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
-//					free(enc->roff[y][x]);
-//				}
-//			}
-//			else if (y + min_abs_dy <= 0){
-//				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
-//					free(enc->roff[y][x]);
-//				}
-//			}
-//			else if (y + max_abs_dy >= enc->height){
-//				if (x == 0 || x + min_abs_dx <= 0 || x + max_abs_dx >= enc->width){
-//					free(enc->roff[y][x]);
-//				}
-//			}
-//		}
-//	}
-//	free(enc->roff);
-
-
 	if(enc->pm_accuracy < 0){
 		num_subpm = 1;
 	}
@@ -2002,7 +1978,7 @@ void remove_emptyclass(ENCODER *enc){
 	enc->num_class = cl;
 }
 
-int write_header(ENCODER *enc, int prd_order, int intra_prd_order, int inter_prd_order, int frames, FILE *fp){
+int write_header(ENCODER *enc, int prd_order, int intra_prd_order, int inter_prd_order, int frames, int diff, FILE *fp){
 	int bits;
 
 	bits = putbits(fp, 16, MAGIC_NUMBER);
@@ -2014,8 +1990,9 @@ int write_header(ENCODER *enc, int prd_order, int intra_prd_order, int inter_prd
 	bits += putbits(fp, 4, 1);	/* number of components (1 = monochrome) */
 	bits += putbits(fp, 6, enc->num_group);
 	bits += putbits(fp, 7, prd_order);
-	bits += putbits(fp, 8, intra_prd_order);
+	bits += putbits(fp, 7, intra_prd_order);
 	bits += putbits(fp, 8, inter_prd_order);
+	bits += putbits(fp, 1, diff);
 	bits += putbits(fp, 8, enc->delta);
 	bits += putbits(fp, 6, enc->num_pmodel - 1);
 	bits += putbits(fp, 4, enc->coef_precision - 1);
@@ -2617,7 +2594,7 @@ int encode_image(FILE *fp, ENCODER *enc){
 				pm = enc->pmlist[gr] + enc->fconv[prd];
 				cumbase = pm->cumfreq[base];
 
-				//print_contexts(-1, /*pm->cumfreq[base + e] - cumbase*/ 4, 2/*pm->freq[base + e]*/, pm->cumfreq[base + enc->maxval + 1] - cumbase, base + enc->maxval + 1, base, prd);
+				//print_contexts(-1, 0, 0, pm->cumfreq[base + enc->maxval + 1] - cumbase, base + enc->maxval + 1, base, prd);
 
 				rc_encode(fp, enc->rc, pm->cumfreq[base + e] - cumbase, pm->freq[base + e], pm->cumfreq[base + enc->maxval + 1] - cumbase);
 			}
@@ -2708,6 +2685,24 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 	fprintf(res, "Total:\n\t%10d\t%10.5f\n", total_bits, (double)total_bits / (height * width * frames));
 }
 
+IMAGE* calc_diff(IMAGE* ref, IMAGE* cur){
+	int x, y;
+	// Image allocation
+	IMAGE *diff = alloc_image(ref->width, ref->height, 255);
+
+	for(y = 0; y < ref->height; y++){
+		for(x = 0; x < ref->width; x++){
+			diff->val[y][x] = cur->val[y][x] - ref->val[y][x] + 128;
+		}
+	}
+
+	free(ref->val);
+	free(ref);
+	free(cur->val);
+	free(cur);
+
+	return diff;
+}
 
 void write_yuv(IMAGE *img, char *filename){
 	int i, j;
@@ -2766,7 +2761,8 @@ int main(int argc, char **argv){
 	FILE *fp, *res;
 	//Print results variables
 	int header, *class_info, *predictors, *thresholds, *errors;
-	int delta;
+	int delta = 1;
+	int diff = 0;
 
 	cpu_time();
 	setbuf(stdout, 0);
@@ -2794,9 +2790,9 @@ int main(int argc, char **argv){
 					frames = FRAMES;
 				}
 				break;
-				//			case 'p':
-				//				predicao = atoi(argv[++i]);
-				//				break;
+			case 'p':
+				diff = 1;
+				break;
 			case 'M':
 				num_class = atoi(argv[++i]);
 				if(num_class <= 0 || num_class > 63){
@@ -2891,7 +2887,7 @@ int main(int argc, char **argv){
 		printf("    -H num  Height*\n");
 		printf("    -W num  Width*\n");
 		printf("    -F num  Frames*\n");
-		//printf("    -p num  Inter slice prediction type (ADICIONAR DESCRIÇÃO)\n");
+		printf("    -p 		Pixel difference prediction\n");
 		printf("    -M num  Number of predictors [%d]\n", num_class);
 		printf("    -K num  Intra frames prediction order [%d]\n", prd_order);
 		printf("    -L num  Intra prediction order [%d]\n", intra_prd_order);
@@ -2944,7 +2940,7 @@ int main(int argc, char **argv){
 	// Print file characteristics to screen
 	printf("%s -> %s (%dx%dx%d)\n", infile, outfile, width, height, frames);
 	// Print coding parameters to screen
-	printf("M = %d, K = %d, L = %d, J = %d, P = %d, V = %d, A = %d\n\n", num_class, prd_order, intra_prd_order, inter_prd_order, coef_precision, num_pmodel, pm_accuracy);
+	printf("M = %d, K = %d, L = %d, J = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", num_class, prd_order, intra_prd_order, inter_prd_order, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
 
 	//Allocation of print results variables
 	errors 	   = (int *) alloc_mem(frames * sizeof(int));
@@ -2973,8 +2969,14 @@ int main(int argc, char **argv){
 		}
 		else{
 			// Read input file
-			video[0] = read_yuv(infile, height, width, f - 1);
-			video[1] = read_yuv(infile, height, width, f);
+			if(diff == 0){
+				video[0] = video[1];
+				video[1] = read_yuv(infile, height, width, f);
+			}
+			else{
+				video[0] = video[1];
+				video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f));
+			}
 
 			enc = init_encoder(video[1], video[0], error, num_class, num_group, intra_prd_order, inter_prd_order, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
 
@@ -3139,7 +3141,7 @@ int main(int argc, char **argv){
 		printf(" --> M = %d\n", enc->num_class);
 
 		if(f == 0){
-			header = write_header(enc, prd_order, intra_prd_order, inter_prd_order, frames, fp);
+			header = write_header(enc, prd_order, intra_prd_order, inter_prd_order, frames, diff, fp);
 		}
 
 		class_info[f] = write_class(enc, fp);
@@ -3153,8 +3155,6 @@ int main(int argc, char **argv){
 		thresholds[f] = encode_threshold(fp, enc);
 		errors[f] = encode_image(fp, enc);
 
-		free(video[1]->val);
-		free(video[1]);
 		if(f > 0){
 			free(video[0]->val);
 			free(video[0]);
@@ -3167,6 +3167,9 @@ int main(int argc, char **argv){
 		error = get_enc_err(enc, 1);
 		free_encoder(enc);
 	}
+
+	free(video[1]->val);
+	free(video[1]);
 
 	if(f_huffman == 1){
 		putbits(fp, 7, 0);	/* flush remaining bits */

@@ -183,7 +183,7 @@ void free_decoder(DECODER *dec){
 	free(dec);
 }
 
-void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *num_comp, int *num_group, int *prd_order, int *intra_prd_order, int *inter_prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta){
+void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *num_comp, int *num_group, int *prd_order, int *intra_prd_order, int *inter_prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta, int *diff){
 	if (getbits(fp, 16) != MAGIC_NUMBER){
 		fprintf(stderr, "Not a compressed file!\n");
 		exit(1);
@@ -197,8 +197,9 @@ void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, i
 	*num_comp = getbits(fp, 4);
 	*num_group = getbits(fp, 6);
 	*prd_order = getbits(fp, 7);
-	*intra_prd_order = getbits(fp, 8);
+	*intra_prd_order = getbits(fp, 7);
 	*inter_prd_order = getbits(fp, 8);
+	*diff = getbits(fp, 1);
 	*delta = getbits(fp, 8);
 	*num_pmodel = getbits(fp, 6) + 1;
 	*coef_precision = getbits(fp, 4) + 1;
@@ -900,6 +901,9 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[2], DECODER *dec){
 					base = (dec->maxprd - prd + (1 << shift) / 2) >> shift;
 					pm = dec->pmodels[gr][0] + (base & mask);
 					base >>= dec->pm_accuracy;
+
+					//print_contexts(-1, 0, 0, pm->cumfreq[base+dec->maxval+1] - pm->cumfreq[base], base+dec->maxval+1, base, prd);
+
 					p = rc_decode(fp, dec->rc, pm, base, base+dec->maxval+1) - base;
 					video[1]->val[y][x] = p;
 					prd >>= (dec->coef_precision - 1);
@@ -996,17 +1000,37 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame){
 	return (img);
 }
 
+IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int frame){
+	int x, y;
+	// Image allocation
+	IMAGE *cur = alloc_image(ref->width, ref->height, 255);
+
+	for(y = 0; y < ref->height; y++){
+		for(x = 0; x < ref->width; x++){
+			cur->val[y][x] = diff->val[y][x] + ref->val[y][x] - 128;
+		}
+	}
+
+	if(frame > 1){
+		free(ref->val);
+		free(ref);
+	}
+
+	return cur;
+}
+
 int main(int argc, char **argv){
 	int i, f, **error;
-	int version, width, height, maxval, frames, num_comp, num_group, prd_order, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta;
+	int version, width, height, maxval, frames, num_comp, num_group, prd_order, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, diff;
 	IMAGE *video[2];
 	DECODER *dec;
 	char *infile, *outfile;
 	FILE *fp;
-
 	cpu_time();
 	setbuf(stdout, 0);
 	infile = outfile = NULL;
+
+	IMAGE *img_diff = NULL;
 
 	for (i = 1; i < argc; i++){
 		if (infile == NULL){
@@ -1033,13 +1057,13 @@ int main(int argc, char **argv){
 	}
 
 	fp = fileopen(infile, "rb");
-	read_header(fp, &version, &width, &height, &maxval, &frames, &num_comp, &num_group, &prd_order, &intra_prd_order, &inter_prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta);
+	read_header(fp, &version, &width, &height, &maxval, &frames, &num_comp, &num_group, &prd_order, &intra_prd_order, &inter_prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &diff);
 
 	printf("\nMRP-Video Decoder\n\n");
 	// Print file characteristics to screen
 	printf("%s -> %s (%dx%dx%d)\n", infile, outfile, width, height, frames);
 	// Print coding parameters to screen
-	printf("K = %d, L = %d, J = %d, P = %d, V = %d, A = %d\n", prd_order, intra_prd_order, inter_prd_order, coef_precision, num_pmodel, pm_accuracy);
+	printf("K = %d, L = %d, J = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", prd_order, intra_prd_order, inter_prd_order, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
 
 	for(f = 0; f < frames; f++){
 		printf("Decoding frame: %03d", f);
@@ -1048,7 +1072,7 @@ int main(int argc, char **argv){
 			dec = init_decoder(fp, NULL, version, width, height, maxval, num_comp, num_group, prd_order, 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
 		}
 		else{
-			video[0] = read_yuv(outfile, height, width, f - 1);
+			video[0] = video[1];
 
 			dec = init_decoder(fp, error, version, width, height, maxval, num_comp, num_group, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
 			free(error);
@@ -1067,20 +1091,33 @@ int main(int argc, char **argv){
 
 		video[1] = decode_image(fp, video, dec);
 
-		write_yuv(video[1], outfile);
+		if(f > 0 && diff != 0){
+			img_diff = sum_diff(img_diff, video[1], f);
+			write_yuv(img_diff, outfile);
+		}
+		else{
+			write_yuv(video[1], outfile);
+		}
 
-		free(video[1]->val);
-		free(video[1]);
+		if(diff != 0 && f == 0) img_diff = video[1];
+
+		error = get_dec_err(dec, 1);
+		free_decoder(dec);
+
 		if(f > 0){
 			free(video[0]->val);
 			free(video[0]);
 		}
 
-		error = get_dec_err(dec, 1);
-		free_decoder(dec);
-
 		printf(" --> Process completed\n");
 	}
+
+	if(diff == 1){
+		free(img_diff->val);
+		free(img_diff);
+	}
+	free(video[1]->val);
+	free(video[1]);
 
 	free(error);
 	fclose(fp);

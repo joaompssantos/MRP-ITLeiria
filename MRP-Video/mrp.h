@@ -30,7 +30,7 @@
 #define BANNER          "\nMRP Video Inter\nencmrp/decmrp version %.1f (September 2014)"
 #define VERSION         1
 #define uint            unsigned int
-#define img_t           unsigned char
+#define img_t           unsigned int//unsigned char
 #define cost_t          double
 #ifdef HAVE_64BIT_INTEGER
 #  define RANGE_SIZE 64
