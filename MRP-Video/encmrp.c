@@ -2685,23 +2685,68 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 	fprintf(res, "Total:\n\t%10d\t%10.5f\n", total_bits, (double)total_bits / (height * width * frames));
 }
 
-IMAGE* calc_diff(IMAGE* ref, IMAGE* cur){
+IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char *extra_info, int *num_pels){
 	int x, y;
 	// Image allocation
 	IMAGE *diff = alloc_image(ref->width, ref->height, 255);
+	int aux, conta = 0;
+	char *aux_extra_info;
+
+	aux_extra_info = (char *) alloc_mem(ref->width * ref->height * sizeof(char));
+
+	extra_info = NULL;
 
 	for(y = 0; y < ref->height; y++){
 		for(x = 0; x < ref->width; x++){
-			diff->val[y][x] = cur->val[y][x] - ref->val[y][x] + 128;
+			aux = cur->val[y][x] - ref->val[y][x] + 127;
+
+			if(aux > 0 && aux < 255){
+				diff->val[y][x] = aux;
+			}
+			else if(aux <= 0){
+				diff->val[y][x] = 0;
+
+				aux_extra_info[conta] = aux;
+
+				conta++;
+			}
+			else if(aux >= 255){
+				diff->val[y][x] = 255;
+
+				aux_extra_info[conta] = aux - 255;
+
+				conta++;
+			}
 		}
 	}
 
+	extra_info = (char *) alloc_mem(conta * sizeof(char));
+
+	for(y = 0; y < conta; y++){
+		extra_info[y] = aux_extra_info[y];
+	}
+
+	*num_pels = conta;
+
+	free(aux_extra_info);
 	free(ref->val);
 	free(ref);
 	free(cur->val);
 	free(cur);
 
 	return diff;
+}
+
+int encode_extra_info(FILE *fp, char *extra_info, int num_pels){
+	int bits, i;
+
+	bits = putbits(fp, 16, num_pels);
+
+	for(i = 0; i < num_pels; i++){
+		bits += putbits(fp, 8, extra_info[i]);
+	}
+
+	return bits;
 }
 
 void write_yuv(IMAGE *img, char *filename){
@@ -2762,7 +2807,8 @@ int main(int argc, char **argv){
 	//Print results variables
 	int header, *class_info, *predictors, *thresholds, *errors;
 	int delta = 1;
-	int diff = 0;
+	int diff = 0, num_pels = 0;
+	char *extra_info = NULL;
 
 	cpu_time();
 	setbuf(stdout, 0);
@@ -2975,7 +3021,7 @@ int main(int argc, char **argv){
 			}
 			else{
 				video[0] = video[1];
-				video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f));
+				video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), extra_info, &num_pels);
 			}
 
 			enc = init_encoder(video[1], video[0], error, num_class, num_group, intra_prd_order, inter_prd_order, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
@@ -3154,6 +3200,10 @@ int main(int argc, char **argv){
 		predictors[f] = encode_predictor(fp, enc);
 		thresholds[f] = encode_threshold(fp, enc);
 		errors[f] = encode_image(fp, enc);
+
+		if(diff == 1 && extra_info != NULL){
+			errors[f] += encode_extra_info(fp, extra_info, num_pels);
+		}
 
 		if(f > 0){
 			free(video[0]->val);
