@@ -1007,7 +1007,7 @@ IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int frame){
 
 	for(y = 0; y < ref->height; y++){
 		for(x = 0; x < ref->width; x++){
-			cur->val[y][x] = diff->val[y][x] + ref->val[y][x] - 128;
+			cur->val[y][x] = diff->val[y][x] + ref->val[y][x] - 127;
 		}
 	}
 
@@ -1017,6 +1017,23 @@ IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int frame){
 	}
 
 	return cur;
+}
+
+char *decode_extra_info(FILE *fp, int *num_pels){
+	int i;
+	char *extra_info = NULL;
+
+	*num_pels = getbits(fp, 16);
+
+	if(*num_pels != 0){
+		extra_info = (char *) alloc_mem(*num_pels * sizeof(char));
+
+		for(i = 0; i < *num_pels; i++){
+			extra_info[i] = getbits(fp, 8);
+		}
+	}
+
+	return extra_info;
 }
 
 int main(int argc, char **argv){
@@ -1031,6 +1048,8 @@ int main(int argc, char **argv){
 	infile = outfile = NULL;
 
 	IMAGE *img_diff = NULL;
+	int num_pels = 0, x, y;
+	char *extra_info = NULL;
 
 	for (i = 1; i < argc; i++){
 		if (infile == NULL){
@@ -1092,7 +1111,35 @@ int main(int argc, char **argv){
 		video[1] = decode_image(fp, video, dec);
 
 		if(f > 0 && diff != 0){
-			img_diff = sum_diff(img_diff, video[1], f);
+			extra_info = decode_extra_info(fp, &num_pels);
+
+			IMAGE *aux_image;
+			if(num_pels != 0 && extra_info != NULL){
+				aux_image = alloc_image(dec->width, dec->height, 255);
+				int conta = 0;
+
+				for(y = 0; y < dec->height; y++){
+					for(x = 0; x < dec->width; x++){
+						aux_image->val[y][x] = video[1]->val[y][x];
+
+						if((video[1]->val[y][x] == 0 || video[1]->val[y][x] == 255) && conta < num_pels){
+							aux_image->val[y][x] += extra_info[conta];
+							conta++;
+						}
+					}
+				}
+			}
+
+			if(extra_info != NULL) free(extra_info);
+
+			if(num_pels == 0){
+				img_diff = sum_diff(img_diff, video[1], f);
+			}
+			else{
+				img_diff = sum_diff(img_diff, aux_image, f);
+				free(aux_image);
+			}
+
 			write_yuv(img_diff, outfile);
 		}
 		else{
