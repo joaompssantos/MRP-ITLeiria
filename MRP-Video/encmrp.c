@@ -2649,7 +2649,7 @@ char *remove_ext (char* mystr, char dot, char sep){
 	return retstr;
 }
 
-void print_results(FILE *res, int frames, int height, int width, int header, int *class_info, int *predictors, int *thresholds, int *errors){
+void print_results(FILE *res, int frames, int height, int width, int header, int *class_info, int *predictors, int *thresholds, int *errors, int *extrainfo){
 	int f, rate = 0, total_bits = 0;
 
 	printf("\n---------------------------------\n");
@@ -2667,6 +2667,12 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 		printf("pred. errors\t :%10d bits\n", errors[f]);
 
 		rate = class_info[f] + predictors[f] + thresholds[f] + errors[f];
+
+		if(extrainfo != NULL){
+			printf("extra info\t :%10d bits\n", extrainfo[f]);
+			rate += extrainfo[f];
+		}
+
 		total_bits += rate;
 
 		printf("---------------------------------\n");
@@ -2683,6 +2689,15 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 
 	fprintf(res, "------------------------------------------------\n");
 	fprintf(res, "Total:\n\t%10d\t%10.5f\n", total_bits, (double)total_bits / (height * width * frames));
+
+	if(extrainfo != NULL){
+		total_bits = 0;
+		for(f = 0; f < frames; f++){
+			total_bits += extrainfo[f];
+		}
+
+		printf("\nExtra info due to pixelwise difference: %d bits --> %f bpp.", total_bits, (double)total_bits / (height * width * frames));
+	}
 }
 
 IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels){
@@ -2805,7 +2820,7 @@ int main(int argc, char **argv){
 	char resfile[100];
 	FILE *fp, *res;
 	//Print results variables
-	int header, *class_info, *predictors, *thresholds, *errors;
+	int header, *class_info, *predictors, *thresholds, *errors, *extrainfo;
 	int delta = 1;
 	int diff = 0, num_pels = 0;
 	char *extra_info = NULL;
@@ -2993,6 +3008,7 @@ int main(int argc, char **argv){
 	class_info = (int *) alloc_mem(frames * sizeof(int));
 	predictors = (int *) alloc_mem(frames * sizeof(int));
 	thresholds = (int *) alloc_mem(frames * sizeof(int));
+	extrainfo  = (int *) alloc_mem(frames * sizeof(int));
 
 	char *aux = remove_ext(outfile, '.', '/');
 	sprintf(resfile, "res_%s.txt", aux);
@@ -3202,7 +3218,7 @@ int main(int argc, char **argv){
 		errors[f] = encode_image(fp, enc);
 
 		if(f > 0 && diff == 1){
-			errors[f] += encode_extra_info(fp, extra_info, num_pels);
+			extrainfo[f] += encode_extra_info(fp, extra_info, num_pels);
 		}
 
 		if(f > 0){
@@ -3227,7 +3243,12 @@ int main(int argc, char **argv){
 
 	fclose(fp);
 
-	print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors);
+	if(diff == 1){
+		print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, extrainfo);
+	}
+	else{
+		print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, NULL);
+	}
 
 	free(class_info);
 	free(predictors);
