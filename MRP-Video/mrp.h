@@ -8,7 +8,6 @@
 #define MAX_CLASS	63
 #define NUM_CLASS       -1
 #define NUM_GROUP       16
-#define PRD_ORDER       -1
 #define INTRA_PRD_ORDER -1
 #define INTER_PRD_ORDER 1
 #define COEF_PRECISION  6
@@ -89,13 +88,13 @@ typedef struct {
 typedef struct {
     int height; // Image height
     int width; // Image width
-    //int frames; // Image frames
     int delta;
     int maxval; // Image maximum value (255)
     int num_class; // Number of classes to use (number of different predictors)
     int num_group; // Number of groups ???? (= 16)
     int prd_order; // Order of the predictors (number of pixels to use)
-    int inter_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
+    int back_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
+    int for_prd_order; // Order of the predictors (number of pixels to use) in the next frame
     int coef_precision; // Precision of the coefficients
     int num_pmodel; // Number of probability models
     int pm_accuracy; // Probability model accuracy
@@ -146,7 +145,8 @@ typedef struct {
     int num_class;
     int num_group;
     int prd_order;
-    int inter_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
+    int back_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
+    int for_prd_order; // Order of the predictors (number of pixels to use) in the next frame
     int num_pmodel;
     int pm_accuracy;
     int maxprd;
@@ -182,7 +182,7 @@ void free_vlc(VLC *);
 VLC **init_vlcs(PMODEL ***, int, int);
 PMODEL ***init_pmodels(int, int, int, int *, double *, int);
 void set_spmodel(PMODEL *, int, int);
-int *init_ctx_weight(int, int, int);
+int *init_ctx_weight(int, int, int, int);
 int e2E(int, int, int, int);
 int E2e(int, int, int, int);
 void mtf_classlabel(char **, int *, int, int, int, int, int);
