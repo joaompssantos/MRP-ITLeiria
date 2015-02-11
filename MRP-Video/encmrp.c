@@ -2154,9 +2154,6 @@ int write_header(ENCODER *enc, int prd_order[6], int frames, int bframes, int di
 	for(i = 0; i < 6; i++){
 		bits += putbits(fp, 8, prd_order[i]);
 	}
-	//bits += putbits(fp, 7, prd_order);
-	//bits += putbits(fp, 7, intra_prd_order);
-	//bits += putbits(fp, 8, inter_prd_order);
 	bits += putbits(fp, 1, diff);
 	bits += putbits(fp, 8, enc->delta);
 	bits += putbits(fp, 6, enc->num_pmodel - 1);
@@ -3170,7 +3167,7 @@ int main(int argc, char **argv){
 	printf("%s -> %s (%dx%dx%d)\n", infile, outfile, width, height, frames);
 	// Print coding parameters to screen
 	printf("M = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
-	printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
+	printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
 
 	//Allocation of print results variables
 	errors 	   = (int *) alloc_mem(frames * sizeof(int));

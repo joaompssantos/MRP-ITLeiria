@@ -1163,7 +1163,7 @@ int main(int argc, char **argv){
 	printf("%s -> %s (%dx%dx%d)\n", infile, outfile, width, height, frames);
 	// Print coding parameters to screen
 	printf("P = %d, V = %d, A = %d, D = %d, p = %s\n\n", coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
-	printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
+	printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
 
 	if(bframes == 0){
 		for(f = 0; f < frames; f++){
