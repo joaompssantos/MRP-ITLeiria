@@ -725,7 +725,7 @@ int calc_prd(IMAGE *video[2], DECODER *dec, int cl, int y, int x){
 	}
 
 	max_abs_dy = dec->height - imax_dy;
-	if(dec->inter_prd_order <= 1) max_abs_dy = dec->height;
+	if(dec->inter_prd_order <= 1) max_abs_dy = 0;
 
 	if(min_dy < imin_dy){
 		min_abs_dy = -min_dy;

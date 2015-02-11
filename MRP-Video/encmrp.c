@@ -108,7 +108,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int inter_prd_order){
 	}
 
 	max_abs_dy = imax_dy;
-	if(inter_prd_order <= 1) max_abs_dy = img->height;
+	if(inter_prd_order <= 1) max_abs_dy = 0;
 
 	if(min_dy < imin_dy){
 		min_abs_dy = min_dy;
@@ -596,7 +596,7 @@ void free_encoder(ENCODER *enc){
 	}
 
 	max_abs_dy = imax_dy;
-	if(enc->inter_prd_order <= 1) max_abs_dy = enc->height;
+	if(enc->inter_prd_order <= 1) max_abs_dy = 0;
 
 	if(min_dy < imin_dy){
 		min_abs_dy = min_dy;
