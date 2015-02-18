@@ -534,13 +534,13 @@ int *init_ctx_weight(int prd_order, int back_prd_order, int for_prd_order, int d
 	}
 
 	if(for_prd_order > 0){
-		ctx_weight[prd_order] = 64.0 / sqrt(delta * delta) + 0.5;
+		ctx_weight[prd_order + back_prd_order] = 64.0 / sqrt(delta * delta) + 0.5;
 
 		for(k = 0; k < for_prd_order - 1; k++){
 			dy = idyx[k].y;
 			dx = idyx[k].x;
 
-			ctx_weight[k + prd_order + 1] = 64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5;
+			ctx_weight[k + prd_order + back_prd_order + 1] = 64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5;
 		}
 	}
 

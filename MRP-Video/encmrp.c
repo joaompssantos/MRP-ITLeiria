@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +10,26 @@ extern POINT dyx[];
 extern POINT idyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
+
+/* Alternative version for 'free()' */
+void safefree(void **pp){
+    /* in debug mode, abort if pp is NULL */
+    assert(pp);
+    if (pp != NULL) {               /* safety check */
+        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
+        *pp = NULL;                 /* reset original pointer */
+    }
+}
+
+void safefree_yuv(IMAGE **pp){
+    /* in debug mode, abort if pp is NULL */
+    assert(pp);
+    if (pp != NULL) {               /* safety check */
+    	free((*pp)->val);
+        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
+        *pp = NULL;                 /* reset original pointer */
+    }
+}
 
 /*------------------------------- read_yuv --------------------------*
  |  Function read_yuv
@@ -129,7 +150,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int back_prd_order, int for_pr
 		max_abs_dy = (fmax_dy > bmax_dy ? fmax_dy : bmax_dy);
 	}
 
-	max_abs_dx = (max_dx < bmax_dx && max_dx < fmax_dx ? max_dx : bmax_dx < fmax_dx ? bmax_dx : fmax_dx);
+	max_abs_dx = (max_dx > bmax_dx && max_dx > fmax_dx ? max_dx : bmax_dx > fmax_dx ? bmax_dx : fmax_dx);
 
 	roff = (int ***)alloc_2d_array(img->height, img->width, sizeof(int *));
 
@@ -553,8 +574,10 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	}
 
 	// Auxiliary values
+	enc->org[2][enc->height][0] = (enc->maxval + 1) >> 1;
 	enc->org[1][enc->height][0] = (enc->maxval + 1) >> 1;
 	enc->org[0][enc->height][0] = (enc->maxval + 1) >> 1;
+	enc->err[2][enc->height][0] = (enc->maxval + 1) >> 2;
 	enc->err[1][enc->height][0] = (enc->maxval + 1) >> 2;
 	enc->err[0][enc->height][0] = (enc->maxval + 1) >> 2;
 
@@ -733,7 +756,7 @@ void free_encoder(ENCODER *enc){
 		max_abs_dy = (fmax_dy > bmax_dy ? fmax_dy : bmax_dy);
 	}
 
-	max_abs_dx = (max_dx < bmax_dx && max_dx < fmax_dx ? max_dx : bmax_dx < fmax_dx ? bmax_dx : fmax_dx);
+	max_abs_dx = (max_dx > bmax_dx && max_dx > fmax_dx ? max_dx : bmax_dx > fmax_dx ? bmax_dx : fmax_dx);
 
 	//Cycle that runs for all the pixels
 	for (y = 0; y < enc->height; y++){
@@ -746,7 +769,7 @@ void free_encoder(ENCODER *enc){
 			}
 		}
 	}
-	free(enc->roff);
+	safefree((void **)&(enc->roff));
 
 	if(enc->pm_accuracy < 0){
 		num_subpm = 1;
@@ -1171,14 +1194,14 @@ int calc_uenc(ENCODER *enc, int y, int x){
 
 	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
 	if(enc->for_prd_order > 0){
-		u += enc->err[0][y][x] * enc->ctx_weight[enc->prd_order];
+		u += enc->err[2][y][x] * enc->ctx_weight[enc->prd_order + enc->back_prd_order];
 
 		if (y >= fmin_dy && x >= fmin_dx && x <= fmax_dx && y < fmax_dy){
 			for (k = 0; k < enc->for_prd_order - 1; k++){
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
-				u += enc->err[0][ry][rx] * enc->ctx_weight[k + enc->prd_order + 1];
+				u += enc->err[2][ry][rx] * enc->ctx_weight[k + enc->prd_order + enc->back_prd_order + 1];
 			}
 		}
 		else{
@@ -1187,10 +1210,10 @@ int calc_uenc(ENCODER *enc, int y, int x){
 				rx = x + idyx[k].x;
 
 				if(ry < 0 || rx < 0 || ry >= enc->height || rx >= enc->width){
-					u += enc->err[0][y][x] * enc->ctx_weight[k + enc->prd_order + 1];
+					u += enc->err[2][y][x] * enc->ctx_weight[k + enc->prd_order + enc->back_prd_order + 1];
 				}
 				else{
-					u += enc->err[0][ry][rx] * enc->ctx_weight[k + enc->prd_order + 1];
+					u += enc->err[2][ry][rx] * enc->ctx_weight[k + enc->prd_order + enc->back_prd_order + 1];
 				}
 			}
 		}
@@ -2725,6 +2748,24 @@ int encode_threshold(FILE *fp, ENCODER *enc){
 	return (bits);
 }
 
+void print_contexts(int modo, uint cumfreq, uint freq, uint totfreq, int max, int min, int prd){
+	if(modo == 0) system("rm /tmp/encoder_context.txt");
+
+	FILE *fp;
+	fp = fileopen("/tmp/encoder_context.txt", "a");
+
+	if(modo != -1){
+		fprintf(fp, "Frame: %d\n", modo);
+		fprintf(fp, "Cum. Freq.\tFreq.\tTot. Freq.\tMax\tMin\tPrd:\n");
+	}
+	else{
+		fprintf(fp, "%d\t\t%d\t%d\t\t%d\t%d\t%d\n", cumfreq, freq, totfreq, max, min, prd);
+		//fprintf(fp, "%d\n", prd);
+	}
+
+	fclose(fp);
+}
+
 int encode_image(FILE *fp, ENCODER *enc){
 	int x, y, e, prd, base, bits, gr, cumbase;
 	PMODEL *pm;
@@ -2757,7 +2798,7 @@ int encode_image(FILE *fp, ENCODER *enc){
 				pm = enc->pmlist[gr] + enc->fconv[prd];
 				cumbase = pm->cumfreq[base];
 
-				//print_contexts(-1, 0, 0, pm->cumfreq[base + enc->maxval + 1] - cumbase, base + enc->maxval + 1, base, prd);
+//				print_contexts(-1, 0, 0, pm->cumfreq[base + enc->maxval + 1] - cumbase, base + enc->maxval + 1, base, prd);
 
 				rc_encode(fp, enc->rc, pm->cumfreq[base + e] - cumbase, pm->freq[base + e], pm->cumfreq[base + enc->maxval + 1] - cumbase);
 			}
@@ -2927,6 +2968,35 @@ int encode_extra_info(FILE *fp, char *extra_info, int num_pels){
 	return bits;
 }
 
+void write_err(int **img, char *filename){
+	int i, j;
+	FILE *fp;
+
+	fp = fileopen(filename, "ab");
+
+	for (i = 0; i < 256; i++){
+		for (j = 0; j < 256; j++){
+			putc(img[i][j] + 128, fp);
+		}
+	}
+
+	for (i = 0; i < 256 / 2; i++){
+		for (j = 0; j < 256 / 2; j++){
+			putc(128, fp);
+		}
+	}
+
+	for (i = 0; i < 256 / 2; i++){
+		for (j = 0; j < 256 / 2; j++){
+			putc(128, fp);
+		}
+	}
+
+	fclose(fp);
+
+	return;
+}
+
 void write_yuv(IMAGE *img, char *filename){
 	int i, j;
 	FILE *fp;
@@ -2956,10 +3026,24 @@ void write_yuv(IMAGE *img, char *filename){
 	return;
 }
 
+IMAGE *copy_yuv(IMAGE *img){
+	int i, j;
+
+	IMAGE *new_img = alloc_image(img->width, img->height, img->maxval);
+
+	for(i = 0; i < new_img->height; i++){
+		for(j = 0; j < new_img->height; j++){
+			new_img->val[i][j] = img->val[i][j];
+		}
+	}
+
+	return(new_img);
+}
+
 int main(int argc, char **argv){
 	// Variable declaration
 	cost_t cost, min_cost, side_cost;
-	int i, j, f, k, x, y, cl, **prd_save, **th_save, **error, **back_ref_error, **for_ref_error;
+	int i, j, f, k, x, y, cl, **prd_save, **th_save, **error;
 	char **class_save;
 	IMAGE *video[3] = {NULL, NULL, NULL};
 	ENCODER *enc;
@@ -3255,11 +3339,11 @@ int main(int argc, char **argv){
 					}
 
 					for (cl = 0; cl < enc->num_class; cl++){
-						for (k= 0; k < enc->prd_order + enc->back_prd_order; k++){
+						for (k = 0; k < enc->prd_order + enc->back_prd_order; k++){
 							prd_save[cl][k] = enc->predictor[cl][k];
 						}
 
-						for (k= 0; k < enc->num_group; k++){
+						for (k = 0; k < enc->num_group; k++){
 							th_save[cl][k] = enc->th[cl][k];
 						}
 					}
@@ -3277,10 +3361,10 @@ int main(int argc, char **argv){
 				}
 			}
 			for (cl = 0; cl < enc->num_class; cl++){
-				for (k= 0; k < enc->prd_order + enc->back_prd_order; k++){
+				for (k = 0; k < enc->prd_order + enc->back_prd_order; k++){
 					enc->predictor[cl][k] = prd_save[cl][k];
 				}
-				for (k= 0; k < enc->num_group; k++){
+				for (k = 0; k < enc->num_group; k++){
 					enc->th[cl][k] = th_save[cl][k];
 				}
 			}
@@ -3319,10 +3403,10 @@ int main(int argc, char **argv){
 							}
 						}
 						for (cl = 0; cl < enc->num_class; cl++){
-							for (k= 0; k < enc->prd_order + enc->back_prd_order; k++){
+							for (k = 0; k < enc->prd_order + enc->back_prd_order; k++){
 								prd_save[cl][k] = enc->predictor[cl][k];
 							}
-							for (k= 0; k < enc->num_group; k++){
+							for (k = 0; k < enc->num_group; k++){
 								th_save[cl][k] = enc->th[cl][k];
 							}
 						}
@@ -3346,12 +3430,12 @@ int main(int argc, char **argv){
 				}
 
 				for (cl = 0; cl < enc->num_class; cl++){
-					for (k= 0; k < enc->prd_order + enc->back_prd_order; k++){
+					for (k = 0; k < enc->prd_order + enc->back_prd_order; k++){
 						enc->predictor[cl][k] = prd_save[cl][k];
 					}
 					i = 0;
 
-					for (k= 0; k < enc->num_group; k++){
+					for (k = 0; k < enc->num_group; k++){
 						enc->th[cl][k] = th_save[cl][k];
 						for (; i < enc->th[cl][k]; i++){
 							enc->uquant[cl][i] = k;
@@ -3422,60 +3506,8 @@ int main(int argc, char **argv){
 	else{
 		//START HERE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		int back_reference = 0, for_reference = bframes;
+		int **back_ref_error, **for_ref_error;
 		f = 0;
-
-//		int *ordem = (int *) alloc_mem(frames * sizeof(int)), conta = 0;
-//
-//		while(f < frames){
-//			if(f == 0){
-//				ordem[conta] = f;
-//				printf("1 Ordem = %d, Frame = %d\n", ordem[conta], bframes);
-//				f = bframes;
-//				for_reference = f;
-//				back_reference = 0;
-//			}
-//			else if(f == for_reference){
-//				ordem[conta] = f;
-//
-//				if(f == back_reference + 1){
-//					printf("2 Ordem = %d, Frame = %d\n", ordem[conta], frames);
-//					f = frames;
-//				}
-//				else{
-//					printf("2.1 Ordem = %d, Frame = %d\n", ordem[conta], back_reference + 1);
-//					f = back_reference + 1;
-//				}
-//			}
-//			else if(back_reference < f && f < for_reference - 1){
-//				ordem[conta] = f;
-//				printf("3 Ordem = %d, Frame = %d\n", ordem[conta], f + 1);
-//				f++;
-//			}
-//			else if(f == for_reference - 1){
-//				ordem[conta] = f;
-//
-//				if(f + 1 == frames - 1){
-//					printf("4 Ordem = %d, Frame = %d\n", ordem[conta], frames);
-//					f = frames;
-//				}
-//				else if(f + bframes + 1 < frames){
-//					printf("5 Ordem = %d, Frame = %d\n", ordem[conta], f + bframes + 1);
-//					f = f + bframes + 1;
-//					back_reference = for_reference;
-//					for_reference = f;
-//				}
-//				else{
-//					printf("6 Ordem = %d, Frame = %d\n", ordem[conta], frames - 1);
-//					f = frames - 1;
-//					back_reference = for_reference;
-//					for_reference = f;
-//				}
-//			}
-//			conta++;
-//		}
-//
-//		back_reference = for_reference = 0;
-//		f = 0;
 
 		while(f < frames){
 			// Creates new ENCODER structure
@@ -3493,8 +3525,6 @@ int main(int argc, char **argv){
 				}
 
 				enc = init_encoder(video[1], video[0], NULL, back_ref_error, NULL, num_class, num_group, prd_order[1], prd_order[2], 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
-
-				//free(error);
 			}
 			else{
 				// Read input file
@@ -3505,8 +3535,6 @@ int main(int argc, char **argv){
 				}
 
 				enc = init_encoder(video[1], video[0], video[2], back_ref_error, for_ref_error, num_class, num_group, prd_order[3], prd_order[4], prd_order[5], coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
-
-				//free(error);
 			}
 
 			//Initiation of the reference offset
@@ -3552,11 +3580,11 @@ int main(int argc, char **argv){
 					}
 
 					for (cl = 0; cl < enc->num_class; cl++){
-						for (k= 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
+						for (k = 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
 							prd_save[cl][k] = enc->predictor[cl][k];
 						}
 
-						for (k= 0; k < enc->num_group; k++){
+						for (k = 0; k < enc->num_group; k++){
 							th_save[cl][k] = enc->th[cl][k];
 						}
 					}
@@ -3574,10 +3602,10 @@ int main(int argc, char **argv){
 				}
 			}
 			for (cl = 0; cl < enc->num_class; cl++){
-				for (k= 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
+				for (k = 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
 					enc->predictor[cl][k] = prd_save[cl][k];
 				}
-				for (k= 0; k < enc->num_group; k++){
+				for (k = 0; k < enc->num_group; k++){
 					enc->th[cl][k] = th_save[cl][k];
 				}
 			}
@@ -3616,10 +3644,10 @@ int main(int argc, char **argv){
 							}
 						}
 						for (cl = 0; cl < enc->num_class; cl++){
-							for (k= 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
+							for (k = 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
 								prd_save[cl][k] = enc->predictor[cl][k];
 							}
-							for (k= 0; k < enc->num_group; k++){
+							for (k = 0; k < enc->num_group; k++){
 								th_save[cl][k] = enc->th[cl][k];
 							}
 						}
@@ -3643,12 +3671,12 @@ int main(int argc, char **argv){
 				}
 
 				for (cl = 0; cl < enc->num_class; cl++){
-					for (k= 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
+					for (k = 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
 						enc->predictor[cl][k] = prd_save[cl][k];
 					}
 					i = 0;
 
-					for (k= 0; k < enc->num_group; k++){
+					for (k = 0; k < enc->num_group; k++){
 						enc->th[cl][k] = th_save[cl][k];
 						for (; i < enc->th[cl][k]; i++){
 							enc->uquant[cl][i] = k;
@@ -3685,11 +3713,6 @@ int main(int argc, char **argv){
 				extrainfo[f] += encode_extra_info(fp, extra_info, num_pels);
 			}
 
-//			if(f > 0){
-//				free(video[0]->val);
-//				free(video[0]);
-//			}
-
 			free(class_save);
 			free(prd_save);
 			free(th_save);
@@ -3697,14 +3720,11 @@ int main(int argc, char **argv){
 			if(f == 0){
 				f = bframes;
 
-				back_ref_error = for_ref_error = get_enc_err(enc, 1);
+				back_ref_error = get_enc_err(enc, 1);
 
-				if(video[0] != NULL){
-					free(video[0]->val);
-					free(video[0]);
-				}
+				video[0] = copy_yuv(video[1]);
+				safefree_yuv(&video[1]);
 
-				video[0] = video[1];
 				video[1] = read_yuv(infile, height, width, f);
 			}
 			else if(f == for_reference){
@@ -3716,20 +3736,18 @@ int main(int argc, char **argv){
 
 					for_ref_error = get_enc_err(enc, 1);
 
-					if(video[2] != NULL){
-						free(video[2]->val);
-						free(video[2]);
-					}
+					if(video[2] != NULL) safefree_yuv(&video[2]);
 
-					video[2] = video[1];
+					video[2] = copy_yuv(video[1]);
+					safefree_yuv(&video[1]);
+
 					video[1] = read_yuv(infile, height, width, f);
 				}
 			}
 			else if(back_reference < f && f < for_reference - 1){
 				f++;
 
-				free(video[1]->val);
-				free(video[1]);
+				safefree_yuv(&video[1]);
 				video[1] = read_yuv(infile, height, width, f);
 			}
 			else if(f == for_reference - 1){
@@ -3739,7 +3757,7 @@ int main(int argc, char **argv){
 				else if(f + bframes + 1 < frames){
 					f = f + bframes + 1;
 
-					free(back_ref_error);
+					safefree((void **)&back_ref_error);
 					back_ref_error = for_ref_error;
 					back_reference = for_reference;
 					for_reference = f;
@@ -3747,31 +3765,29 @@ int main(int argc, char **argv){
 				else{
 					f = frames - 1;
 
-					free(back_ref_error);
+					safefree((void **)&back_ref_error);
 					back_ref_error = for_ref_error;
 					back_reference = for_reference;
 					for_reference = f;
 				}
 
-				free(video[0]->val);
-				free(video[0]);
-				video[0] = video[2];
-				free(video[1]->val);
-				free(video[1]);
+				safefree_yuv(&video[0]);
+				video[0] = copy_yuv(video[2]);
+
+				safefree_yuv(&video[1]);
 				video[1] = read_yuv(infile, height, width, f);
 			}
 
 			free_encoder(enc);
 		}
 
-//		free(video[2]->val);
-//		free(video[2]);
-//
-//		free(video[1]->val);
-//		free(video[1]);
-
-//		free(video[0]->val);
-//		free(video[0]);
+		if(video[1] != video[0] && video[1] != video[2]){
+			if(video[1] != NULL) safefree_yuv(&video[1]);
+		}
+		if(video[0] != video[2]){
+			safefree_yuv(&video[0]);
+		}
+		safefree_yuv(&video[2]);
 
 		if(f_huffman == 1){
 			putbits(fp, 7, 0);	/* flush remaining bits */
@@ -3786,8 +3802,10 @@ int main(int argc, char **argv){
 			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, NULL);
 		}
 
-//		free(back_ref_error);
-//		free(for_ref_error);
+		if(back_ref_error != for_ref_error){
+			safefree((void **)&back_ref_error);
+		}
+		safefree((void **)&for_ref_error);
 	}
 
 	free(class_info);
