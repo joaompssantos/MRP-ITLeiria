@@ -10,6 +10,26 @@ extern POINT idyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
 
+/* Alternative version for 'free()' */
+void safefree(void **pp){
+    /* in debug mode, abort if pp is NULL */
+    assert(pp);
+    if (pp != NULL) {               /* safety check */
+        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
+        *pp = NULL;                 /* reset original pointer */
+    }
+}
+
+void safefree_yuv(IMAGE **pp){
+    /* in debug mode, abort if pp is NULL */
+    assert(pp);
+    if (pp != NULL) {               /* safety check */
+    	free((*pp)->val);
+        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
+        *pp = NULL;                 /* reset original pointer */
+    }
+}
+
 uint getbits(FILE *fp, int n){
 	static int bitpos = 0;
 	static uint bitbuf = 0;
@@ -1161,8 +1181,7 @@ IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int frame){
 	}
 
 	if(frame > 1){
-		free(ref->val);
-		free(ref);
+		safefree_yuv(&ref);
 	}
 
 	return cur;
@@ -1183,26 +1202,6 @@ char *decode_extra_info(FILE *fp, int *num_pels){
 	}
 
 	return extra_info;
-}
-
-/* Alternative version for 'free()' */
-void safefree(void **pp){
-    /* in debug mode, abort if pp is NULL */
-    assert(pp);
-    if (pp != NULL) {               /* safety check */
-        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
-        *pp = NULL;                 /* reset original pointer */
-    }
-}
-
-void safefree_yuv(IMAGE **pp){
-    /* in debug mode, abort if pp is NULL */
-    assert(pp);
-    if (pp != NULL) {               /* safety check */
-    	free((*pp)->val);
-        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
-        *pp = NULL;                 /* reset original pointer */
-    }
 }
 
 int main(int argc, char **argv){
@@ -1396,29 +1395,18 @@ int main(int argc, char **argv){
 				if(extra_info != NULL) free(extra_info);
 
 				if(num_pels == 0){
-					img_diff = sum_diff(img_diff, video[1], f);
+					seq[f] = copy_yuv(video[1]);
 				}
 				else{
-					img_diff = sum_diff(img_diff, aux_image, f);
+					seq[f] = copy_yuv(aux_image);
 					free(aux_image);
 				}
-
-				//write_yuv(img_diff, outfile);
-				seq[f] = img_diff;
 			}
 			else{
-				//write_yuv(video[1], outfile);
 				seq[f] = copy_yuv(video[1]);
 			}
 
-			if(diff != 0 && f == 0) img_diff = video[1];
-
 			printf(" --> Process completed\n");
-
-			if(diff == 1){
-				free(img_diff->val);
-				free(img_diff);
-			}
 
 			if(f == 0){
 				f = bframes;
@@ -1435,7 +1423,6 @@ int main(int argc, char **argv){
 
 					for_ref_error = get_dec_err(dec, 1);
 
-					if(video[2] != NULL) safefree_yuv(&video[2]);
 					video[2] = video[1];
 				}
 			}
@@ -1486,10 +1473,26 @@ int main(int argc, char **argv){
 		}
 		safefree_yuv(&video[2]);
 
-		for(f = 0; f < frames; f++){
-			write_yuv(seq[f], outfile);
-			free(seq[f]->val);
-			free(seq[f]);
+		if(diff == 0){
+			for(f = 0; f < frames; f++){
+				write_yuv(seq[f], outfile);
+				free(seq[f]->val);
+				free(seq[f]);
+			}
+		}
+		else{
+			write_yuv(seq[0], outfile);
+			img_diff = seq[0];
+			for(f = 1; f < frames; f++){
+				img_diff = sum_diff(img_diff, seq[f], f);
+				write_yuv(img_diff, outfile);
+				free(seq[f - 1]->val);
+				free(seq[f - 1]);
+			}
+			free(seq[frames - 1]->val);
+			free(seq[frames - 1]);
+
+			safefree_yuv(&img_diff);
 		}
 
 		if(back_ref_error != for_ref_error){

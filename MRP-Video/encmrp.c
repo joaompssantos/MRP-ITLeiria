@@ -2514,7 +2514,7 @@ int encode_class(FILE *fp, ENCODER *enc){
 }
 
 int encode_predictor(FILE *fp, ENCODER *enc){
-	int cl, coef, sgn, k, m, min_m, bits;
+	int cl, coef, sgn, k, m, min_m, bits = 0;
 	cost_t cost, min_cost, t_cost;
 
 	int prd_order = enc->prd_order + enc->back_prd_order + enc->for_prd_order;
@@ -2601,7 +2601,7 @@ int encode_predictor(FILE *fp, ENCODER *enc){
 }
 
 int encode_threshold(FILE *fp, ENCODER *enc){
-	int cl, gr, i, k, m, min_m, bits;
+	int cl, gr, i, k, m, min_m, bits = 0;
 	cost_t cost, min_cost;
 	PMODEL *pm;
 
@@ -2957,7 +2957,7 @@ IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels){
 }
 
 int encode_extra_info(FILE *fp, char *extra_info, int num_pels){
-	int bits, i;
+	int bits = 0, i;
 
 	bits = putbits(fp, 16, num_pels);
 
@@ -3040,6 +3040,29 @@ IMAGE *copy_yuv(IMAGE *img){
 	return(new_img);
 }
 
+void print_predictors(ENCODER *enc, int f){
+	int y, x;
+
+	if(f == 0) system("rm encoder_predictors.txt");
+
+	FILE *teste;
+	teste = fileopen("encoder_predictors.txt", "a");
+
+	//fprintf(teste, "Frame: %d\n\n", f);
+	for(y = 0; y < enc->num_class; y++){
+		//fprintf(teste, "intra: ");
+		for(x = 0; x < enc->prd_order; x++){
+			fprintf(teste, "%d ", enc->predictor[y][x]);
+		}
+		//fprintf(teste, "|| inter: ");
+		for(x = 0; x < enc->back_prd_order; x++){
+			fprintf(teste, "%d ", enc->predictor[y][enc->prd_order + x]);
+		}fprintf(teste, "\n");
+	}fprintf(teste, "\n");
+
+	fclose(teste);
+}
+
 int main(int argc, char **argv){
 	// Variable declaration
 	cost_t cost, min_cost, side_cost;
@@ -3066,7 +3089,7 @@ int main(int argc, char **argv){
 	char resfile[100];
 	FILE *fp, *res;
 	//Print results variables
-	int header, *class_info, *predictors, *thresholds, *errors, *extrainfo;
+	int header, *class_info, *predictors, *thresholds, *errors, *extrainfo = NULL;
 	int delta = 1;
 	int diff = 0, num_pels = 0;
 	char *extra_info = NULL;
@@ -3259,6 +3282,13 @@ int main(int argc, char **argv){
 	predictors = (int *) alloc_mem(frames * sizeof(int));
 	thresholds = (int *) alloc_mem(frames * sizeof(int));
 	extrainfo  = (int *) alloc_mem(frames * sizeof(int));
+	for(f = 0; f < frames; f++){
+		errors[f] = 0;
+		class_info[f] = 0;
+		predictors[f] = 0;
+		thresholds[f] = 0;
+		extrainfo[f] = 0;
+	}
 
 	char *aux = remove_ext(outfile, '.', '/');
 	sprintf(resfile, "res_%s.txt", aux);
@@ -3482,6 +3512,7 @@ int main(int argc, char **argv){
 			free(th_save);
 
 			error = get_enc_err(enc, 1);
+
 			free_encoder(enc);
 		}
 
@@ -3518,22 +3549,9 @@ int main(int argc, char **argv){
 				enc = init_encoder(video[1], NULL, NULL, NULL, NULL, num_class, num_group, prd_order[0], 0, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
 			}
 			else if(f % bframes == 0){
-				// Read input file
-				if(diff != 0){
-					video[0] = video[1];
-					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
-				}
-
 				enc = init_encoder(video[1], video[0], NULL, back_ref_error, NULL, num_class, num_group, prd_order[1], prd_order[2], 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
 			}
 			else{
-				// Read input file
-				if(diff != 0){
-					video[0] = calc_diff(read_yuv(infile, height, width, back_reference - 1), read_yuv(infile, height, width, back_reference), &extra_info, &num_pels);
-					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
-					video[2] = calc_diff(read_yuv(infile, height, width, for_reference - 1), read_yuv(infile, height, width, for_reference), &extra_info, &num_pels);
-				}
-
 				enc = init_encoder(video[1], video[0], video[2], back_ref_error, for_ref_error, num_class, num_group, prd_order[3], prd_order[4], prd_order[5], coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
 			}
 
@@ -3725,7 +3743,12 @@ int main(int argc, char **argv){
 				video[0] = copy_yuv(video[1]);
 				safefree_yuv(&video[1]);
 
-				video[1] = read_yuv(infile, height, width, f);
+				if(diff == 0){
+					video[1] = read_yuv(infile, height, width, f);
+				}
+				else{
+					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+				}
 			}
 			else if(f == for_reference){
 				if(f == back_reference + 1){
@@ -3741,14 +3764,25 @@ int main(int argc, char **argv){
 					video[2] = copy_yuv(video[1]);
 					safefree_yuv(&video[1]);
 
-					video[1] = read_yuv(infile, height, width, f);
+					if(diff == 0){
+						video[1] = read_yuv(infile, height, width, f);
+					}
+					else{
+						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+					}
 				}
 			}
 			else if(back_reference < f && f < for_reference - 1){
 				f++;
 
 				safefree_yuv(&video[1]);
-				video[1] = read_yuv(infile, height, width, f);
+
+				if(diff == 0){
+					video[1] = read_yuv(infile, height, width, f);
+				}
+				else{
+					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+				}
 			}
 			else if(f == for_reference - 1){
 				if(f + 1 == frames - 1){
@@ -3775,7 +3809,13 @@ int main(int argc, char **argv){
 				video[0] = copy_yuv(video[2]);
 
 				safefree_yuv(&video[1]);
-				video[1] = read_yuv(infile, height, width, f);
+
+				if(diff == 0){
+					video[1] = read_yuv(infile, height, width, f);
+				}
+				else{
+					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+				}
 			}
 
 			free_encoder(enc);
