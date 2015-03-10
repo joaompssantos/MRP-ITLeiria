@@ -4113,7 +4113,7 @@ int main(int argc, char **argv){
 					video[1] = read_yuv(infile, height, width, f);
 				}
 				else{
-					video[0] = calc_diff(read_yuv(infile, height, width, f + bref[conta][1] - 1), read_yuv(infile, height, width, f + bref[conta][1]), &extra_info, &num_pels);
+					video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
 					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
 				}
 
@@ -4137,7 +4137,12 @@ int main(int argc, char **argv){
 						video[1] = read_yuv(infile, height, width, f);
 					}
 					else{
-						video[0] = calc_diff(read_yuv(infile, height, width, f + bref[conta][1] - 1), read_yuv(infile, height, width, f + bref[conta][1]), &extra_info, &num_pels);
+						if(f + bref[conta][1] == 0){
+							video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
+						}
+						else{
+							video[0] = calc_diff(read_yuv(infile, height, width, f + bref[conta][1] - 1), read_yuv(infile, height, width, f + bref[conta][1]), &extra_info, &num_pels);
+						}
 						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
 					}
 
