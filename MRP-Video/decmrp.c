@@ -1045,64 +1045,6 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec){
 	return (video[1]);
 }
 
-void write_err(int **img, char *filename){
-	int i, j;
-	FILE *fp;
-
-	fp = fileopen(filename, "ab");
-
-	for (i = 0; i < 256; i++){
-		for (j = 0; j < 256; j++){
-			putc(img[i][j] + 128, fp);
-		}
-	}
-
-	for (i = 0; i < 256 / 2; i++){
-		for (j = 0; j < 256 / 2; j++){
-			putc(128, fp);
-		}
-	}
-
-	for (i = 0; i < 256 / 2; i++){
-		for (j = 0; j < 256 / 2; j++){
-			putc(128, fp);
-		}
-	}
-
-	fclose(fp);
-
-	return;
-}
-
-void write_yuv(IMAGE *img, char *filename){
-	int i, j;
-	FILE *fp;
-
-	fp = fileopen(filename, "ab");
-
-	for (i = 0; i < img->height; i++){
-		for (j = 0; j < img->width; j++){
-			putc(img->val[i][j], fp);
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++){
-		for (j = 0; j < img->width / 2; j++){
-			putc(128, fp);
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++){
-		for (j = 0; j < img->width / 2; j++){
-			putc(128, fp);
-		}
-	}
-
-	fclose(fp);
-
-	return;
-}
-
 /*------------------------------- read_yuv --------------------------*
  |  Function read_yuv
  |
@@ -1157,20 +1099,6 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame){
 	return (img);
 }
 
-IMAGE *copy_yuv(IMAGE *img){
-	int i, j;
-
-	IMAGE *new_img = alloc_image(img->width, img->height, img->maxval);
-
-	for(i = 0; i < new_img->height; i++){
-		for(j = 0; j < new_img->height; j++){
-			new_img->val[i][j] = img->val[i][j];
-		}
-	}
-
-	return(new_img);
-}
-
 IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int frame){
 	int x, y;
 	// Image allocation
@@ -1207,7 +1135,7 @@ char *decode_extra_info(FILE *fp, int *num_pels){
 }
 
 int main(int argc, char **argv){
-	int i, f, **error;
+	int i, f, **error = NULL;
 	int version, width, height, maxval, frames, bframes, num_comp, num_group, prd_order[6] = {0, 0, 0, 0, 0, 0}, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, diff, hevc;
 	IMAGE *video[3] = {NULL, NULL, NULL};
 	DECODER *dec;

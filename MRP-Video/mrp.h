@@ -174,6 +174,8 @@ void *alloc_mem(size_t);
 void **alloc_2d_array(int, int, int);
 void ***alloc_3d_array(int, int, int, int);
 IMAGE *alloc_image(int, int, int);
+IMAGE *copy_yuv(IMAGE*);
+void write_yuv(IMAGE*, char*);
 int *gen_hufflen(uint *, int, int);
 void gen_huffcode(VLC *);
 VLC *make_vlc(uint *, int, int);

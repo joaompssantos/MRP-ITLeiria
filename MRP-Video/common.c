@@ -215,6 +215,51 @@ IMAGE *alloc_image(int width, int height, int maxval){
 	return (img);
 }
 
+// Function to copy YUV image
+IMAGE *copy_yuv(IMAGE *img){
+	int i, j;
+
+	IMAGE *new_img = alloc_image(img->width, img->height, img->maxval);
+
+	for(i = 0; i < new_img->height; i++){
+		for(j = 0; j < new_img->width; j++){
+			new_img->val[i][j] = img->val[i][j];
+		}
+	}
+
+	return(new_img);
+}
+
+// Write YUV image to file
+void write_yuv(IMAGE *img, char *filename){
+	int i, j;
+	FILE *fp;
+
+	fp = fileopen(filename, "ab");
+
+	for (i = 0; i < img->height; i++){
+		for (j = 0; j < img->width; j++){
+			putc(img->val[i][j], fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++){
+		for (j = 0; j < img->width / 2; j++){
+			putc(128, fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++){
+		for (j = 0; j < img->width / 2; j++){
+			putc(128, fp);
+		}
+	}
+
+	fclose(fp);
+
+	return;
+}
+
 int *gen_hufflen(uint *hist, int size, int max_len){
 	int i, j, k, l, *len, *index, *bits, *link;
 
