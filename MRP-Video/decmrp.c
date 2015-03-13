@@ -9,7 +9,6 @@ extern POINT dyx[];
 extern POINT idyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
-extern int bref1[][5], bref2[][5], bref3[][5], bref4[][5], bref5[][5], bref6[][5], bref7[][5], bref8[][5], bref9[][5];
 
 /* Alternative version for 'free()' */
 void safefree(void **pp){
@@ -1268,210 +1267,26 @@ int main(int argc, char **argv){
 
 		free(error);
 	}
-	else if(hevc == 0){
-		int back_reference = 0, for_reference = bframes;
+	else{
+		int back_reference, for_reference;
 		int **back_ref_error = NULL, **for_ref_error = NULL;
 		IMAGE **seq = alloc_mem(frames * sizeof(IMAGE));
-		f = 0;
-
-		while(f < frames){
-		//for(f = 0; f < frames; f++){
-			printf("Decoding frame: %03d", f);
-
-			if(f == 0){
-				dec = init_decoder(fp, NULL, NULL, version, width, height, maxval, num_comp, num_group, prd_order[0], 0, 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
-			}
-			else if(f % bframes == 0){
-				dec = init_decoder(fp, back_ref_error, NULL, version, width, height, maxval, num_comp, num_group, prd_order[1], prd_order[2], 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
-			}
-			else{
-				dec = init_decoder(fp, back_ref_error, for_ref_error, version, width, height, maxval, num_comp, num_group, prd_order[3], prd_order[4], prd_order[5], num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
-			}
-
-			if (dec->f_huffman == 0){
-				dec->rc = rc_init();
-				rc_startdec(fp, dec->rc);
-			}
-
-			decode_class(fp, dec);
-			decode_predictor(fp, dec);
-			decode_threshold(fp, dec);
-
-			dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
-
-			video[1] = decode_image(fp, video, dec);
-
-			if(f > 0 && diff != 0){
-				extra_info = decode_extra_info(fp, &num_pels);
-
-				IMAGE *aux_image;
-				if(num_pels != 0 && extra_info != NULL){
-					aux_image = alloc_image(dec->width, dec->height, 255);
-					int conta = 0;
-
-					for(y = 0; y < dec->height; y++){
-						for(x = 0; x < dec->width; x++){
-							aux_image->val[y][x] = video[1]->val[y][x];
-
-							if((video[1]->val[y][x] == 0 || video[1]->val[y][x] == 255) && conta < num_pels){
-								aux_image->val[y][x] += extra_info[conta];
-								conta++;
-							}
-						}
-					}
-				}
-
-				if(extra_info != NULL) free(extra_info);
-
-				if(num_pels == 0){
-					seq[f] = copy_yuv(video[1]);
-				}
-				else{
-					seq[f] = copy_yuv(aux_image);
-					free(aux_image);
-				}
-			}
-			else{
-				seq[f] = copy_yuv(video[1]);
-			}
-
-			printf(" --> Process completed\n");
-
-			if(f == 0){
-				f = bframes;
-
-				back_ref_error = get_dec_err(dec, 1);
-				video[0] = video[1];
-			}
-			else if(f == for_reference){
-				if(f == back_reference + 1){
-					f = frames;
-				}
-				else{
-					f = back_reference + 1;
-
-					for_ref_error = get_dec_err(dec, 1);
-
-					video[2] = video[1];
-				}
-			}
-			else if(back_reference < f && f < for_reference - 1){
-				f++;
-
-				safefree_yuv(&video[1]);
-			}
-			else if(f == for_reference - 1){
-				if(f + 1 == frames - 1){
-					f = frames;
-				}
-				else if(f + bframes + 1 < frames){
-					f = f + bframes + 1;
-
-					safefree((void **)&back_ref_error);
-					back_ref_error = NULL;
-					back_ref_error = for_ref_error;
-					back_reference = for_reference;
-					for_reference = f;
-				}
-				else{
-					f = frames - 1;
-
-					safefree((void **)&back_ref_error);
-					back_ref_error = NULL;
-					back_ref_error = for_ref_error;
-					back_reference = for_reference;
-					for_reference = f;
-				}
-
-				if(video[1] != video[0] && video[1] != video[2]){
-					safefree_yuv(&video[1]);
-				}
-				safefree_yuv(&video[0]);
-				video[0] = video[2];
-			}
-
-			free_decoder(dec);
-		}
-
-
-		if(video[1] != video[0] && video[1] != video[2]){
-			if(video[1] != NULL) safefree_yuv(&video[1]);
-		}
-		if(video[0] != video[2]){
-			safefree_yuv(&video[0]);
-		}
-		safefree_yuv(&video[2]);
-
-		if(diff == 0){
-			for(f = 0; f < frames; f++){
-				write_yuv(seq[f], outfile);
-				free(seq[f]->val);
-				free(seq[f]);
-			}
-		}
-		else{
-			write_yuv(seq[0], outfile);
-			img_diff = seq[0];
-			for(f = 1; f < frames; f++){
-				img_diff = sum_diff(img_diff, seq[f], f);
-				write_yuv(img_diff, outfile);
-				free(seq[f - 1]->val);
-				free(seq[f - 1]);
-			}
-			free(seq[frames - 1]->val);
-			free(seq[frames - 1]);
-
-			safefree_yuv(&img_diff);
-		}
-
-		if(back_ref_error != for_ref_error){
-			safefree((void **)&back_ref_error);
-		}
-		safefree((void **)&for_ref_error);
-
-		free(seq);
-	}
-	else if(hevc == 1){
-		IMAGE **seq = alloc_mem(frames * sizeof(IMAGE));
-		int first_frame = 0;
-		int **back_ref_error, **for_ref_error;
-		int ***keep_error = (int ***)alloc_mem((bframes + 1) * sizeof(int **));
-
-		for(f = 0; f < bframes + 1; f++) keep_error[f] = NULL;
-
+		int ***keep_error;
+		int first_frame = 0, conta = 0, final;
 		int (*bref)[5] = NULL;
-		int conta = 0, final;
 
-		final = ((frames - 1) % bframes != 0) ? bframes * ((int)((frames - 1) / bframes)) + 1 : frames;
+		if(hevc == 0){
+			back_reference = 0;
+			for_reference = bframes;
+		}
+		else if(hevc == 1){
+			keep_error = (int ***)alloc_mem((bframes + 1) * sizeof(int **));
 
-		switch(bframes){
-			case 3:
-				bref = bref2;
-				break;
-			case 4:
-				bref = bref3;
-				break;
-			case 5:
-				bref = bref4;
-				break;
-			case 6:
-				bref = bref5;
-				break;
-			case 7:
-				bref = bref6;
-				break;
-			case 8:
-				bref = bref7;
-				break;
-			case 9:
-				bref = bref8;
-				break;
-			case 10:
-				bref = bref9;
-				break;
-			default:
-				bref = bref3;
-				break;
+			for(f = 0; f < bframes + 1; f++) keep_error[f] = NULL;
+
+			bref = select_bref(bframes);
+
+			final = ((frames - 1) % bframes != 0) ? bframes * ((int)((frames - 1) / bframes)) + 1 : frames;
 		}
 
 		f = 0;
@@ -1526,7 +1341,6 @@ int main(int argc, char **argv){
 
 				if(num_pels == 0){
 					seq[f] = copy_yuv(video[1]);
-					safefree_yuv(&video[1]);
 				}
 				else{
 					seq[f] = copy_yuv(aux_image);
@@ -1535,138 +1349,165 @@ int main(int argc, char **argv){
 			}
 			else{
 				seq[f] = copy_yuv(video[1]);
-				safefree_yuv(&video[1]);
 			}
 
 			printf(" --> Process completed\n");
 
-			if(f == 0){
-				f = bref[conta][0];
+			if(hevc == 0){
+				if(f == 0){
+					f = bframes;
 
-				keep_error[0] = get_dec_err(dec, 1);
-				for_ref_error = NULL;
-				video[2] = NULL;
-				back_ref_error = keep_error[0];
-
-				video[0] = seq[f + bref[conta][1]];
-
-				conta++;
-			}
-			else{
-				if(conta + 1 <= bframes){
-					keep_error[f - first_frame] = get_dec_err(dec, 1);
-
-					if(f + bref[conta][0] > 2 * first_frame && first_frame != 0){
-						f = first_frame + bref[conta][0];
+					back_ref_error = get_dec_err(dec, 1);
+					video[0] = video[1];
+				}
+				else if(f == for_reference){
+					if(f == back_reference + 1){
+						f = frames;
 					}
 					else{
-						f = f + bref[conta][0];
+						f = back_reference + 1;
+
+						for_ref_error = get_dec_err(dec, 1);
+
+						video[2] = video[1];
 					}
+				}
+				else if(back_reference < f && f < for_reference - 1){
+					f++;
+
+					safefree_yuv(&video[1]);
+				}
+				else if(f == for_reference - 1){
+					if(f + 1 == frames - 1){
+						f = frames;
+					}
+					else if(f + bframes + 1 < frames){
+						f = f + bframes + 1;
+
+						safefree((void **)&back_ref_error);
+						back_ref_error = NULL;
+						back_ref_error = for_ref_error;
+						back_reference = for_reference;
+						for_reference = f;
+					}
+					else{
+						f = frames - 1;
+
+						safefree((void **)&back_ref_error);
+						back_ref_error = NULL;
+						back_ref_error = for_ref_error;
+						back_reference = for_reference;
+						for_reference = f;
+					}
+
+					if(video[1] != video[0] && video[1] != video[2]){
+						safefree_yuv(&video[1]);
+					}
+					safefree_yuv(&video[0]);
+					video[0] = video[2];
+				}
+			}
+			else if(hevc == 1){
+				safefree_yuv(&video[1]);
+
+				if(f == 0){
+					f = bref[conta][0];
+
+					keep_error[0] = get_dec_err(dec, 1);
+					for_ref_error = NULL;
+					video[2] = NULL;
+					back_ref_error = keep_error[0];
 
 					video[0] = seq[f + bref[conta][1]];
 
-					if(conta < bframes + 1) back_ref_error = keep_error[bref[conta][3]];
-
-					if(bref[conta][2] != -1){
-						video[2] = seq[f + bref[conta][2]];
-
-						if(conta < bframes + 1) for_ref_error = keep_error[bref[conta][4]];
-					}
-					else{
-						for_ref_error = NULL;
-					}
-
 					conta++;
 				}
-				else if(conta + 1 > bframes){
-					if(first_frame + 2 * bframes >= frames){
-						if(f + 1 < final && final != frames){
-							int numbs = frames - final;
-							int aux_bframes = bframes;
-							bframes = numbs;
+				else{
+					if(conta + 1 <= bframes){
+						keep_error[f - first_frame] = get_dec_err(dec, 1);
 
-							conta = 1;
+						if(f + bref[conta][0] > 2 * first_frame && first_frame != 0){
+							f = first_frame + bref[conta][0];
+						}
+						else{
+							f = f + bref[conta][0];
+						}
 
-							video[0] = seq[f + 1];
+						video[0] = seq[f + bref[conta][1]];
 
-							first_frame = f + 1;
-							f = frames - 1;
-							final = frames;
+						if(conta < bframes + 1) back_ref_error = keep_error[bref[conta][3]];
 
-							switch(numbs){
-								case 1:
+						if(bref[conta][2] != -1){
+							video[2] = seq[f + bref[conta][2]];
+
+							if(conta < bframes + 1) for_ref_error = keep_error[bref[conta][4]];
+						}
+						else{
+							for_ref_error = NULL;
+						}
+
+						conta++;
+					}
+					else if(conta + 1 > bframes){
+						if(first_frame + 2 * bframes >= frames){
+							if(f + 1 < final && final != frames){
+								int numbs = frames - final;
+								int aux_bframes = bframes;
+								bframes = numbs;
+
+								conta = 1;
+
+								video[0] = seq[f + 1];
+
+								first_frame = f + 1;
+								f = frames - 1;
+								final = frames;
+
+								if(numbs == 1){
 									conta = bframes;
 
 									video[0] = seq[frames - 2];
 
 									first_frame = frames - 2;
+								}
+								else{
+									bref = select_bref(bframes);
+								}
 
-									break;
-								case 2:
-									bref = bref1;
-									break;
-								case 3:
-									bref = bref2;
-									break;
-								case 4:
-									bref = bref3;
-									break;
-								case 5:
-									bref = bref4;
-									break;
-								case 6:
-									bref = bref5;
-									break;
-								case 7:
-									bref = bref6;
-									break;
-								case 8:
-									bref = bref7;
-									break;
-								case 9:
-									bref = bref8;
-									break;
-								case 10:
-									bref = bref9;
-									break;
-								default:
-									bref = bref3;
-									break;
+								video[2] = NULL;
+								for_ref_error = NULL;
+
+								back_ref_error = keep_error[aux_bframes];
+								safefree((void **)&keep_error[0]);
+								keep_error[0] = keep_error[aux_bframes];
+
+								for(i = 1; i < aux_bframes; i++){
+									safefree((void **)&keep_error[i]);
+								}
 							}
+							else{
+								break;
+							}
+						}
+						else{
+							conta = 1;
+							f = first_frame + 2 * bframes;
+
+							video[0] = seq[f + bref[0][1]];
 
 							video[2] = NULL;
 							for_ref_error = NULL;
 
-							back_ref_error = keep_error[aux_bframes];
+							back_ref_error = keep_error[bframes];
 							safefree((void **)&keep_error[0]);
-							keep_error[0] = keep_error[aux_bframes];
+							keep_error[0] = keep_error[bframes];
 
-							for(i = 1; i < aux_bframes; i++){
+							for(i = 1; i < bframes; i++){
 								safefree((void **)&keep_error[i]);
 							}
+
+							first_frame = first_frame + bframes;
 						}
-						else{
-							break;
-						}
-					}
-					else{
-						conta = 1;
-						f = first_frame + 2 * bframes;
-
-						video[0] = seq[f + bref[0][1]];
-
-						video[2] = NULL;
-						for_ref_error = NULL;
-
-						back_ref_error = keep_error[bframes];
-						safefree((void **)&keep_error[0]);
-						keep_error[0] = keep_error[bframes];
-
-						for(i = 1; i < bframes; i++){
-							safefree((void **)&keep_error[i]);
-						}
-
-						first_frame = first_frame + bframes;
 					}
 				}
 			}
@@ -1699,11 +1540,26 @@ int main(int argc, char **argv){
 			safefree_yuv(&img_diff);
 		}
 
-		for(i = 0; i < bframes + 1; i++){
-			safefree((void **)&keep_error[i]);
-		}
+		if(hevc == 0){
+			if(video[1] != video[0] && video[1] != video[2]){
+				if(video[1] != NULL) safefree_yuv(&video[1]);
+			}
+			if(video[0] != video[2]){
+				safefree_yuv(&video[0]);
+			}
+			safefree_yuv(&video[2]);
 
-		safefree((void **)&keep_error);
+			if(back_ref_error != for_ref_error){
+				safefree((void **)&back_ref_error);
+			}
+			safefree((void **)&for_ref_error);
+		}
+		else if(hevc == 1){
+			for(i = 0; i < bframes + 1; i++){
+				safefree((void **)&keep_error[i]);
+			}
+			safefree((void **)&keep_error);
+		}
 
 		free(seq);
 	}

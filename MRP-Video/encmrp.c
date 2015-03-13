@@ -10,7 +10,6 @@ extern POINT dyx[];
 extern POINT idyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
-extern int bref1[][5], bref2[][5], bref3[][5], bref4[][5], bref5[][5], bref6[][5], bref7[][5], bref8[][5], bref9[][5];
 
 /* Alternative version for 'free()' */
 void safefree(void **pp){
@@ -3476,358 +3475,24 @@ int main(int argc, char **argv){
 
 		free(error);
 	}
-	else if(hevc == 0 || bframes == 2){
-		int back_reference = 0, for_reference = bframes;
+	else{
 		int **back_ref_error, **for_ref_error;
-		f = 0;
+		int back_reference, for_reference, first_frame = 0, conta = 0, final;
+		int ***keep_error;
+		int (*bref)[5];
 
-		while(f < frames){
-			// Creates new ENCODER structure
-			if(f == 0){
-				// Read input file
-				video[1] = read_yuv(infile, height, width, f);
-
-				enc = init_encoder(video[1], NULL, NULL, NULL, NULL, num_class, num_group, prd_order[0], 0, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
-			}
-			else if(f % bframes == 0){
-				enc = init_encoder(video[1], video[0], NULL, back_ref_error, NULL, num_class, num_group, prd_order[1], prd_order[2], 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
-			}
-			else{
-				enc = init_encoder(video[1], video[0], video[2], back_ref_error, for_ref_error, num_class, num_group, prd_order[3], prd_order[4], prd_order[5], coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
-			}
-
-			//Initiation of the reference offset
-			enc->roff = init_ref_offset(video[1], enc->prd_order, enc->back_prd_order, enc->for_prd_order);
-
-			// Initialize probability models
-			enc->pmodels = init_pmodels(enc->num_group, enc->num_pmodel, enc->pm_accuracy, NULL, enc->sigma, enc->maxval + 1);
-
-			// Huffman coding
-			if (enc->f_huffman == 1){
-				enc->vlcs = init_vlcs(enc->pmodels, enc->num_group, enc->num_pmodel);
-			}
-
-			// Set cost model
-			set_cost_model(enc, f_mmse);
-
-			// Set cost model
-			init_class(enc);
-
-			//Auxiliary variables
-			prd_save = (int **)alloc_2d_array(enc->num_class, (enc->prd_order + enc->back_prd_order + enc->for_prd_order), sizeof(int));
-			th_save = (int **)alloc_2d_array(enc->num_class, enc->num_group, sizeof(int));
-			class_save = (char **)alloc_2d_array(enc->height, enc->width, sizeof(char));
-
-			/* 1st loop */
-			//Loop type
-			enc->optimize_loop = 1;
-			min_cost = INT_MAX;
-
-			for (i = j = 0; i < max_iteration; i++){
-				cost = design_predictor(enc, f_mmse);
-				cost = optimize_group(enc);
-				cost = optimize_class(enc);
-
-				if (cost < min_cost){
-					min_cost = cost;
-					j = i;
-
-					for (y = 0; y < enc->height; y++){
-						for (x = 0; x < enc->width; x++){
-							class_save[y][x] = enc->class[y][x];
-						}
-					}
-
-					for (cl = 0; cl < enc->num_class; cl++){
-						for (k = 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
-							prd_save[cl][k] = enc->predictor[cl][k];
-						}
-
-						for (k = 0; k < enc->num_group; k++){
-							th_save[cl][k] = enc->th[cl][k];
-						}
-					}
-
-				}
-
-				if (i - j >= EXTRA_ITERATION) break;
-				elapse += cpu_time();
-			}
-
-			//Restore values
-			for (y = 0; y < enc->height; y++){
-				for (x = 0; x < enc->width; x++){
-					enc->class[y][x] = class_save[y][x];
-				}
-			}
-			for (cl = 0; cl < enc->num_class; cl++){
-				for (k = 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
-					enc->predictor[cl][k] = prd_save[cl][k];
-				}
-				for (k = 0; k < enc->num_group; k++){
-					enc->th[cl][k] = th_save[cl][k];
-				}
-			}
-
-			set_cost_rate(enc);
-			predict_region(enc, 0, 0, enc->height, enc->width, 0);
-			cost = calc_cost(enc, 0, 0, enc->height, enc->width);
-
-			printf("Frame: %d\n\t1st optimization --> Cost: %d\n", f, (int)cost);
-
-			/* 2nd loop */
-			//Loop type
-			enc->optimize_loop = 2;
-			min_cost = INT_MAX;
-
-			for (i = j = 0; i < max_iteration; i++){
-				if (f_optpred){
-					cost = optimize_predictor(enc, video);
-				}
-
-				side_cost = encode_predictor(NULL, enc);
-				cost = optimize_group(enc);
-				side_cost += encode_threshold(NULL, enc);
-				cost = optimize_class(enc);
-				side_cost += encode_class(NULL, enc);
-				cost += side_cost;
-
-				if (cost < min_cost){
-					min_cost = cost;
-					j = i;
-
-					if (f_optpred){
-						for (y = 0; y < enc->height; y++){
-							for (x = 0; x < enc->width; x++){
-								class_save[y][x] = enc->class[y][x];
-							}
-						}
-						for (cl = 0; cl < enc->num_class; cl++){
-							for (k = 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
-								prd_save[cl][k] = enc->predictor[cl][k];
-							}
-							for (k = 0; k < enc->num_group; k++){
-								th_save[cl][k] = enc->th[cl][k];
-							}
-						}
-					}
-				}
-
-				if (f_optpred){
-					if (i - j >= EXTRA_ITERATION) break;
-				}
-				else{
-					if (i > j) break;
-				}
-				elapse += cpu_time();
-			}
-
-			if (f_optpred){
-				for (y = 0; y < enc->height; y++){
-					for (x = 0; x < enc->width; x++){
-						enc->class[y][x] = class_save[y][x];
-					}
-				}
-
-				for (cl = 0; cl < enc->num_class; cl++){
-					for (k = 0; k < enc->prd_order + enc->back_prd_order + enc->for_prd_order; k++){
-						enc->predictor[cl][k] = prd_save[cl][k];
-					}
-					i = 0;
-
-					for (k = 0; k < enc->num_group; k++){
-						enc->th[cl][k] = th_save[cl][k];
-						for (; i < enc->th[cl][k]; i++){
-							enc->uquant[cl][i] = k;
-						}
-					}
-				}
-
-				predict_region(enc, 0, 0, enc->height, enc->width, 0);
-				calc_cost(enc, 0, 0, enc->height, enc->width);
-				optimize_class(enc);
-			}
-
-			remove_emptyclass(enc);
-
-			printf("\t2nd optimization --> Cost: %d (%d)", (int)cost, (int)side_cost);
-			printf(" --> M = %d\n", enc->num_class);
-
-			if(f == 0){
-				header = write_header(enc, prd_order, frames, bframes, diff, 0, fp);
-			}
-
-			class_info[f] = write_class(enc, fp);
-
-			if (enc->f_huffman == 0){
-				enc->rc = rc_init();
-			}
-
-			class_info[f] += encode_class(fp, enc);
-			predictors[f] = encode_predictor(fp, enc);
-			thresholds[f] = encode_threshold(fp, enc);
-			errors[f] = encode_image(fp, enc);
-
-			if(f > 0 && diff == 1){
-				extrainfo[f] += encode_extra_info(fp, extra_info, num_pels);
-			}
-
-			free(class_save);
-			free(prd_save);
-			free(th_save);
-
-			if(f == 0){
-				f = bframes;
-
-				back_ref_error = get_enc_err(enc, 1);
-
-				video[0] = copy_yuv(video[1]);
-				safefree_yuv(&video[1]);
-
-				if(diff == 0){
-					video[1] = read_yuv(infile, height, width, f);
-				}
-				else{
-					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
-				}
-			}
-			else if(f == for_reference){
-				if(f == back_reference + 1){
-					f = frames;
-				}
-				else{
-					f = back_reference + 1;
-
-					for_ref_error = get_enc_err(enc, 1);
-
-					if(video[2] != NULL) safefree_yuv(&video[2]);
-
-					video[2] = copy_yuv(video[1]);
-					safefree_yuv(&video[1]);
-
-					if(diff == 0){
-						video[1] = read_yuv(infile, height, width, f);
-					}
-					else{
-						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
-					}
-				}
-			}
-			else if(back_reference < f && f < for_reference - 1){
-				f++;
-
-				safefree_yuv(&video[1]);
-
-				if(diff == 0){
-					video[1] = read_yuv(infile, height, width, f);
-				}
-				else{
-					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
-				}
-			}
-			else if(f == for_reference - 1){
-				if(f + 1 == frames - 1){
-					f = frames;
-				}
-				else if(f + bframes + 1 < frames){
-					f = f + bframes + 1;
-
-					safefree((void **)&back_ref_error);
-					back_ref_error = for_ref_error;
-					back_reference = for_reference;
-					for_reference = f;
-				}
-				else{
-					f = frames - 1;
-
-					safefree((void **)&back_ref_error);
-					back_ref_error = for_ref_error;
-					back_reference = for_reference;
-					for_reference = f;
-				}
-
-				safefree_yuv(&video[0]);
-				video[0] = copy_yuv(video[2]);
-
-				safefree_yuv(&video[1]);
-
-				if(diff == 0){
-					video[1] = read_yuv(infile, height, width, f);
-				}
-				else{
-					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
-				}
-			}
-
-			free_encoder(enc);
+		if(hevc == 0 || bframes == 2){
+			back_reference = 0;
+			for_reference = bframes;
 		}
+		else if(hevc == 1){
+			keep_error = (int ***)alloc_mem((bframes + 1) * sizeof(int **));
 
-		if(video[1] != video[0] && video[1] != video[2]){
-			if(video[1] != NULL) safefree_yuv(&video[1]);
-		}
-		if(video[0] != video[2]){
-			safefree_yuv(&video[0]);
-		}
-		safefree_yuv(&video[2]);
+			for(f = 0; f < bframes + 1; f++) keep_error[f] = NULL;
 
-		if(f_huffman == 1){
-			putbits(fp, 7, 0);	/* flush remaining bits */
-		}
+			bref = select_bref(bframes);
 
-		fclose(fp);
-
-		if(diff == 1){
-			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, extrainfo);
-		}
-		else{
-			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, NULL);
-		}
-
-		if(back_ref_error != for_ref_error){
-			safefree((void **)&back_ref_error);
-		}
-		safefree((void **)&for_ref_error);
-	}
-	else if(hevc == 1){
-		int first_frame = 0;
-		int **back_ref_error, **for_ref_error;
-		int ***keep_error = (int ***)alloc_mem((bframes + 1) * sizeof(int **));
-
-		for(f = 0; f < bframes + 1; f++) keep_error[f] = NULL;
-
-		int (*bref)[5] = NULL;
-		int conta = 0, final;
-
-		final = ((frames - 1) % bframes != 0) ? (bframes * ((int)((frames - 1) / bframes)) + 1) : frames;
-
-		switch(bframes){
-			case 3:
-				bref = bref2;
-				break;
-			case 4:
-				bref = bref3;
-				break;
-			case 5:
-				bref = bref4;
-				break;
-			case 6:
-				bref = bref5;
-				break;
-			case 7:
-				bref = bref6;
-				break;
-			case 8:
-				bref = bref7;
-				break;
-			case 9:
-				bref = bref8;
-				break;
-			case 10:
-				bref = bref9;
-				break;
-			default:
-				bref = bref3;
-				break;
+			final = ((frames - 1) % bframes != 0) ? (bframes * ((int)((frames - 1) / bframes)) + 1) : frames;
 		}
 
 		f = 0;
@@ -4005,7 +3670,7 @@ int main(int argc, char **argv){
 			printf(" --> M = %d\n", enc->num_class);
 
 			if(f == 0){
-				header = write_header(enc, prd_order, frames, bframes, diff, 1, fp);
+				header = write_header(enc, prd_order, frames, bframes, diff, hevc, fp);
 			}
 
 			class_info[f] = write_class(enc, fp);
@@ -4027,98 +3692,183 @@ int main(int argc, char **argv){
 			free(prd_save);
 			free(th_save);
 
-			if(f == 0){
-				f = bref[conta][0];
+			//Next frame selection
+			if(hevc == 0 || bframes == 2){
+				if(f == 0){
+					f = bframes;
 
-				keep_error[0] = get_enc_err(enc, 1);
-				for_ref_error = NULL;
-				video[2] = NULL;
-				back_ref_error = keep_error[0];
+					back_ref_error = get_enc_err(enc, 1);
 
-				safefree_yuv(&video[1]);
-				if(diff == 0){
-					video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
-					video[1] = read_yuv(infile, height, width, f);
-				}
-				else{
-					video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
-					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
-				}
+					video[0] = copy_yuv(video[1]);
+					safefree_yuv(&video[1]);
 
-				conta++;
-			}
-			else{
-				if(conta + 1 <= bframes){
-					keep_error[f - first_frame] = get_enc_err(enc, 1);
-
-					if(f + bref[conta][0] > 2 * first_frame && first_frame != 0){
-						f = first_frame + bref[conta][0];
+					if(diff == 0){
+						video[1] = read_yuv(infile, height, width, f);
 					}
 					else{
-						f = f + bref[conta][0];
+						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
 					}
+				}
+				else if(f == for_reference){
+					if(f == back_reference + 1){
+						f = frames;
+					}
+					else{
+						f = back_reference + 1;
+
+						for_ref_error = get_enc_err(enc, 1);
+
+						if(video[2] != NULL) safefree_yuv(&video[2]);
+
+						video[2] = copy_yuv(video[1]);
+						safefree_yuv(&video[1]);
+
+						if(diff == 0){
+							video[1] = read_yuv(infile, height, width, f);
+						}
+						else{
+							video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+						}
+					}
+				}
+				else if(back_reference < f && f < for_reference - 1){
+					f++;
 
 					safefree_yuv(&video[1]);
+
+					if(diff == 0){
+						video[1] = read_yuv(infile, height, width, f);
+					}
+					else{
+						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+					}
+				}
+				else if(f == for_reference - 1){
+					if(f + 1 == frames - 1){
+						f = frames;
+					}
+					else if(f + bframes + 1 < frames){
+						f = f + bframes + 1;
+
+						safefree((void **)&back_ref_error);
+						back_ref_error = for_ref_error;
+						back_reference = for_reference;
+						for_reference = f;
+					}
+					else{
+						f = frames - 1;
+
+						safefree((void **)&back_ref_error);
+						back_ref_error = for_ref_error;
+						back_reference = for_reference;
+						for_reference = f;
+					}
+
 					safefree_yuv(&video[0]);
+					video[0] = copy_yuv(video[2]);
+
+					safefree_yuv(&video[1]);
+
+					if(diff == 0){
+						video[1] = read_yuv(infile, height, width, f);
+					}
+					else{
+						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+					}
+				}
+			}
+			else if(hevc == 1){
+				if(f == 0){
+					f = bref[conta][0];
+
+					keep_error[0] = get_enc_err(enc, 1);
+					for_ref_error = NULL;
+					video[2] = NULL;
+					back_ref_error = keep_error[0];
+
+					safefree_yuv(&video[1]);
 					if(diff == 0){
 						video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
 						video[1] = read_yuv(infile, height, width, f);
 					}
 					else{
-						if(f + bref[conta][1] == 0){
-							video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
-						}
-						else{
-							video[0] = calc_diff(read_yuv(infile, height, width, f + bref[conta][1] - 1), read_yuv(infile, height, width, f + bref[conta][1]), &extra_info, &num_pels);
-						}
+						video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
 						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
-					}
-
-					if(conta < bframes + 1) back_ref_error = keep_error[bref[conta][3]];
-
-					if(bref[conta][2] != -1){
-						if(video[2] != NULL) safefree_yuv(&video[2]);
-						if(diff == 0){
-							video[2] = read_yuv(infile, height, width, f + bref[conta][2]);
-						}
-						else{
-							video[2] = calc_diff(read_yuv(infile, height, width, f + bref[conta][2] - 1), read_yuv(infile, height, width, f + bref[conta][2]), &extra_info, &num_pels);
-						}
-
-						if(conta < bframes + 1) for_ref_error = keep_error[bref[conta][4]];
-					}
-					else{
-						if(video[2] != NULL) safefree_yuv(&video[2]);
-						for_ref_error = NULL;
 					}
 
 					conta++;
 				}
-				else if(conta + 1 > bframes){
-					if(first_frame + 2 * bframes >= frames){
-						if(f + 1 < final && final != frames){
-							int aux_bframes = bframes;
-							bframes = frames - final;
+				else{
+					if(conta + 1 <= bframes){
+						keep_error[f - first_frame] = get_enc_err(enc, 1);
 
-							conta = 1;
+						if(f + bref[conta][0] > 2 * first_frame && first_frame != 0){
+							f = first_frame + bref[conta][0];
+						}
+						else{
+							f = f + bref[conta][0];
+						}
 
-							safefree_yuv(&video[0]);
-							safefree_yuv(&video[1]);
-							if(diff == 0){
-								video[0] = read_yuv(infile, height, width, f + 1);
-								video[1] = read_yuv(infile, height, width, frames - 1);
+						safefree_yuv(&video[1]);
+						safefree_yuv(&video[0]);
+						if(diff == 0){
+							video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
+							video[1] = read_yuv(infile, height, width, f);
+						}
+						else{
+							if(f + bref[conta][1] == 0){
+								video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
 							}
 							else{
-								video[0] = calc_diff(read_yuv(infile, height, width, f), read_yuv(infile, height, width, f + 1), &extra_info, &num_pels);
-								video[1] = calc_diff(read_yuv(infile, height, width, frames - 2), read_yuv(infile, height, width, frames - 1), &extra_info, &num_pels);
+								video[0] = calc_diff(read_yuv(infile, height, width, f + bref[conta][1] - 1), read_yuv(infile, height, width, f + bref[conta][1]), &extra_info, &num_pels);
+							}
+							video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+						}
+
+						if(conta < bframes + 1) back_ref_error = keep_error[bref[conta][3]];
+
+						if(bref[conta][2] != -1){
+							if(video[2] != NULL) safefree_yuv(&video[2]);
+							if(diff == 0){
+								video[2] = read_yuv(infile, height, width, f + bref[conta][2]);
+							}
+							else{
+								video[2] = calc_diff(read_yuv(infile, height, width, f + bref[conta][2] - 1), read_yuv(infile, height, width, f + bref[conta][2]), &extra_info, &num_pels);
 							}
 
-							first_frame = f + 1;
-							f = frames - 1;
-							final = frames;
+							if(conta < bframes + 1) for_ref_error = keep_error[bref[conta][4]];
+						}
+						else{
+							if(video[2] != NULL) safefree_yuv(&video[2]);
+							for_ref_error = NULL;
+						}
 
-							switch(bframes){
-								case 1:
+						conta++;
+					}
+					else if(conta + 1 > bframes){
+						if(first_frame + 2 * bframes >= frames){
+							if(f + 1 < final && final != frames){
+								int aux_bframes = bframes;
+								bframes = frames - final;
+
+								conta = 1;
+
+								safefree_yuv(&video[0]);
+								safefree_yuv(&video[1]);
+								if(diff == 0){
+									video[0] = read_yuv(infile, height, width, f + 1);
+									video[1] = read_yuv(infile, height, width, frames - 1);
+								}
+								else{
+									video[0] = calc_diff(read_yuv(infile, height, width, f), read_yuv(infile, height, width, f + 1), &extra_info, &num_pels);
+									video[1] = calc_diff(read_yuv(infile, height, width, frames - 2), read_yuv(infile, height, width, frames - 1), &extra_info, &num_pels);
+								}
+
+								first_frame = f + 1;
+								f = frames - 1;
+								final = frames;
+
+								if(bframes == 1){
 									conta = aux_bframes;
 
 									safefree_yuv(&video[0]);
@@ -4133,84 +3883,56 @@ int main(int argc, char **argv){
 									}
 
 									first_frame = frames - 2;
+								}
+								else{
+									bref = select_bref(bframes);
+								}
 
-									break;
-								case 2:
-									bref = bref1;
-									break;
-								case 3:
-									bref = bref2;
-									break;
-								case 4:
-									bref = bref3;
-									break;
-								case 5:
-									bref = bref4;
-									break;
-								case 6:
-									bref = bref5;
-									break;
-								case 7:
-									bref = bref6;
-									break;
-								case 8:
-									bref = bref7;
-									break;
-								case 9:
-									bref = bref8;
-									break;
-								case 10:
-									bref = bref9;
-									break;
-								default:
-									bref = bref3;
-									break;
+								safefree_yuv(&video[2]);
+								video[2] = NULL;
+								for_ref_error = NULL;
+
+								back_ref_error = keep_error[aux_bframes];
+								safefree((void **)&keep_error[0]);
+								keep_error[0] = keep_error[aux_bframes];
+
+								for(i = 1; i < aux_bframes; i++){
+									safefree((void **)&keep_error[i]);
+								}
+							}
+							else{
+								break;
+							}
+						}
+						else{
+							conta = 1;
+							f = first_frame + 2 * bframes;
+
+							safefree_yuv(&video[0]);
+							safefree_yuv(&video[1]);
+							if(diff == 0){
+								video[0] = read_yuv(infile, height, width, f + bref[0][1]);
+								video[1] = read_yuv(infile, height, width, f);
+							}
+							else{
+								video[0] = calc_diff(read_yuv(infile, height, width, f + bref[0][1] - 1), read_yuv(infile, height, width, f + bref[0][1]), &extra_info, &num_pels);
+								video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
 							}
 
 							safefree_yuv(&video[2]);
 							video[2] = NULL;
 							for_ref_error = NULL;
 
-							back_ref_error = keep_error[aux_bframes];
+							back_ref_error = keep_error[bframes];
 							safefree((void **)&keep_error[0]);
-							keep_error[0] = keep_error[aux_bframes];
+							keep_error[0] = keep_error[bframes];
 
-							for(i = 1; i < aux_bframes; i++){
+							for(i = 1; i < bframes; i++){
 								safefree((void **)&keep_error[i]);
 							}
-						}
-						else{
-							break;
-						}
-					}
-					else{
-						conta = 1;
-						f = first_frame + 2 * bframes;
 
-						safefree_yuv(&video[0]);
-						safefree_yuv(&video[1]);
-						if(diff == 0){
-							video[0] = read_yuv(infile, height, width, f + bref[0][1]);
-							video[1] = read_yuv(infile, height, width, f);
+							first_frame = first_frame + bframes;
 						}
-						else{
-							video[0] = calc_diff(read_yuv(infile, height, width, f + bref[0][1] - 1), read_yuv(infile, height, width, f + bref[0][1]), &extra_info, &num_pels);
-							video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
-						}
-
-						safefree_yuv(&video[2]);
-						video[2] = NULL;
-						for_ref_error = NULL;
-
-						back_ref_error = keep_error[bframes];
-						safefree((void **)&keep_error[0]);
-						keep_error[0] = keep_error[bframes];
-
-						for(i = 1; i < bframes; i++){
-							safefree((void **)&keep_error[i]);
-						}
-
-						first_frame = first_frame + bframes;
 					}
 				}
 			}
@@ -4233,11 +3955,19 @@ int main(int argc, char **argv){
 			putbits(fp, 7, 0);	/* flush remaining bits */
 		}
 
-		for(i = 0; i < bframes + 1; i++){
-			safefree((void **)&keep_error[i]);
+		if(hevc == 0 || bframes == 2){
+			if(back_ref_error != for_ref_error){
+				safefree((void **)&back_ref_error);
+			}
+			safefree((void **)&for_ref_error);
 		}
+		else if(hevc == 1){
+			for(i = 0; i < bframes + 1; i++){
+				safefree((void **)&keep_error[i]);
+			}
 
-		safefree((void **)&keep_error);
+			safefree((void **)&keep_error);
+		}
 
 		fclose(fp);
 

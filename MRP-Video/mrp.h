@@ -189,6 +189,7 @@ int e2E(int, int, int, int);
 int E2e(int, int, int, int);
 void mtf_classlabel(char **, int *, int, int, int, int, int);
 double cpu_time(void);
+int **select_bref(int);
 
 /* rc.c */
 RANGECODER *rc_init(void);

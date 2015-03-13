@@ -769,3 +769,39 @@ double cpu_time(void){
 	return ((double)dif / CLK_TCK);
 #endif
 }
+
+int **select_bref(int bframes){
+	int (*aux)[5] = NULL;
+
+	switch(bframes){
+		case 3:
+			aux = bref2;
+			break;
+		case 4:
+			aux = bref3;
+			break;
+		case 5:
+			aux = bref4;
+			break;
+		case 6:
+			aux = bref5;
+			break;
+		case 7:
+			aux = bref6;
+			break;
+		case 8:
+			aux = bref7;
+			break;
+		case 9:
+			aux = bref8;
+			break;
+		case 10:
+			aux = bref9;
+			break;
+		default:
+			aux = bref3;
+			break;
+	}
+
+	return aux;
+}
