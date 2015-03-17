@@ -2854,7 +2854,7 @@ char *remove_ext (char* mystr, char dot, char sep){
 	return retstr;
 }
 
-void print_results(FILE *res, int frames, int height, int width, int header, int *class_info, int *predictors, int *thresholds, int *errors, int *extrainfo){
+void print_results(FILE *res, int frames, int height, int width, int header, int *class_info, int *predictors, int *thresholds, int *errors, int *extrainfo, int prate, int pframes){
 	int f, rate = 0, total_bits = 0;
 
 	printf("\n---------------------------------\n");
@@ -2892,8 +2892,20 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 	printf("total\t\t :%10d bits\n", total_bits);
 	printf("total coding rate:%10.5f b/p\n", (double)total_bits / (height * width * frames));
 
+	if(pframes != 0){
+		printf("\nAverage I bitrate:%10.5f bits\n", (double) (class_info[0] + predictors[0] + thresholds[0] + errors[0]) / (height * width));
+		printf("Average P bitrate:%10.5f bits (%d frames)\n", (double) prate / (pframes * height * width), pframes);
+		printf("Average B bitrate:%10.5f bits (%d frames)\n", (double) (total_bits - (class_info[0] + predictors[0] + thresholds[0] + errors[0]) - prate) / ((frames - pframes - 1) * height * width), frames - pframes - 1);
+	}
+
 	fprintf(res, "------------------------------------------------\n");
 	fprintf(res, "Total:\n\t%10d\t%10.5f\n", total_bits, (double)total_bits / (height * width * frames));
+
+	if(pframes != 0){
+		fprintf(res, "\nAverage I bitrate:%10.5f bits\n", (double) (class_info[0] + predictors[0] + thresholds[0] + errors[0]) / (height * width));
+		fprintf(res, "Average P bitrate:%10.5f bits (%d frames)\n", (double) prate / (pframes * height * width), pframes);
+		fprintf(res, "Average B bitrate:%10.5f bits (%d frames)\n", (double) (total_bits - (class_info[0] + predictors[0] + thresholds[0] + errors[0]) - prate) / ((frames - pframes - 1) * height * width), frames - pframes - 1);
+	}
 
 	if(extrainfo != NULL){
 		total_bits = 0;
@@ -3467,10 +3479,10 @@ int main(int argc, char **argv){
 		fclose(fp);
 
 		if(diff == 1){
-			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, extrainfo);
+			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, extrainfo, 0, 0);
 		}
 		else{
-			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, NULL);
+			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, NULL, 0, 0);
 		}
 
 		free(error);
@@ -3480,6 +3492,7 @@ int main(int argc, char **argv){
 		int back_reference, for_reference, first_frame = 0, conta = 0, final;
 		int ***keep_error;
 		int (*bref)[5];
+		int prate = 0, pframes = 0;
 
 		if(hevc == 0 || bframes == 2){
 			back_reference = 0;
@@ -3686,6 +3699,11 @@ int main(int argc, char **argv){
 
 			if(f > 0 && diff == 1){
 				extrainfo[f] += encode_extra_info(fp, extra_info, num_pels);
+			}
+
+			if(((f - first_frame) % bframes == 0 | f == frames - 1) && f != 0){
+				prate += class_info[f] + predictors[f] + thresholds[f] + errors[f];
+				pframes++;
 			}
 
 			free(class_save);
@@ -3972,10 +3990,10 @@ int main(int argc, char **argv){
 		fclose(fp);
 
 		if(diff == 1){
-			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, extrainfo);
+			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, extrainfo, prate, pframes);
 		}
 		else{
-			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, NULL);
+			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, NULL, prate, pframes);
 		}
 	}
 
