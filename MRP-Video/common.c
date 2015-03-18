@@ -774,6 +774,9 @@ int **select_bref(int bframes){
 	int (*aux)[5] = NULL;
 
 	switch(bframes){
+		case 2:
+			aux = bref1;
+			break;
 		case 3:
 			aux = bref2;
 			break;

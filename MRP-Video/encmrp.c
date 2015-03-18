@@ -3495,6 +3495,7 @@ int main(int argc, char **argv){
 		int prate = 0, pframes = 0;
 
 		if(hevc == 0 || bframes == 2){
+			hevc = 0;
 			back_reference = 0;
 			for_reference = bframes;
 		}
@@ -3701,7 +3702,7 @@ int main(int argc, char **argv){
 				extrainfo[f] += encode_extra_info(fp, extra_info, num_pels);
 			}
 
-			if(((f - first_frame) % bframes == 0 | f == frames - 1) && f != 0){
+			if((((f - first_frame) % bframes == 0) | (f == frames - 1)) && f != 0){
 				prate += class_info[f] + predictors[f] + thresholds[f] + errors[f];
 				pframes++;
 			}
@@ -3711,7 +3712,7 @@ int main(int argc, char **argv){
 			free(th_save);
 
 			//Next frame selection
-			if(hevc == 0 || bframes == 2){
+			if(hevc == 0){
 				if(f == 0){
 					f = bframes;
 
