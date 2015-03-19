@@ -1929,7 +1929,7 @@ cost_t optimize_class(ENCODER *enc){
 	return (calc_cost(enc, 0, 0, enc->height, enc->width));
 }
 
-void optimize_coef(ENCODER *enc, IMAGE *video[2], int cl, int pos1, int pos2){
+void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2){
 #define SEARCH_RANGE 11
 #define SUBSEARCH_RANGE 3
 	cost_t cbuf[SEARCH_RANGE * SUBSEARCH_RANGE], *cbuf_p;
@@ -2061,7 +2061,7 @@ void optimize_coef(ENCODER *enc, IMAGE *video[2], int cl, int pos1, int pos2){
 	}
 }
 
-cost_t optimize_predictor(ENCODER *enc, IMAGE *video[2]){
+cost_t optimize_predictor(ENCODER *enc){
 	int cl, k, pos1, pos2;
 #ifndef RAND_MAX
 #  define RAND_MAX 32767
@@ -2077,7 +2077,7 @@ cost_t optimize_predictor(ENCODER *enc, IMAGE *video[2]){
 
 			if (pos1 == pos2) goto retry;
 
-			optimize_coef(enc, video, cl, pos1, pos2);
+			optimize_coef(enc, cl, pos1, pos2);
 		}
 	}
 
@@ -3365,7 +3365,7 @@ int main(int argc, char **argv){
 
 			for (i = j = 0; i < max_iteration; i++){
 				if (f_optpred){
-					cost = optimize_predictor(enc, video);
+					cost = optimize_predictor(enc);
 				}
 
 				side_cost = encode_predictor(NULL, enc);
@@ -3612,7 +3612,7 @@ int main(int argc, char **argv){
 
 			for (i = j = 0; i < max_iteration; i++){
 				if (f_optpred){
-					cost = optimize_predictor(enc, video);
+					cost = optimize_predictor(enc);
 				}
 
 				side_cost = encode_predictor(NULL, enc);
