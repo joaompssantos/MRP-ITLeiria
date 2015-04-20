@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -9,26 +8,6 @@ extern POINT dyx[];
 extern POINT idyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
-
-/* Alternative version for 'free()' */
-void safefree(void **pp) {
-    /* in debug mode, abort if pp is NULL */
-    assert(pp);
-    if (pp != NULL) {               /* safety check */
-        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
-        *pp = NULL;                 /* reset original pointer */
-    }
-}
-
-void safefree_yuv(IMAGE **pp) {
-    /* in debug mode, abort if pp is NULL */
-    assert(pp);
-    if (pp != NULL) {               /* safety check */
-    	free((*pp)->val);
-        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
-        *pp = NULL;                 /* reset original pointer */
-    }
-}
 
 uint getbits(FILE *fp, int n) {
 	static int bitpos = 0;
@@ -1042,60 +1021,6 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 	}
 
 	return (video[1]);
-}
-
-/*------------------------------- read_yuv --------------------------*
- |  Function read_yuv
- |
- |  Purpose:  Reads a yuv file to the program memory
- |
- |  Parameters:
- |      filename 	--> Name of the yuv file (IN)
- |		height		--> Height of the video (IN)
- |		width		--> Width of the video (IN)
- |		frame		--> Frame of the video to copy (IN)
- |
- |  Returns:  IMAGE* --> returns a video type structure
- *-------------------------------------------------------------------*/
-IMAGE *read_yuv(char *filename, int height, int width, int frame) {
-	int i, j;
-	IMAGE *img;
-	FILE *fp;
-
-	//Open file
-	fp = fileopen(filename, "rb");
-
-	// Check if image dimensions are correct (It has to be multiple of BASE_BSIZE)
-	if ((width % BASE_BSIZE) || (height % BASE_BSIZE)) {
-		fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
-		exit(1);
-	}
-
-	// Image allocation
-	img = alloc_image(width, height, 255);
-
-	if (frame > 0) fseek(fp, img->height * img->width * 1.5 * frame, SEEK_SET);
-
-	for (i = 0; i < img->height; i++) {
-		for (j = 0; j < img->width; j++) {
-			img->val[i][j] = (img_t)fgetc(fp);
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++) {
-		for (j = 0; j < img->width / 2; j++) {
-			fgetc(fp);
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++) {
-		for (j = 0; j < img->width / 2; j++) {
-			fgetc(fp);
-		}
-	}
-
-	fclose(fp);
-	return (img);
 }
 
 IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int frame) {

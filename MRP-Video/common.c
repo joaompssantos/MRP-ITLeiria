@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -124,6 +125,26 @@ int bref9[10][5] = {{10, -10, -1, 0, -1},
 double sigma_h[] = {0.85, 1.15, 1.50, 1.90, 2.55, 3.30, 4.25, 5.60, 7.15, 9.20,12.05,15.35,19.95,25.85,32.95,44.05};
 double sigma_a[] = {0.15, 0.26, 0.38, 0.57, 0.83, 1.18, 1.65, 2.31, 3.22, 4.47, 6.19, 8.55,11.80,16.27,22.42,30.89};
 double qtree_prob[] = {0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95};
+
+/* Alternative version for 'free()' */
+void safefree(void **pp) {
+    /* in debug mode, abort if pp is NULL */
+    assert(pp);
+    if (pp != NULL) {               /* safety check */
+        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
+        *pp = NULL;                 /* reset original pointer */
+    }
+}
+
+void safefree_yuv(IMAGE **pp) {
+    /* in debug mode, abort if pp is NULL */
+    assert(pp);
+    if (pp != NULL) {               /* safety check */
+    	free((*pp)->val);
+        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
+        *pp = NULL;                 /* reset original pointer */
+    }
+}
 
 /*------------------------------- fileopen --------------------------*
  |  Function fileopen
@@ -259,6 +280,61 @@ void write_yuv(IMAGE *img, char *filename) {
 
 	return;
 }
+
+/*------------------------------- read_yuv --------------------------*
+ |  Function read_yuv
+ |
+ |  Purpose:  Reads a yuv file to the program memory
+ |
+ |  Parameters:
+ |      filename 	--> Name of the yuv file (IN)
+ |		height		--> Height of the video (IN)
+ |		width		--> Width of the video (IN)
+ |		frame		--> Frame of the video to copy (IN)
+ |
+ |  Returns:  IMAGE* --> returns a video type structure
+ *-------------------------------------------------------------------*/
+IMAGE *read_yuv(char *filename, int height, int width, int frame) {
+	int i, j;
+	IMAGE *img;
+	FILE *fp;
+
+	//Open file
+	fp = fileopen(filename, "rb");
+
+	// Check if image dimensions are correct (It has to be multiple of BASE_BSIZE)
+	if ((width % BASE_BSIZE) || (height % BASE_BSIZE)) {
+		fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
+		exit(1);
+	}
+
+	// Image allocation
+	img = alloc_image(width, height, 255);
+
+	if (frame > 0) fseek(fp, img->height * img->width * 1.5 * frame, SEEK_SET);
+
+	for (i = 0; i < img->height; i++) {
+		for (j = 0; j < img->width; j++) {
+			img->val[i][j] = (img_t)fgetc(fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++) {
+		for (j = 0; j < img->width / 2; j++) {
+			fgetc(fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++) {
+		for (j = 0; j < img->width / 2; j++) {
+			fgetc(fp);
+		}
+	}
+
+	fclose(fp);
+	return (img);
+}
+
 
 int *gen_hufflen(uint *hist, int size, int max_len) {
 	int i, j, k, l, *len, *index, *bits, *link;

@@ -169,6 +169,8 @@ typedef struct {
 } DECODER;
 
 /* common.c */
+void safefree(void **);
+void safefree_yuv(IMAGE **);
 FILE *fileopen(char *, char *);
 void *alloc_mem(size_t);
 void **alloc_2d_array(int, int, int);
@@ -176,6 +178,7 @@ void ***alloc_3d_array(int, int, int, int);
 IMAGE *alloc_image(int, int, int);
 IMAGE *copy_yuv(IMAGE*);
 void write_yuv(IMAGE*, char*);
+IMAGE *read_yuv(char *, int, int, int);
 int *gen_hufflen(uint *, int, int);
 void gen_huffcode(VLC *);
 VLC *make_vlc(uint *, int, int);
