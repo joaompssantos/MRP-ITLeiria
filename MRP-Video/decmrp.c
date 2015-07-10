@@ -636,7 +636,7 @@ int calc_udec(DECODER *dec, int y, int x) {
 	fmax_dx = dec->width - fmax_dx;
 	fmax_dy = dec->height - fmax_dy;
 
-	if (y >= min_dy && x >= min_dx && x <= max_dx) {
+	if (y >= min_dy && x >= min_dx && x < max_dx) {
 		for (k = 0; k < dec->prd_order; k++) {
 			ry = y + dyx[k].y;
 			rx = x + dyx[k].x;
@@ -697,7 +697,7 @@ int calc_udec(DECODER *dec, int y, int x) {
 	if (dec->back_prd_order > 0) {
 		u += dec->err[0][y][x] * dec->ctx_weight[dec->prd_order];
 
-		if (y >= bmin_dy && x >= bmin_dx && x <= bmax_dx && y < bmax_dy) {
+		if (y >= bmin_dy && x >= bmin_dx && x < bmax_dx && y < bmax_dy) {
 			for (k = 0; k < dec->back_prd_order - 1; k++) {
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
@@ -724,7 +724,7 @@ int calc_udec(DECODER *dec, int y, int x) {
 	if (dec->for_prd_order > 0) {
 		u += dec->err[2][y][x] * dec->ctx_weight[dec->prd_order + dec->back_prd_order];
 
-		if (y >= fmin_dy && x >= fmin_dx && x <= fmax_dx && y < fmax_dy) {
+		if (y >= fmin_dy && x >= fmin_dx && x < fmax_dx && y < fmax_dy) {
 			for (k = 0; k < dec->for_prd_order - 1; k++) {
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
