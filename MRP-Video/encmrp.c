@@ -3083,16 +3083,10 @@ int main(int argc, char **argv) {
 			min_cost = INT_MAX;
 
 			for (i = j = 0; i < max_iteration; i++) {
-				printf("[%2d] cost =", i);
 				cost = design_predictor(enc, f_mmse);
-				printf(" %d ->", (int)cost);
 				cost = optimize_group(enc);
-				printf(" %d ->", (int)cost);
 				cost = optimize_class(enc);
-				printf(" %d", (int)cost);
-
 				if (cost < min_cost) {
-					 printf(" *\n");
 					min_cost = cost;
 					j = i;
 
@@ -3111,9 +3105,6 @@ int main(int argc, char **argv) {
 							th_save[cl][k] = enc->th[cl][k];
 						}
 					}
-				}
-				else {
-					printf("\n");
 				}
 
 				if (i - j >= EXTRA_ITERATION) break;
