@@ -2523,24 +2523,6 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
 	return (bits);
 }
 
-void print_contexts(int modo, uint cumfreq, uint freq, uint totfreq, int max, int min, int prd) {
-	if (modo == 0) system("rm /tmp/encoder_context.txt");
-
-	FILE *fp;
-	fp = fileopen("/tmp/encoder_context.txt", "a");
-
-	if (modo != -1) {
-		fprintf(fp, "Frame: %d\n", modo);
-		fprintf(fp, "Cum. Freq.\tFreq.\tTot. Freq.\tMax\tMin\tPrd:\n");
-	}
-	else {
-		fprintf(fp, "%d\t\t%d\t%d\t\t%d\t%d\t%d\n", cumfreq, freq, totfreq, max, min, prd);
-		//fprintf(fp, "%d\n", prd);
-	}
-
-	fclose(fp);
-}
-
 int encode_image(FILE *fp, ENCODER *enc) {
 	int x, y, e, prd, base, bits, gr, cumbase;
 	PMODEL *pm;
@@ -2572,9 +2554,6 @@ int encode_image(FILE *fp, ENCODER *enc) {
 				base = enc->bconv[prd];
 				pm = enc->pmlist[gr] + enc->fconv[prd];
 				cumbase = pm->cumfreq[base];
-
-//				print_contexts(-1, 0, 0, pm->cumfreq[base + enc->maxval + 1] - cumbase, base + enc->maxval + 1, base, prd);
-
 				rc_encode(fp, enc->rc, pm->cumfreq[base + e] - cumbase, pm->freq[base + e], pm->cumfreq[base + enc->maxval + 1] - cumbase);
 			}
 		}
@@ -2753,29 +2732,6 @@ int encode_extra_info(FILE *fp, char *extra_info, int num_pels) {
 	}
 
 	return bits;
-}
-
-void print_predictors(ENCODER *enc, int f) {
-	int y, x;
-
-	if (f == 0) system("rm encoder_predictors.txt");
-
-	FILE *teste;
-	teste = fileopen("encoder_predictors.txt", "a");
-
-	//fprintf(teste, "Frame: %d\n\n", f);
-	for (y = 0; y < enc->num_class; y++) {
-		//fprintf(teste, "intra: ");
-		for (x = 0; x < enc->prd_order; x++) {
-			fprintf(teste, "%d ", enc->predictor[y][x]);
-		}
-		//fprintf(teste, "|| inter: ");
-		for (x = 0; x < enc->back_prd_order; x++) {
-			fprintf(teste, "%d ", enc->predictor[y][enc->prd_order + x]);
-		}fprintf(teste, "\n");
-	}fprintf(teste, "\n");
-
-	fclose(teste);
 }
 
 int main(int argc, char **argv) {
@@ -3263,9 +3219,9 @@ int main(int argc, char **argv) {
 	}
 	else {
 		int **back_ref_error, **for_ref_error;
-		int back_reference, for_reference, first_frame = 0, conta = 0, final;
+		int back_reference = 0, for_reference = 0, first_frame = 0, conta = 0, final = 0;
 		int ***keep_error;
-		int (*bref)[5];
+		int (*bref)[5] = NULL;
 		int prate = 0, pframes = 0;
 
 		if (hevc == 0 || bframes == 2) {
