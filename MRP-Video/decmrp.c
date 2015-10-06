@@ -935,6 +935,7 @@ int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
 
 	return (prd);
 }
+
 void print_contexts(int modo, uint cumfreq, uint freq, uint totfreq, int max, int min, int prd) {
 	if (modo == 0) system("rm /tmp/decoder_context.txt");
 
@@ -1060,11 +1061,15 @@ char *decode_extra_info(FILE *fp, int *num_pels) {
 
 int main(int argc, char **argv) {
 	int i, f, **error = NULL;
-	int version, width, height, maxval, frames, bframes, num_comp, num_group, prd_order[6] = {0, 0, 0, 0, 0, 0}, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, diff, hevc;
+	int version, width, height, maxval, frames, bframes, num_comp, num_group;
+	int num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, diff, hevc;
+	int prd_order[6] = {0, 0, 0, 0, 0, 0};
+
 	IMAGE *video[3] = {NULL, NULL, NULL};
 	DECODER *dec;
 	char *infile, *outfile;
 	FILE *fp;
+
 	cpu_time();
 	setbuf(stdout, 0);
 	infile = outfile = NULL;
@@ -1105,7 +1110,13 @@ int main(int argc, char **argv) {
 	printf("%s -> %s (%dx%dx%d)\n", infile, outfile, width, height, frames);
 	// Print coding parameters to screen
 	printf("P = %d, V = %d, A = %d, D = %d, p = %s\n\n", coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
-	printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
+	// Print prediction parameters to screen
+	if (bframes == 0) {
+		printf("Prediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\n", prd_order[0], prd_order[1], prd_order[2]);
+	}
+	else{
+		printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
+	}
 
 	if (bframes == 0) {
 		for (f = 0; f < frames; f++) {
@@ -1193,11 +1204,11 @@ int main(int argc, char **argv) {
 		free(error);
 	}
 	else {
-		int back_reference, for_reference;
+		int back_reference = 0, for_reference = 0;
 		int **back_ref_error = NULL, **for_ref_error = NULL;
 		IMAGE **seq = alloc_mem(frames * sizeof(IMAGE));
 		int ***keep_error;
-		int first_frame = 0, conta = 0, final;
+		int first_frame = 0, conta = 0, final = 0;
 		int (*bref)[5] = NULL;
 
 		if (hevc == 0) {

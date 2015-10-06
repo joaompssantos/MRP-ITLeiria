@@ -27,7 +27,7 @@
 #define VLC_MAXLEN      32
 #define MAGIC_NUMBER    ('M' << 8) + 'R'
 #define BANNER          "\nMRP Video Inter\nencmrp/decmrp version %.1f (September 2014)"
-#define VERSION         1
+#define VERSION         3
 #define uint            unsigned int
 #define img_t           unsigned char
 #define cost_t          double
@@ -98,39 +98,39 @@ typedef struct {
     int coef_precision; // Precision of the coefficients
     int num_pmodel; // Number of probability models
     int pm_accuracy; // Probability model accuracy
-    int maxprd; // ??
+    int maxprd; // Maximum prediction allowed
     int f_huffman; // Huffman coding flag
-    int quadtree_depth; // Quadtree depth or deactivation
+    int quadtree_depth; // Quadtree depth on/off
     int optimize_loop; // First or second optimization loop
-    int **predictor;
-    int **th;
-    int **upara;
-    int **prd;
-    int **encval;
-    int ***err;
+    int **predictor; // Stores the prediction coefficients for all classes
+    int **th; // Indicates the threshold values used to quantize the weighted sum of neighboring residues, to be used on the context coding.
+    int **upara; // Context for the residue encoding, without the quantization.
+    int **prd; // Prediction value for each pixel
+    int **encval; // Pointer to the error (in set_cost_model()) and later to the image real values (in set_cost_rate()).
+    int ***err; // Matrix that keeps residue values after the prediction.
     int ***org; // Original video/image
-    int *ctx_weight;
-    int ***roff;
-    int qtctx[QUADTREE_DEPTH << 3];
-    char **qtmap[QUADTREE_DEPTH];
-    char **class;
-    char **group;
-    char **uquant;
-    int **econv;
-    img_t *bconv;
-    img_t *fconv;
-    PMODEL ***pmodels;
-    PMODEL **pmlist;
-    PMODEL spm;
-    VLC **vlcs;
-    RANGECODER *rc;
-    double *sigma;
-    int *mtfbuf;
-    int *coef_m;
-    cost_t **coef_cost;
-    cost_t *th_cost;
-    cost_t *class_cost;
-    cost_t qtflag_cost[QUADTREE_DEPTH << 3];
+    int *ctx_weight; // Keeps the weights used for the residue encoding context.
+    int ***roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int qtctx[QUADTREE_DEPTH << 3]; // Frequency counter of the segmentation flag context for the whole image.
+    char **qtmap[QUADTREE_DEPTH]; // Segmentation flags for the quadtree partitioning of the image's prediction.
+    char **class; // Keeps the class of each pixel
+    char **group; // keeps the group, i.e. the quantized context used for residue entropy coding.
+    char **uquant; // Table used for the quantification of the context variable u.
+    int **econv; // Table used for the conversion of the error.
+    img_t *bconv; // Structure used to convert the prediction to a pointer which indicates the position in the probability vector structure of the prediction error.
+    img_t *fconv; // Structure used to fine tune the probability value, given the probability model accuracy.
+    PMODEL ***pmodels; // Structure that holds all probability models.
+    PMODEL **pmlist; // List of pointer for the probability model for each group.
+    PMODEL spm; // Probability model structure used for the side information (classes, thresholds, coefficients).
+    VLC **vlcs; // Structure for the Huffman encoder.
+    RANGECODER *rc; // Structure for the Range encode.
+    double *sigma; // A vector that defines the variance that will be used for the generalized gaussian, for each context.
+    int *mtfbuf; // Buffer used for context determination for class encoding.
+    int *coef_m; // Structure that indicates the context used for arithmetic encoding of the coefficients of the prediction filters.
+    cost_t **coef_cost; // Structure used to keep the cost of the coefficients.
+    cost_t *th_cost; // Structure used to keep the cost of the thresholds.
+    cost_t *class_cost; // Array with the cost of each class.
+    cost_t qtflag_cost[QUADTREE_DEPTH << 3]; // Structure for the cost of the segmentation flags.
 } ENCODER;
 
 // Decoder

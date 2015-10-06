@@ -18,7 +18,8 @@ extern double qtree_prob[];
  |  Parameters:
  |		img				--> Image structure (IN)
  |		prd_order		--> Number of intra reference pixels (IN)
- |		inter_prd_order	--> Number of inter reference pixels (IN)
+ |		back_prd_order	--> Number of back reference pixels (IN)
+ |		for_prd_order	--> Number of forward reference pixels (IN)
  |
  |  Returns:  int*** --> Array with the references offset
  *-------------------------------------------------------------------*/
@@ -400,7 +401,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	int full_prd_order;
 
 	//Allocation of the memory for the encoder struct
-	enc = (ENCODER *)alloc_mem(sizeof(ENCODER));
+	enc = (ENCODER *) alloc_mem(sizeof(ENCODER));
 
 	//Copy of the video/image properties to encoder
 	enc->height = img->height;
@@ -441,10 +442,10 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	enc->prd = (int **)alloc_2d_array(enc->height, enc->width, sizeof(int));
 	// Memory allocation for the original image
 	enc->org = (int ***)alloc_3d_array(enc->height + 1, enc->width, 3, sizeof(int));
-	// Memory allocation for the error image ??
+	// Memory allocation for the error image
 	enc->err = (int ***)alloc_3d_array(enc->height + 1, enc->width, 3, sizeof(int));
 
-	// Quadtree map what?
+	// Quadtree map
 	if (enc->quadtree_depth > 0) {
 		y = (enc->height + MAX_BSIZE - 1) / MAX_BSIZE;
 		x = (enc->width + MAX_BSIZE - 1) / MAX_BSIZE;
@@ -2736,7 +2737,7 @@ int encode_extra_info(FILE *fp, char *extra_info, int num_pels) {
 
 int main(int argc, char **argv) {
 	// Variable declaration
-	cost_t cost, min_cost, side_cost;
+	cost_t cost, min_cost, side_cost = 0;
 	int i, j, f, k, x, y, cl, **prd_save, **th_save, **error = NULL;
 	char **class_save;
 	IMAGE *video[3] = {NULL, NULL, NULL};
@@ -2756,13 +2757,15 @@ int main(int argc, char **argv) {
 	int max_iteration = MAX_ITERATION;
 	int frames = FRAMES;
 	int height = 0, width = 0;
+	int full_prd_order;
 	char *infile, *outfile;
 	char resfile[100];
 	FILE *fp, *res;
+
 	//Print results variables
 	int header = 0, *class_info, *predictors, *thresholds, *errors, *extrainfo = NULL;
 	int delta = 1;
-	int hevc = 1;
+	int hevc = 0;
 	int diff = 0, num_pels = 0;
 	char *extra_info = NULL;
 
@@ -2800,6 +2803,9 @@ int main(int argc, char **argv) {
 				if (num_class <= 0 || num_class > 63) {
 					num_class = NUM_CLASS;
 				}
+				break;
+			case 'B':
+				hevc = 1;
 				break;
 			case 'G':
 				bframes = atoi(argv[++i]);
@@ -2866,12 +2872,6 @@ int main(int argc, char **argv) {
 					delta = 1;
 				}
 				break;
-			case 'B':
-				hevc = atoi(argv[++i]);
-				if (hevc != 0 && hevc != 1) {
-					hevc = 0;
-				}
-				break;
 			default:
 				fprintf(stderr, "Unknown option: %s!\n", argv[i]);
 				exit (1);
@@ -2897,23 +2897,24 @@ int main(int argc, char **argv) {
 		printf(BANNER"\n", 0.1 * VERSION);
 		printf("usage: encmrp [options] infile outfile\n");
 		printf("options:\n");
-		printf("    -H num  Height*\n");
-		printf("    -W num  Width*\n");
-		printf("    -F num  Frames*\n");
-		printf("    -p 		Pixel difference prediction\n");
-		printf("    -M num  Number of predictors [%d]\n", num_class);
-		printf("    -G num  Number of frames between references (number of B frames) [%d]\n", bframes);
-		printf("    -K num  Prediction order [%d %d %d %d %d %d]\n", prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
-		printf("    -P num  Precision of prediction coefficients (fractional bits) [%d]\n", coef_precision);
-		printf("    -V num  Number of probability models [%d]\n", num_pmodel);
-		printf("    -A num  Accuracy of probability models [%d]\n", pm_accuracy);
-		printf("    -I num  Maximum number of iterations [%d]\n", max_iteration);
-		printf("    -m      Use MMSE predictors\n");
-		printf("    -h      Use Huffman coding\n");
-		printf("    -f      Fixed block-size for adaptive prediction\n");
-		printf("    -o      Further optimization of predictors (experimental)\n");
-		printf("infile:     Input file (must be in a raw PGM format)\n");
-		printf("outfile:    Output file\n");
+		printf("    -H num  	Height*\n");
+		printf("    -W num  	Width*\n");
+		printf("    -F num  	Frames*\n");
+		printf("    -p      	Pixel difference prediction\n");
+		printf("    -M num  	Number of predictors [%d]\n", num_class);
+		printf("    -G num  	Number of frames between references (number of B frames) [%d]\n", bframes);
+		printf("    -B      	Choose HEVC style bidirectional prediction\n");
+		printf("    -K 6 * num  Prediction order [%d %d %d %d %d %d]\n", prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
+		printf("    -P num  	Precision of prediction coefficients (fractional bits) [%d]\n", coef_precision);
+		printf("    -V num  	Number of probability models [%d]\n", num_pmodel);
+		printf("    -A num  	Accuracy of probability models [%d]\n", pm_accuracy);
+		printf("    -I num  	Maximum number of iterations [%d]\n", max_iteration);
+		printf("    -m      	Use MMSE predictors\n");
+		printf("    -h      	Use Huffman coding\n");
+		printf("    -f      	Fixed block-size for adaptive prediction\n");
+		printf("    -o      	Further optimization of predictors (experimental)\n");
+		printf("infile:     	Input file (must be in a raw YUV format)\n");
+		printf("outfile:    	Output file\n");
 		printf("\nNote: * stands for a mandatory option.\n");
 		exit(0);
 	}
@@ -2957,7 +2958,13 @@ int main(int argc, char **argv) {
 	printf("%s -> %s (%dx%dx%d)\n", infile, outfile, width, height, frames);
 	// Print coding parameters to screen
 	printf("M = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
-	printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
+	// Print prediction parameters to screen
+	if (bframes == 0) {
+		printf("Prediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\n", prd_order[0], prd_order[1], prd_order[2]);
+	}
+	else{
+		printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
+	}
 
 	//Allocation of print results variables
 	errors 	   = (int *) alloc_mem(frames * sizeof(int));
@@ -3009,7 +3016,7 @@ int main(int argc, char **argv) {
 				free(error);
 			}
 
-			int full_prd_order = enc->prd_order + enc->back_prd_order;
+			full_prd_order = enc->prd_order + enc->back_prd_order;
 
 			//Initiation of the reference offset
 			enc->roff = init_ref_offset(video[1], enc->prd_order, enc->back_prd_order, 0);
@@ -3029,7 +3036,7 @@ int main(int argc, char **argv) {
 			init_class(enc);
 
 			//Auxiliary variables
-			prd_save = (int **)alloc_2d_array(enc->num_class, (full_prd_order), sizeof(int));
+			prd_save = (int **)alloc_2d_array(enc->num_class, full_prd_order, sizeof(int));
 			th_save = (int **)alloc_2d_array(enc->num_class, enc->num_group, sizeof(int));
 			class_save = (char **)alloc_2d_array(enc->height, enc->width, sizeof(char));
 
@@ -3256,7 +3263,7 @@ int main(int argc, char **argv) {
 				enc = init_encoder(video[1], video[0], video[2], back_ref_error, for_ref_error, num_class, num_group, prd_order[3], prd_order[4], prd_order[5], coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
 			}
 
-			int full_prd_order = enc->prd_order + enc->back_prd_order + enc->for_prd_order;
+			full_prd_order = enc->prd_order + enc->back_prd_order + enc->for_prd_order;
 
 			//Initiation of the reference offset
 			enc->roff = init_ref_offset(video[1], enc->prd_order, enc->back_prd_order, enc->for_prd_order);
@@ -3276,7 +3283,7 @@ int main(int argc, char **argv) {
 			init_class(enc);
 
 			//Auxiliary variables
-			prd_save = (int **)alloc_2d_array(enc->num_class, (full_prd_order), sizeof(int));
+			prd_save = (int **)alloc_2d_array(enc->num_class, full_prd_order, sizeof(int));
 			th_save = (int **)alloc_2d_array(enc->num_class, enc->num_group, sizeof(int));
 			class_save = (char **)alloc_2d_array(enc->height, enc->width, sizeof(char));
 
