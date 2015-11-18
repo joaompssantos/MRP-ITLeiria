@@ -91,14 +91,14 @@ typedef struct {
     int delta;
     int maxval; // Image maximum value (255)
     int num_class; // Number of classes to use (number of different predictors)
-    int num_group; // Number of groups ???? (= 16)
+    int num_group; // Number of pixels that are taken into account to form the context for entropy coding of the residue (= 16)
     int prd_order; // Order of the predictors (number of pixels to use)
     int back_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
     int for_prd_order; // Order of the predictors (number of pixels to use) in the next frame
     int coef_precision; // Precision of the coefficients
     int num_pmodel; // Number of probability models
     int pm_accuracy; // Probability model accuracy
-    int maxprd; // Maximum prediction allowed
+    int maxprd; // Maximum prediction value allowed, depends on the coef_precision
     int f_huffman; // Huffman coding flag
     int quadtree_depth; // Quadtree depth on/off
     int optimize_loop; // First or second optimization loop

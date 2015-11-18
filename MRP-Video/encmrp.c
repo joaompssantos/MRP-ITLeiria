@@ -380,16 +380,22 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int back_prd_order, int for_pr
  |  Purpose:  Initializes the encoder structure
  |
  |  Parameters:
- |      img		 		--> Video/Image file structure (IN)
+ |      img		 		--> Image structure with the frame to encode (IN)
+ |      back_ref_img	--> Image structure with the backward reference frame (when available) (IN)
+ |      for_ref_img	    --> Image structure with the forward reference frame (when available) (IN)
+ |      back_ref_error	--> Array with the error of the backward reference frame (when available) (IN)
+ |      for_ref_error   --> Array with the error of the forward reference frame (when available) (IN)
  |		num_class		--> Number of classes to use (number of different predictors) (IN)
- |		num_group		--> Number of groups ???? (IN)
+ |		num_group		--> Number of pixels that are taken into account to form the context for entropy coding of the residue (IN)
  |		prd_order		--> Order of the predictors (number of pixels to use) (IN)
- |		inter_prd_order	--> Order of the inter predictors (number of pixels to use) (IN)
+ |		back_prd_order	--> Order of the predictors in the backward reference frame (number of pixels to use, when available) (IN)
+ |		for_prd_order	--> Order of the predictors in the forward reference frame (number of pixels to use, when available) (IN)
  |		coef_precision	--> Precision of the coefficients (IN)
  |		f_huffman		--> Huffman coding flag (IN)
  |		quadtree_depth	--> Quadtree flag (IN)
  |		num_pmodel		--> Number of probability models (IN)
  |		pm_accuracy		--> Probability model accuracy (IN)
+ |		delta			--> Parameter representing the distance between frames (IN)
  |
  |  Returns:  ENCODER* --> returns a encoder type structure
  *-------------------------------------------------------------------*/
@@ -409,24 +415,24 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	enc->maxval = img->maxval;
 
 	// Copy of the encoding parameters
-	enc->num_class = num_class;
-	enc->num_group = num_group; // ?? (= 16)
+	enc->num_class = num_class; // M
+	enc->num_group = num_group; // 16
 	enc->prd_order = prd_order; // K
 	enc->back_prd_order = back_prd_order;
 	enc->for_prd_order = for_prd_order;
 	enc->coef_precision = coef_precision; // P
-	enc->f_huffman = f_huffman; // -h
-	enc->quadtree_depth = quadtree_depth; // -f
+	enc->f_huffman = f_huffman; // h
+	enc->quadtree_depth = quadtree_depth; // f
 	enc->num_pmodel = num_pmodel; // V
 	enc->pm_accuracy = pm_accuracy; // A
-	enc->maxprd = enc->maxval << enc->coef_precision; // ??
-	enc->delta = delta;
+	enc->maxprd = enc->maxval << enc->coef_precision; // Maximum prediction value allowed
+	enc->delta = delta; //Parameter representing the distance between frames
 	full_prd_order = enc->prd_order + enc->back_prd_order + enc->for_prd_order;
 
 	// Alloc memory to predictors array
 	enc->predictor = (int **)alloc_2d_array(enc->num_class, full_prd_order, sizeof(int));
 
-	// Alloc memory to ??
+	// Alloc memory to array of the threshold values used to quantize the weighted sum of neighboring residues
 	enc->th = (int **)alloc_2d_array(enc->num_class, enc->num_group, sizeof(int));
 
 	// enc->th initializing cycle
@@ -456,6 +462,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 		}
 	}
 
+	// Keeps the weights used for the residue encoding context
 	enc->ctx_weight = init_ctx_weight(enc->prd_order, enc->back_prd_order, enc->for_prd_order, enc->delta);
 
 	// Class and group arrays
@@ -519,12 +526,15 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 		}
 	}
 
+	// Table used for the conversion of the error
 	enc->econv = (int **)alloc_2d_array(enc->maxval+1, (enc->maxval<<1) + 1, sizeof(int));
+	// Structure used to convert the prediction to a pointer which indicates the position in the probability vector structure of the prediction error
 	enc->bconv = (img_t *)alloc_mem((enc->maxprd + 1) * sizeof(img_t));
+	// Structure used to fine tune the probability value, given the probability model accuracy
 	enc->fconv = (img_t *)alloc_mem((enc->maxprd + 1) * sizeof(img_t));
-
+	// List of pointer for the probability model for each group
 	enc->pmlist = (PMODEL **)alloc_mem(enc->num_group * sizeof(PMODEL *));
-
+	// Probability model structure used for the side information (classes, thresholds, coefficients)
 	enc->spm.freq = alloc_mem((MAX_SYMBOL * 2 + 1) * sizeof(uint));
 	enc->spm.cumfreq = &(enc->spm.freq[MAX_SYMBOL]);
 
@@ -535,14 +545,16 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 		enc->sigma = sigma_a;
 	}
 
-	// ?
+	// Buffer used for context determination for class encoding
 	enc->mtfbuf = (int *)alloc_mem(enc->num_class * sizeof(int));
+	// Structure that indicates the context used for arithmetic encoding of the coefficients of the prediction filters
 	enc->coef_m = (int *)alloc_mem((full_prd_order) * sizeof(int));
 
 	for (i = 0; i < full_prd_order; i++) {
 		enc->coef_m[i] = 0;
 	}
 
+	// Structure used to keep the cost of the coefficients
 	enc->coef_cost = (cost_t **)alloc_2d_array(16, MAX_COEF + 1, sizeof(cost_t));
 
 	for (i = 0; i < 16; i++) {
@@ -568,14 +580,16 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 #endif
 	}
 
+	// Structure used to keep the cost of the thresholds
 	enc->th_cost = (cost_t *)alloc_mem((MAX_UPARA + 2) * sizeof(cost_t));
 	for (i = 0; i < MAX_UPARA + 2; i++) {
 		enc->th_cost[i] = 0;
 	}
 
+	// Array with the cost of each class
 	enc->class_cost = (cost_t *)alloc_mem(enc->num_class * sizeof(cost_t));
 
-	c = log((double)enc->num_class) / log(2.0);
+	c = log((double) enc->num_class) / log(2.0);
 
 	for (i = 0; i < enc->num_class; i++) {
 		enc->class_cost[i] = c;
@@ -586,6 +600,18 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	return (enc);
 }
 
+/*---------------------------- get_enc_err ------------------------*
+ |  Function get_enc_err
+ |
+ |  Purpose:  Returns the error of a given frame
+ |
+ |  Parameters:
+ |      enc				--> Encoder structure (IN)
+ |      pos				--> Position of the wanted frame in
+ |	 	 	 	 	 	 	the err array (IN)
+ |
+ |  Returns:  int**		--> returns the error of a given frame
+ *-------------------------------------------------------------------*/
 int **get_enc_err(ENCODER *enc, int pos) {
 	int y, x;
 	int **error = (int **)alloc_2d_array(enc->height + 1, enc->width, sizeof(int));
@@ -599,6 +625,16 @@ int **get_enc_err(ENCODER *enc, int pos) {
 	return error;
 }
 
+/*---------------------------- free_encoder ------------------------*
+ |  Function free_encoder
+ |
+ |  Purpose:  Frees the memory used by the encoder structure
+ |
+ |  Parameters:
+ |      enc				--> Encoder structure (IN)
+ |
+ |  Returns:  void
+ *-------------------------------------------------------------------*/
 void free_encoder(ENCODER *enc) {
 	int dy, dx, x, y, i, j, k;
 	int min_dx, max_dx, min_dy, max_dy;
@@ -812,6 +848,17 @@ void init_class(ENCODER *enc) {
 	free(var);
 }
 
+/*------------------------------ set_cost_model -------------------------*
+ |  Function set_cost_model
+ |
+ |  Purpose:  Sets the cost model
+ |
+ |  Parameters:
+ |		enc				--> Encoder structure (IN / OUT)
+ |		f_mmse			--> Sets the use of MMSE (IN)
+ |
+ |  Returns:  void
+ *-------------------------------------------------------------------*/
 void set_cost_model(ENCODER *enc, int f_mmse) {
 	int gr, i, j, k;
 	double a, b, c, var;
@@ -856,6 +903,16 @@ void set_cost_model(ENCODER *enc, int f_mmse) {
 	return;
 }
 
+/*------------------------------ set_cost_rate -------------------------*
+ |  Function set_cost_rate
+ |
+ |  Purpose:  Sets the cost rate
+ |
+ |  Parameters:
+ |		enc				--> Encoder structure (IN / OUT)
+ |
+ |  Returns:  void
+ *-------------------------------------------------------------------*/
 void set_cost_rate(ENCODER *enc) {
 	int gr, k, i, j, mask, shift, num_spm;
 	double a, c;
@@ -928,15 +985,15 @@ void set_cost_rate(ENCODER *enc) {
 /*-------------------------- prediction_region ----------------------*
  |  Function prediction_region
  |
- |  Purpose: "Calculates the prediction of each pixel"
+ |  Purpose: Calculates the prediction of each pixel
  |
  |  Parameters:
  |		enc				--> Encoder structure (IN / OUT)
  |		frame			--> Frame to be processed (IN)
- |		tly				--> Top left Y boundary
- |		tlx				--> Top left X boundary
- |		bry				--> Bottom right Y boundary
- |		brx				--> Bottom right X boundary
+ |		tly				--> Top left Y boundary (IN)
+ |		tlx				--> Top left X boundary (IN)
+ |		bry				--> Bottom right Y boundary (IN)
+ |		brx				--> Bottom right X boundary (IN)
  |
  |  Returns:  void
  *-------------------------------------------------------------------*/
@@ -981,6 +1038,19 @@ void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx) {
 	}
 }
 
+/*------------------------------ calc_uenc --------------------------*
+ |  Function calc_uenc
+ |
+ |  Purpose: Calculates the context for the residue encoding,
+ |			 without the quantization
+ |
+ |  Parameters:
+ |		enc				--> Encoder structure (IN / OUT)
+ |		y				--> Y position (IN)
+ |		x				--> X position (IN)
+ |
+ |  Returns:  int		--> Returns the context value
+ *-------------------------------------------------------------------*/
 int calc_uenc(ENCODER *enc, int y, int x) {
 	int u, k, *err_p, *roff_p, *wt_p;
 	int full_prd_order = enc->prd_order + enc->back_prd_order + enc->for_prd_order;
@@ -1001,6 +1071,21 @@ int calc_uenc(ENCODER *enc, int y, int x) {
 	return (u);
 }
 
+/*------------------------------ calc_cost --------------------------*
+ |  Function calc_cost
+ |
+ |  Purpose: Iterates through all the pixel positions and sums up
+ |			 the cost for encoding each prediction residue
+ |
+ |  Parameters:
+ |		enc				--> Encoder structure (IN / OUT)
+ |		tly				--> Top left Y boundary (IN)
+ |		tlx				--> Top left X boundary (IN)
+ |		bry				--> Bottom right Y boundary (IN)
+ |		brx				--> Bottom right X boundary (IN)
+ |
+ |  Returns:  cost_t	--> Returns the cost
+ *-------------------------------------------------------------------*/
 cost_t calc_cost(ENCODER *enc, int tly, int tlx, int bry, int brx) {
 	cost_t cost;
 	int x, y, u, cl, gr, prd, e, base, frac;
@@ -1047,11 +1132,10 @@ cost_t calc_cost(ENCODER *enc, int tly, int tlx, int bry, int brx) {
 /*-------------------------- design_predictor -----------------------*
  |  Function design_predictor
  |
- |  Purpose:  Calculates the predictor coefficients for each class
+ |  Purpose:  Designs the predictor coefficients for each class
  |
  |  Parameters:
  |		enc				--> Encoder structure (IN / OUT)
- |		frame			--> Frame to be processed (IN)
  |		f_mmse			--> Coding type (Huffman/Arithmetic) (IN)
  |
  |  Returns:  cost_t --> cost of the designed predictor
@@ -1210,6 +1294,17 @@ cost_t design_predictor(ENCODER *enc, int f_mmse) {
 	return (calc_cost(enc, 0, 0, enc->height, enc->width));
 }
 
+/*--------------------------- optimize_group ------------------------*
+ |  Function optimize_group
+ |
+ |  Purpose: Optimize the thresholds that determine the group
+ |			 for each residue
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN)
+ |
+ |  Returns:  cost_t	--> Returns the new cost of encoding
+ *-------------------------------------------------------------------*/
 cost_t optimize_group(ENCODER *enc) {
 	cost_t cost, min_cost, **cbuf, *dpcost, *cbuf_p, *thc_p;
 	int x, y, th1, th0, k, u, cl, gr, prd, e, base, frac;
@@ -1394,7 +1489,8 @@ cost_t optimize_group(ENCODER *enc) {
 /*---------------------------- set_prdbuf --------------------------*
  |  Function set_prdbuf
  |
- |  Purpose: Calculates and stores the prediction and residue for all classes for a given block
+ |  Purpose: Calculates and stores the prediction and residue
+ |			 for all classes for a given block
  |
  |  Parameters:
  |      enc		 		--> Encoder struct (IN)
@@ -1459,6 +1555,24 @@ void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int 
 	}
 }
 
+/*---------------------------- find_class ---------------------------*
+ |  Function find_class
+ |
+ |  Purpose: Tests all possible prediction modes for the block
+ |			 and returns the class that resulted in the minimum cost
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN)
+ |		prdbuf			--> Struct to store the prediction value (IN/OUT)
+ |		errbuf          --> Struct to store the residue value (IN/OUT)
+ |		tly				--> Top left corner y position of the current block (IN)
+ |		tlx             --> Top left corner x position of the current block (IN)
+ |		bry				--> Bottom right Y position of the current block (IN)
+ |		brx				--> Bottom right X position of the current block (IN)
+ |		bufsize			--> Size of the block (IN)
+ |
+ |  Returns:  int 		--> Returns the best class
+ *-------------------------------------------------------------------*/
 int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int bry, int brx, int bufsize) {
 	cost_t cost, min_cost;
 	int x, y, bufptr, cl, min_cl;
@@ -1516,7 +1630,8 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int b
 /*------------------------------ vbs_class --------------------------*
  |  Function vbs_class
  |
- |  Purpose:
+ |  Purpose: Performs the search for the best class based
+ |			 on the residue cost
  |
  |  Parameters:
  |      enc		 		--> Encoder struct (IN)
@@ -1655,7 +1770,8 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int
 /*--------------------------- optimize_class ------------------------*
  |  Function optimize_class
  |
- |  Purpose: Optimizes the prediction class for each block in the picture
+ |  Purpose: Optimizes the prediction class for each block
+ |			 in the picture
  |
  |  Parameters:
  |      enc		 		--> Encoder struct (IN/OUT)
@@ -1700,10 +1816,23 @@ cost_t optimize_class(ENCODER *enc) {
 	free(errbuf);
 	free(prdbuf);
 
-	//Returns cost...
+	//Returns cost
 	return (calc_cost(enc, 0, 0, enc->height, enc->width));
 }
 
+/*--------------------------- optimize_coef -------------------------*
+ |  Function optimize_coef
+ |
+ |  Purpose: Optimizes the coefficients
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |		cl				--> Class number (IN)
+ |		pos1			--> Coefficient position (IN)
+ |		pos2			--> Coefficient position (IN)
+ |
+ |  Returns:  void
+ *-------------------------------------------------------------------*/
 void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
 #define SEARCH_RANGE 11
 #define SUBSEARCH_RANGE 3
@@ -1836,6 +1965,17 @@ void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
 	}
 }
 
+/*------------------------- optimize_predictor ----------------------*
+ |  Function optimize_predictor
+ |
+ |  Purpose: Two coefficients are randomly chosen
+ |			 and optimized together
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |
+ |  Returns:  cost_t	--> Returns the new cost value
+ *-------------------------------------------------------------------*/
 cost_t optimize_predictor(ENCODER *enc) {
 	int cl, k, pos1, pos2;
 #ifndef RAND_MAX
@@ -1887,6 +2027,17 @@ int putbits(FILE *fp, int n, uint x) {
 	return (bits);
 }
 
+/*-------------------------- remove_emptyclass ----------------------*
+ |  Function remove_emptyclass
+ |
+ |  Purpose: Removes the empty classes and updates
+ |			 the dependent variables
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |
+ |  Returns:  void
+ *-------------------------------------------------------------------*/
 void remove_emptyclass(ENCODER *enc) {
 	int cl, i, k, x, y;
 
@@ -1937,6 +2088,22 @@ void remove_emptyclass(ENCODER *enc) {
 	enc->num_class = cl;
 }
 
+/*---------------------------- write_header ---------------------------*
+ |  Function write_header
+ |
+ |  Purpose: Writes the header of the file
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |		prd_order		--> Array that stores the prediction orders (IN)
+ |		frames			--> Number of encoded frames (IN)
+ |		bframes			--> Distance between B frames (IN)
+ |		diff			--> Usage of pixelwise difference (IN)
+ |		hevc			--> Usage of HEVC B frames type (IN)
+ |		fp				--> File to write into (IN)
+ |
+ |  Returns:  int		--> Returns the number of bits used
+ *---------------------------------------------------------------------*/
 int write_header(ENCODER *enc, int prd_order[6], int frames, int bframes, int diff, int hevc, FILE *fp) {
 	int bits, i;
 
@@ -1965,6 +2132,17 @@ int write_header(ENCODER *enc, int prd_order[6], int frames, int bframes, int di
 	return (bits);
 }
 
+/*---------------------------- write_class ----------------------------*
+ |  Function write_class
+ |
+ |  Purpose: Writes the number of classes for the current frame
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |		fp				--> File to write into (IN)
+ |
+ |  Returns:  int		--> Returns the number of bits used
+ *---------------------------------------------------------------------*/
 int write_class(ENCODER *enc, FILE *fp) {
 	int bits;
 
@@ -2041,6 +2219,17 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tly, int
 	return;
 }
 
+/*--------------------------- encode_class ----------------------------*
+ |  Function encode_class
+ |
+ |  Purpose: Arithmetic encode of the classes to file
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |		fp				--> File to write into (IN)
+ |
+ |  Returns:  int		--> Returns the number of bits used
+ *---------------------------------------------------------------------*/
 int encode_class(FILE *fp, ENCODER *enc) {
 	int i, j, k, numidx, blksize, level, x, y, ctx, bits, *index;
 	uint *hist;
@@ -2289,6 +2478,17 @@ int encode_class(FILE *fp, ENCODER *enc) {
 	return (bits);
 }
 
+/*-------------------------- encode_predictor --------------------------*
+ |  Function encode_predictor
+ |
+ |  Purpose: Arithmetic encode of the predictors to file
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |		fp				--> File to write into (IN)
+ |
+ |  Returns:  int		--> Returns the number of bits used
+ *---------------------------------------------------------------------*/
 int encode_predictor(FILE *fp, ENCODER *enc) {
 	int cl, coef, sgn, k, m, min_m, bits = 0;
 	cost_t cost, min_cost, t_cost;
@@ -2376,6 +2576,17 @@ int encode_predictor(FILE *fp, ENCODER *enc) {
 	return (bits);
 }
 
+/*-------------------------- encode_threshold --------------------------*
+ |  Function encode_threshold
+ |
+ |  Purpose: Arithmetic encode of the thresholds to file
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |		fp				--> File to write into (IN)
+ |
+ |  Returns:  int		--> Returns the number of bits used
+ *---------------------------------------------------------------------*/
 int encode_threshold(FILE *fp, ENCODER *enc) {
 	int cl, gr, i, k, m, min_m, bits = 0;
 	cost_t cost, min_cost;
@@ -2524,6 +2735,17 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
 	return (bits);
 }
 
+/*---------------------------- encode_image ---------------------------*
+ |  Function encode_image
+ |
+ |  Purpose: Arithmetic encode of the residue to file
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |		fp				--> File to write into (IN)
+ |
+ |  Returns:  int		--> Returns the number of bits used
+ *---------------------------------------------------------------------*/
 int encode_image(FILE *fp, ENCODER *enc) {
 	int x, y, e, prd, base, bits, gr, cumbase;
 	PMODEL *pm;
@@ -2671,6 +2893,19 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 	}
 }
 
+/*----------------------------- calc_diff -----------------------------*
+ |  Function calc_diff
+ |
+ |  Purpose: Calculates the pixelwise difference image
+ |
+ |  Parameters:
+ |      ref		 		--> Reference image struct (IN)
+ |      cur		 		--> Current image struct (IN)
+ |		extra_info		--> Stores the extra info if needed (OUT)
+ |		num_pels		--> Number of pixels in need of extra info (OUT)
+ |
+ |  Returns:  IMAGE*	--> Returns the pixelwise difference image
+ *---------------------------------------------------------------------*/
 IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels) {
 	int x, y;
 	// Image allocation
@@ -2723,6 +2958,18 @@ IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels) {
 	return diff;
 }
 
+/*------------------------- encode_extra_info -------------------------*
+ |  Function encode_extra_info
+ |
+ |  Purpose: Writes the extra infor to file
+ |
+ |  Parameters:
+ |		fp				--> File to write into (IN)
+ |		extra_info		--> Array with the extra info (IN)
+ |		num_pels		--> Number of pixels in need of extra info (IN)
+ |
+ |  Returns:  int		--> Returns the number of bits used
+ *---------------------------------------------------------------------*/
 int encode_extra_info(FILE *fp, char *extra_info, int num_pels) {
 	int bits = 0, i;
 
