@@ -252,7 +252,7 @@ IMAGE *copy_yuv(IMAGE *img) {
 }
 
 // Write YUV image to file
-void write_yuv(IMAGE *img, char *filename) {
+void write_yuv(IMAGE *img, char *filename, int depth) {
 	int i, j;
 	FILE *fp;
 
@@ -260,21 +260,27 @@ void write_yuv(IMAGE *img, char *filename) {
 
 	for (i = 0; i < img->height; i++) {
 		for (j = 0; j < img->width; j++) {
-			putc(img->val[i][j], fp);
+			if (depth == 8) {
+				putc(img->val[i][j], fp);
+			}
+			else if (depth > 8) {
+				putc(img->val[i][j] >> 8, fp);
+				putc(img->val[i][j] & 0x00FF, fp);
+			}
 		}
 	}
 
-	for (i = 0; i < img->height / 2; i++) {
-		for (j = 0; j < img->width / 2; j++) {
-			putc(128, fp);
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++) {
-		for (j = 0; j < img->width / 2; j++) {
-			putc(128, fp);
-		}
-	}
+//	for (i = 0; i < img->height / 2; i++) {
+//		for (j = 0; j < img->width / 2; j++) {
+//			putc((int) (pow(2, depth) / 2), fp);
+//		}
+//	}
+//
+//	for (i = 0; i < img->height / 2; i++) {
+//		for (j = 0; j < img->width / 2; j++) {
+//			putc((int) (pow(2, depth) / 2), fp);
+//		}
+//	}
 
 	fclose(fp);
 
@@ -294,7 +300,7 @@ void write_yuv(IMAGE *img, char *filename) {
  |
  |  Returns:  IMAGE* --> returns a video type structure
  *-------------------------------------------------------------------*/
-IMAGE *read_yuv(char *filename, int height, int width, int frame) {
+IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth) {
 	int i, j;
 	IMAGE *img;
 	FILE *fp;
@@ -309,25 +315,37 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame) {
 	}
 
 	// Image allocation
-	img = alloc_image(width, height, 255);
+	img = alloc_image(width, height, (int) (pow(2, depth) - 1));
 
 	if (frame > 0) fseek(fp, img->height * img->width * 1.5 * frame, SEEK_SET);
 
 	for (i = 0; i < img->height; i++) {
 		for (j = 0; j < img->width; j++) {
 			img->val[i][j] = (img_t)fgetc(fp);
+
+			if (depth > 8) {
+				img->val[i][j] = img->val[i][j] * 256 + (img_t)fgetc(fp);
+			}
 		}
 	}
 
 	for (i = 0; i < img->height / 2; i++) {
 		for (j = 0; j < img->width / 2; j++) {
 			fgetc(fp);
+
+			if (depth > 8) {
+				fgetc(fp);
+			}
 		}
 	}
 
 	for (i = 0; i < img->height / 2; i++) {
 		for (j = 0; j < img->width / 2; j++) {
 			fgetc(fp);
+
+			if (depth > 8) {
+				fgetc(fp);
+			}
 		}
 	}
 

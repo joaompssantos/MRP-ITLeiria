@@ -399,7 +399,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int back_prd_order, int for_pr
  |
  |  Returns:  ENCODER* --> returns a encoder type structure
  *-------------------------------------------------------------------*/
-ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int **back_ref_error, int **for_ref_error, int num_class, int num_group, int prd_order, int back_prd_order, int for_prd_order, int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel, int pm_accuracy, int delta) {
+ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int **back_ref_error, int **for_ref_error, int num_class, int num_group, int prd_order, int back_prd_order, int for_prd_order, int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel, int pm_accuracy, int delta, int depth) {
 	//Declare new encoder struct
 	ENCODER *enc;
 	int x, y, i, j;
@@ -427,6 +427,8 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	enc->pm_accuracy = pm_accuracy; // A
 	enc->maxprd = enc->maxval << enc->coef_precision; // Maximum prediction value allowed
 	enc->delta = delta; //Parameter representing the distance between frames
+	enc->depth = depth;
+
 	full_prd_order = enc->prd_order + enc->back_prd_order + enc->for_prd_order;
 
 	// Alloc memory to predictors array
@@ -528,6 +530,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 
 	// Table used for the conversion of the error
 	enc->econv = (int **)alloc_2d_array(enc->maxval+1, (enc->maxval<<1) + 1, sizeof(int));
+
 	// Structure used to convert the prediction to a pointer which indicates the position in the probability vector structure of the prediction error
 	enc->bconv = (img_t *)alloc_mem((enc->maxprd + 1) * sizeof(img_t));
 	// Structure used to fine tune the probability value, given the probability model accuracy
@@ -597,6 +600,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	for (i = 0; i < (QUADTREE_DEPTH << 3); i++) {
 		enc->qtflag_cost[i] = 1.0;
 	}
+
 	return (enc);
 }
 
@@ -2113,6 +2117,7 @@ int write_header(ENCODER *enc, int prd_order[6], int frames, int bframes, int di
 	bits += putbits(fp, 16, enc->height);
 	bits += putbits(fp, 16, enc->maxval);
 	bits += putbits(fp, 16, frames);
+	bits += putbits(fp, 5, enc->depth);
 	bits += putbits(fp, 8, bframes);
 	bits += putbits(fp, 1, hevc);
 	bits += putbits(fp, 4, 1);	/* number of components (1 = monochrome) */
@@ -2127,7 +2132,6 @@ int write_header(ENCODER *enc, int prd_order[6], int frames, int bframes, int di
 	bits += putbits(fp, 3, enc->pm_accuracy + 1);
 	bits += putbits(fp, 1, enc->f_huffman);
 	bits += putbits(fp, 1, (enc->quadtree_depth < 0)? 0 : 1);
-	bits += putbits(fp, 5, 0);
 
 	return (bits);
 }
@@ -2906,10 +2910,10 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
  |
  |  Returns:  IMAGE*	--> Returns the pixelwise difference image
  *---------------------------------------------------------------------*/
-IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels) {
+IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels, int depth) {
 	int x, y;
 	// Image allocation
-	IMAGE *diff = alloc_image(ref->width, ref->height, 255);
+	IMAGE *diff = alloc_image(ref->width, ref->height, (int) (pow(2, depth) - 1));
 	int aux, conta = 0;
 	char *aux_extra_info;
 
@@ -2919,9 +2923,9 @@ IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels) {
 
 	for (y = 0; y < ref->height; y++) {
 		for (x = 0; x < ref->width; x++) {
-			aux = cur->val[y][x] - ref->val[y][x] + 127;
+			aux = cur->val[y][x] - ref->val[y][x] + (int) (pow(2, depth) / 2 - 1);
 
-			if (aux > 0 && aux < 255) {
+			if (aux > 0 && aux < (int) (pow(2, depth) - 1)) {
 				diff->val[y][x] = aux;
 			}
 			else if (aux <= 0) {
@@ -2931,10 +2935,10 @@ IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels) {
 
 				conta++;
 			}
-			else if (aux >= 255) {
-				diff->val[y][x] = 255;
+			else if (aux >= (int) (pow(2, depth) - 1)) {
+				diff->val[y][x] = (int) (pow(2, depth) - 1);
 
-				aux_extra_info[conta] = aux - 255;
+				aux_extra_info[conta] = aux - (int) (pow(2, depth) - 1);
 
 				conta++;
 			}
@@ -3004,6 +3008,7 @@ int main(int argc, char **argv) {
 	int max_iteration = MAX_ITERATION;
 	int frames = FRAMES;
 	int height = 0, width = 0;
+	int depth = DEPTH;
 	int full_prd_order;
 	char *infile, *outfile;
 	char resfile[100];
@@ -3027,12 +3032,14 @@ int main(int argc, char **argv) {
 			case 'H':
 				height = atoi(argv[++i]);
 				if (height <= 0) {
+					fprintf(stderr, "The height of the image cannot be less than %d!\n", BASE_BSIZE);
 					exit(-1);
 				}
 				break;
 			case 'W':
 				width = atoi(argv[++i]);
 				if (width <= 0) {
+					fprintf(stderr, "The width of the image cannot be less than %d!\n", BASE_BSIZE);
 					exit(-2);
 				}
 				break;
@@ -3119,6 +3126,15 @@ int main(int argc, char **argv) {
 					delta = 1;
 				}
 				break;
+			case 'd':
+				depth = atoi(argv[++i]);
+				if (depth < 8) {
+					depth = DEPTH;
+				}
+				else if (depth > 16) {
+					depth = 16;
+				}
+				break;
 			default:
 				fprintf(stderr, "Unknown option: %s!\n", argv[i]);
 				exit (1);
@@ -3146,7 +3162,9 @@ int main(int argc, char **argv) {
 		printf("options:\n");
 		printf("    -H num  	Height*\n");
 		printf("    -W num  	Width*\n");
+		printf("    -d num  	Bit depth [%d]\n", depth);
 		printf("    -F num  	Frames*\n");
+		printf("    -D num  	Distance between frames [%d]*\n", delta);
 		printf("    -p      	Pixel difference prediction\n");
 		printf("    -M num  	Number of predictors [%d]\n", num_class);
 		printf("    -G num  	Number of frames between references (number of B frames) [%d]\n", bframes);
@@ -3202,14 +3220,17 @@ int main(int argc, char **argv) {
 
 	printf("\nMRP-Video Encoder\n\n");
 	// Print file characteristics to screen
-	printf("%s -> %s (%dx%dx%d)\n", infile, outfile, width, height, frames);
+	printf("%s (%dx%dx%dx%d) -> %s\n", infile, width, height, frames, depth, outfile);
 	// Print coding parameters to screen
 	printf("M = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
 	// Print prediction parameters to screen
-	if (bframes == 0) {
+	if (frames == 1) {
+		printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
+	}
+	else if (bframes == 0) {
 		printf("Prediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\n", prd_order[0], prd_order[1], prd_order[2]);
 	}
-	else{
+	else {
 		printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
 	}
 
@@ -3243,22 +3264,22 @@ int main(int argc, char **argv) {
 			// Creates new ENCODER structure
 			if (f == 0) {
 				// Read input file
-				video[1] = read_yuv(infile, height, width, f);
+				video[1] = read_yuv(infile, height, width, f, depth);
 
-				enc = init_encoder(video[1], NULL, NULL, NULL, NULL, num_class, num_group, prd_order[0], 0, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
+				enc = init_encoder(video[1], NULL, NULL, NULL, NULL, num_class, num_group, prd_order[0], 0, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta, depth);
 			}
 			else {
 				// Read input file
 				if (diff == 0) {
 					video[0] = video[1];
-					video[1] = read_yuv(infile, height, width, f);
+					video[1] = read_yuv(infile, height, width, f, depth);
 				}
 				else {
 					video[0] = video[1];
-					video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+					video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth), read_yuv(infile, height, width, f, depth), &extra_info, &num_pels, depth);
 				}
 
-				enc = init_encoder(video[1], video[0], NULL, error, NULL, num_class, num_group, prd_order[1], prd_order[2], 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
+				enc = init_encoder(video[1], video[0], NULL, error, NULL, num_class, num_group, prd_order[1], prd_order[2], 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta, depth);
 
 				free(error);
 			}
@@ -3499,15 +3520,15 @@ int main(int argc, char **argv) {
 			// Creates new ENCODER structure
 			if (f == 0) {
 				// Read input file
-				video[1] = read_yuv(infile, height, width, f);
+				video[1] = read_yuv(infile, height, width, f, depth);
 
-				enc = init_encoder(video[1], NULL, NULL, NULL, NULL, num_class, num_group, prd_order[0], 0, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
+				enc = init_encoder(video[1], NULL, NULL, NULL, NULL, num_class, num_group, prd_order[0], 0, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta, depth);
 			}
 			else if ((f - first_frame) % bframes == 0) {
-				enc = init_encoder(video[1], video[0], NULL, back_ref_error, NULL, num_class, num_group, prd_order[1], prd_order[2], 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
+				enc = init_encoder(video[1], video[0], NULL, back_ref_error, NULL, num_class, num_group, prd_order[1], prd_order[2], 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta, depth);
 			}
 			else {
-				enc = init_encoder(video[1], video[0], video[2], back_ref_error, for_ref_error, num_class, num_group, prd_order[3], prd_order[4], prd_order[5], coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta);
+				enc = init_encoder(video[1], video[0], video[2], back_ref_error, for_ref_error, num_class, num_group, prd_order[3], prd_order[4], prd_order[5], coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta, depth);
 			}
 
 			full_prd_order = enc->prd_order + enc->back_prd_order + enc->for_prd_order;
@@ -3708,10 +3729,10 @@ int main(int argc, char **argv) {
 					safefree_yuv(&video[1]);
 
 					if (diff == 0) {
-						video[1] = read_yuv(infile, height, width, f);
+						video[1] = read_yuv(infile, height, width, f, depth);
 					}
 					else {
-						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+						video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth), read_yuv(infile, height, width, f, depth), &extra_info, &num_pels, depth);
 					}
 				}
 				else if (f == for_reference) {
@@ -3729,10 +3750,10 @@ int main(int argc, char **argv) {
 						safefree_yuv(&video[1]);
 
 						if (diff == 0) {
-							video[1] = read_yuv(infile, height, width, f);
+							video[1] = read_yuv(infile, height, width, f, depth);
 						}
 						else {
-							video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+							video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth), read_yuv(infile, height, width, f, depth), &extra_info, &num_pels, depth);
 						}
 					}
 				}
@@ -3742,10 +3763,10 @@ int main(int argc, char **argv) {
 					safefree_yuv(&video[1]);
 
 					if (diff == 0) {
-						video[1] = read_yuv(infile, height, width, f);
+						video[1] = read_yuv(infile, height, width, f, depth);
 					}
 					else {
-						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+						video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth), read_yuv(infile, height, width, f, depth), &extra_info, &num_pels, depth);
 					}
 				}
 				else if (f == for_reference - 1) {
@@ -3775,10 +3796,10 @@ int main(int argc, char **argv) {
 					safefree_yuv(&video[1]);
 
 					if (diff == 0) {
-						video[1] = read_yuv(infile, height, width, f);
+						video[1] = read_yuv(infile, height, width, f, depth);
 					}
 					else {
-						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+						video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth), read_yuv(infile, height, width, f, depth), &extra_info, &num_pels, depth);
 					}
 				}
 			}
@@ -3793,12 +3814,12 @@ int main(int argc, char **argv) {
 
 					safefree_yuv(&video[1]);
 					if (diff == 0) {
-						video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
-						video[1] = read_yuv(infile, height, width, f);
+						video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth);
+						video[1] = read_yuv(infile, height, width, f, depth);
 					}
 					else {
-						video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
-						video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+						video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth);
+						video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth), read_yuv(infile, height, width, f, depth), &extra_info, &num_pels, depth);
 					}
 
 					conta++;
@@ -3817,17 +3838,17 @@ int main(int argc, char **argv) {
 						safefree_yuv(&video[1]);
 						safefree_yuv(&video[0]);
 						if (diff == 0) {
-							video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
-							video[1] = read_yuv(infile, height, width, f);
+							video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth);
+							video[1] = read_yuv(infile, height, width, f, depth);
 						}
 						else {
 							if (f + bref[conta][1] == 0) {
-								video[0] = read_yuv(infile, height, width, f + bref[conta][1]);
+								video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth);
 							}
 							else {
-								video[0] = calc_diff(read_yuv(infile, height, width, f + bref[conta][1] - 1), read_yuv(infile, height, width, f + bref[conta][1]), &extra_info, &num_pels);
+								video[0] = calc_diff(read_yuv(infile, height, width, f + bref[conta][1] - 1, depth), read_yuv(infile, height, width, f + bref[conta][1], depth), &extra_info, &num_pels, depth);
 							}
-							video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+							video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth), read_yuv(infile, height, width, f, depth), &extra_info, &num_pels, depth);
 						}
 
 						if (conta < bframes + 1) back_ref_error = keep_error[bref[conta][3]];
@@ -3835,10 +3856,10 @@ int main(int argc, char **argv) {
 						if (bref[conta][2] != -1) {
 							if (video[2] != NULL) safefree_yuv(&video[2]);
 							if (diff == 0) {
-								video[2] = read_yuv(infile, height, width, f + bref[conta][2]);
+								video[2] = read_yuv(infile, height, width, f + bref[conta][2], depth);
 							}
 							else {
-								video[2] = calc_diff(read_yuv(infile, height, width, f + bref[conta][2] - 1), read_yuv(infile, height, width, f + bref[conta][2]), &extra_info, &num_pels);
+								video[2] = calc_diff(read_yuv(infile, height, width, f + bref[conta][2] - 1, depth), read_yuv(infile, height, width, f + bref[conta][2], depth), &extra_info, &num_pels, depth);
 							}
 
 							if (conta < bframes + 1) for_ref_error = keep_error[bref[conta][4]];
@@ -3861,12 +3882,12 @@ int main(int argc, char **argv) {
 								safefree_yuv(&video[0]);
 								safefree_yuv(&video[1]);
 								if (diff == 0) {
-									video[0] = read_yuv(infile, height, width, f + 1);
-									video[1] = read_yuv(infile, height, width, frames - 1);
+									video[0] = read_yuv(infile, height, width, f + 1, depth);
+									video[1] = read_yuv(infile, height, width, frames - 1, depth);
 								}
 								else {
-									video[0] = calc_diff(read_yuv(infile, height, width, f), read_yuv(infile, height, width, f + 1), &extra_info, &num_pels);
-									video[1] = calc_diff(read_yuv(infile, height, width, frames - 2), read_yuv(infile, height, width, frames - 1), &extra_info, &num_pels);
+									video[0] = calc_diff(read_yuv(infile, height, width, f, depth), read_yuv(infile, height, width, f + 1, depth), &extra_info, &num_pels, depth);
+									video[1] = calc_diff(read_yuv(infile, height, width, frames - 2, depth), read_yuv(infile, height, width, frames - 1, depth), &extra_info, &num_pels, depth);
 								}
 
 								first_frame = f + 1;
@@ -3879,12 +3900,12 @@ int main(int argc, char **argv) {
 									safefree_yuv(&video[0]);
 									safefree_yuv(&video[1]);
 									if (diff == 0) {
-										video[0] = read_yuv(infile, height, width, frames - 2);
-										video[1] = read_yuv(infile, height, width, frames - 1);
+										video[0] = read_yuv(infile, height, width, frames - 2, depth);
+										video[1] = read_yuv(infile, height, width, frames - 1, depth);
 									}
 									else {
-										video[0] = calc_diff(read_yuv(infile, height, width, frames - 3), read_yuv(infile, height, width, frames - 2), &extra_info, &num_pels);
-										video[1] = calc_diff(read_yuv(infile, height, width, frames - 2), read_yuv(infile, height, width, frames - 1), &extra_info, &num_pels);
+										video[0] = calc_diff(read_yuv(infile, height, width, frames - 3, depth), read_yuv(infile, height, width, frames - 2, depth), &extra_info, &num_pels, depth);
+										video[1] = calc_diff(read_yuv(infile, height, width, frames - 2, depth), read_yuv(infile, height, width, frames - 1, depth), &extra_info, &num_pels, depth);
 									}
 
 									first_frame = frames - 2;
@@ -3916,12 +3937,12 @@ int main(int argc, char **argv) {
 							safefree_yuv(&video[0]);
 							safefree_yuv(&video[1]);
 							if (diff == 0) {
-								video[0] = read_yuv(infile, height, width, f + bref[0][1]);
-								video[1] = read_yuv(infile, height, width, f);
+								video[0] = read_yuv(infile, height, width, f + bref[0][1], depth);
+								video[1] = read_yuv(infile, height, width, f, depth);
 							}
 							else {
-								video[0] = calc_diff(read_yuv(infile, height, width, f + bref[0][1] - 1), read_yuv(infile, height, width, f + bref[0][1]), &extra_info, &num_pels);
-								video[1] = calc_diff(read_yuv(infile, height, width, f - 1), read_yuv(infile, height, width, f), &extra_info, &num_pels);
+								video[0] = calc_diff(read_yuv(infile, height, width, f + bref[0][1] - 1, depth), read_yuv(infile, height, width, f + bref[0][1], depth), &extra_info, &num_pels, depth);
+								video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth), read_yuv(infile, height, width, f, depth), &extra_info, &num_pels, depth);
 							}
 
 							safefree_yuv(&video[2]);

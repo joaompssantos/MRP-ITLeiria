@@ -1,6 +1,7 @@
 #define HAVE_CLOCK
 #define HAVE_64BIT_INTEGER
 #define FRAMES 1
+#define DEPTH 8
 #define QUADTREE_DEPTH	4
 #define BASE_BSIZE      8
 #define MAX_BSIZE       32
@@ -29,7 +30,7 @@
 #define BANNER          "\nMRP Video Inter\nencmrp/decmrp version %.1f (September 2014)"
 #define VERSION         3
 #define uint            unsigned int
-#define img_t           unsigned char
+#define img_t           unsigned short
 #define cost_t          double
 #ifdef HAVE_64BIT_INTEGER
 #  define RANGE_SIZE 64
@@ -88,8 +89,9 @@ typedef struct {
 typedef struct {
     int height; // Image height
     int width; // Image width
-    int delta;
-    int maxval; // Image maximum value (255)
+    int delta; // Distance between the reference frame and the current one
+    int depth; // Bit depth of the input image/sequence
+    int maxval; // Image maximum value
     int num_class; // Number of classes to use (number of different predictors)
     int num_group; // Number of pixels that are taken into account to form the context for entropy coding of the residue (= 16)
     int prd_order; // Order of the predictors (number of pixels to use)
@@ -141,6 +143,7 @@ typedef struct {
     int maxval;
     int frames;
     int delta;
+    int depth; // Bit depth of the input image/sequence
     int num_comp;
     int num_class;
     int num_group;
@@ -177,8 +180,8 @@ void **alloc_2d_array(int, int, int);
 void ***alloc_3d_array(int, int, int, int);
 IMAGE *alloc_image(int, int, int);
 IMAGE *copy_yuv(IMAGE*);
-void write_yuv(IMAGE*, char*);
-IMAGE *read_yuv(char *, int, int, int);
+void write_yuv(IMAGE*, char*, int);
+IMAGE *read_yuv(char *, int, int, int, int);
 int *gen_hufflen(uint *, int, int);
 void gen_huffcode(VLC *);
 VLC *make_vlc(uint *, int, int);
