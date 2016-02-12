@@ -529,8 +529,11 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	}
 
 	// Table used for the conversion of the error
-	enc->econv = (int **)alloc_2d_array(enc->maxval+1, (enc->maxval<<1) + 1, sizeof(int));
-
+	//enc->econv = (int **)alloc_2d_array(enc->maxval + 1, (enc->maxval << 1) + 1, sizeof(int));
+	enc->econv = (int **) malloc((enc->maxval + 1) * sizeof(int *));
+	for (i = 0; i < enc->maxval + 1; i++){
+		enc->econv[i] = (int *) malloc(((enc->maxval << 1) + 1) * sizeof(int));
+	}
 	// Structure used to convert the prediction to a pointer which indicates the position in the probability vector structure of the prediction error
 	enc->bconv = (img_t *)alloc_mem((enc->maxprd + 1) * sizeof(img_t));
 	// Structure used to fine tune the probability value, given the probability model accuracy
@@ -871,7 +874,7 @@ void set_cost_model(ENCODER *enc, int f_mmse) {
 	for (i = 0; i <= enc->maxval; i++) {
 		for (j = 0; j <= (enc->maxval << 1); j++) {
 			k = (i << 1) - j;
-			enc->econv[i][j] = (k > 0)? (k - 1) : (-k);
+			enc->econv[i][j] = (k > 0) ? (k - 1) : (-k);
 		}
 	}
 
@@ -1037,6 +1040,7 @@ void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx) {
 			else if (prd > enc->maxprd) prd = enc->maxprd;
 
 			prd >>= (enc->coef_precision - 1);
+
 			*err_p++ = enc->econv[org][prd];
 		}
 	}

@@ -270,17 +270,17 @@ void write_yuv(IMAGE *img, char *filename, int depth) {
 		}
 	}
 
-//	for (i = 0; i < img->height / 2; i++) {
-//		for (j = 0; j < img->width / 2; j++) {
-//			putc((int) (pow(2, depth) / 2), fp);
-//		}
-//	}
-//
-//	for (i = 0; i < img->height / 2; i++) {
-//		for (j = 0; j < img->width / 2; j++) {
-//			putc((int) (pow(2, depth) / 2), fp);
-//		}
-//	}
+	for (i = 0; i < img->height / 2; i++) {
+		for (j = 0; j < img->width / 2; j++) {
+			putc((int) (pow(2, depth) / 2), fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++) {
+		for (j = 0; j < img->width / 2; j++) {
+			putc((int) (pow(2, depth) / 2), fp);
+		}
+	}
 
 	fclose(fp);
 
