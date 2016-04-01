@@ -122,6 +122,17 @@ int bref9[10][5] = {{10, -10, -1, 0, -1},
 				   {1, -1, 1, 8, 10}
 };
 
+const mask[9] = {0x00FF,
+				 0x01FF,
+				 0x03FF,
+				 0x07FF,
+				 0x0FFF,
+				 0x1FFF,
+				 0x3FFF,
+				 0x7FFF,
+				 0xFFFF
+};
+
 double sigma_h[] = {0.85, 1.15, 1.50, 1.90, 2.55, 3.30, 4.25, 5.60, 7.15, 9.20,12.05,15.35,19.95,25.85,32.95,44.05};
 double sigma_a[] = {0.15, 0.26, 0.38, 0.57, 0.83, 1.18, 1.65, 2.31, 3.22, 4.47, 6.19, 8.55,11.80,16.27,22.42,30.89};
 double qtree_prob[] = {0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95};
@@ -251,9 +262,25 @@ IMAGE *copy_yuv(IMAGE *img) {
 	return(new_img);
 }
 
+// Function to reverse the endianness of a unsigned short
+unsigned short reverse_endianness (unsigned short s, int endianness) {
+    unsigned char c1, c2;
+
+    if (endianness == 1) {
+        return s;
+    }
+    else {
+        c1 = s & 255;
+        c2 = (s >> 8) & 255;
+
+        return (c1 << 8) + c2;
+    }
+}
+
 // Write YUV image to file
-void write_yuv(IMAGE *img, char *filename, int depth) {
+void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
 	int i, j;
+	unsigned short byte;
 	FILE *fp;
 
 	fp = fileopen(filename, "ab");
@@ -264,8 +291,10 @@ void write_yuv(IMAGE *img, char *filename, int depth) {
 				putc(img->val[i][j], fp);
 			}
 			else if (depth > 8) {
-				putc(img->val[i][j] >> 8, fp);
-				putc(img->val[i][j] & 0x00FF, fp);
+				byte = reverse_endianness(img->val[i][j], endianness);
+
+				putc((byte >> 8) & 0x00FF, fp);
+				putc(byte & 0x00FF, fp);
 			}
 		}
 	}
@@ -273,12 +302,20 @@ void write_yuv(IMAGE *img, char *filename, int depth) {
 	for (i = 0; i < img->height / 2; i++) {
 		for (j = 0; j < img->width / 2; j++) {
 			putc((int) (pow(2, depth) / 2), fp);
+
+			if (depth > 8) {
+				putc((int) (pow(2, depth) / 2), fp);
+			}
 		}
 	}
 
 	for (i = 0; i < img->height / 2; i++) {
 		for (j = 0; j < img->width / 2; j++) {
 			putc((int) (pow(2, depth) / 2), fp);
+
+			if (depth > 8) {
+				putc((int) (pow(2, depth) / 2), fp);
+			}
 		}
 	}
 
@@ -300,8 +337,8 @@ void write_yuv(IMAGE *img, char *filename, int depth) {
  |
  |  Returns:  IMAGE* --> returns a video type structure
  *-------------------------------------------------------------------*/
-IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth) {
-	int i, j;
+IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int endianness) {
+	int i, j, shift_first, shift_second, first, second;
 	IMAGE *img;
 	FILE *fp;
 
@@ -314,6 +351,15 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth) {
 		exit(1);
 	}
 
+	if( endianness == LITTLE_ENDIANNESS ) {
+		shift_first = 0;
+		shift_second = 8;
+	}
+	else if (endianness == BIG_ENDIANNESS){
+		shift_first = 8;
+		shift_second = 0;
+	}
+
 	// Image allocation
 	img = alloc_image(width, height, (int) (pow(2, depth) - 1));
 
@@ -321,11 +367,15 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth) {
 
 	for (i = 0; i < img->height; i++) {
 		for (j = 0; j < img->width; j++) {
-			img->val[i][j] = (img_t)fgetc(fp);
+			first = (img_t)fgetc(fp);
 
 			if (depth > 8) {
-				img->val[i][j] = img->val[i][j] * 256 + (img_t)fgetc(fp);
+				second = (img_t)fgetc(fp);
+
+				img->val[i][j] = (first << shift_first) + (second << shift_second);
+				img->val[i][j] = img->val[i][j] & mask[depth - 8];
 			}
+//			printf("Testes: %d\n", img->val[i][j]);getchar();
 		}
 	}
 

@@ -48,6 +48,10 @@
 #define RANGE_TOP  ((range_t)1 << (RANGE_SIZE - 8))
 #define RANGE_BOT  ((range_t)1 << (RANGE_SIZE - 16))
 
+// Endianness
+#define LITTLE_ENDIANNESS 0
+#define BIG_ENDIANNESS 1
+
 // Image
 typedef struct {
     int height;
@@ -180,8 +184,9 @@ void **alloc_2d_array(int, int, int);
 void ***alloc_3d_array(int, int, int, int);
 IMAGE *alloc_image(int, int, int);
 IMAGE *copy_yuv(IMAGE*);
-void write_yuv(IMAGE*, char*, int);
-IMAGE *read_yuv(char *, int, int, int, int);
+unsigned short reverse_endianness (unsigned short, int);
+void write_yuv(IMAGE*, char*, int, int);
+IMAGE *read_yuv(char *, int, int, int, int, int);
 int *gen_hufflen(uint *, int, int);
 void gen_huffcode(VLC *);
 VLC *make_vlc(uint *, int, int);

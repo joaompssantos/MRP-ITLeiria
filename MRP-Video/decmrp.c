@@ -1062,7 +1062,7 @@ char *decode_extra_info(FILE *fp, int *num_pels) {
 
 int main(int argc, char **argv) {
 	int i, f, **error = NULL;
-	int version, width, height, maxval, frames, depth, bframes, num_comp, num_group;
+	int version, width, height, maxval, frames, depth, bframes, num_comp, num_group, endianness = LITTLE_ENDIANNESS;
 	int num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, diff, hevc;
 	int prd_order[6] = {0, 0, 0, 0, 0, 0};
 
@@ -1080,17 +1080,33 @@ int main(int argc, char **argv) {
 	char *extra_info = NULL;
 
 	for (i = 1; i < argc; i++) {
-		if (infile == NULL) {
-			infile = argv[i];
+		if (argv[i][0] == '-') {
+			switch(argv[i][1]) {
+			case 'E':
+				endianness = atoi(argv[++i]);
+				if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
+					endianness = LITTLE_ENDIANNESS;
+				}
+				break;
+			default:
+				fprintf(stderr, "Unknown option: %s!\n", argv[i]);
+				exit (1);
+			}
 		}
 		else {
-			outfile = argv[i];
+			if (infile == NULL) {
+				infile = argv[i];
+			}
+			else {
+				outfile = argv[i];
+			}
 		}
 	}
 
 	if (infile == NULL || outfile == NULL) {
 		printf(BANNER"\n", 0.1 * VERSION);
-		printf("usage: decmrp infile outfile\n");
+		printf("usage: decmrp [options] infile outfile\n");
+		printf("-E num		Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
 		printf("infile:     Input file\n");
 		printf("outfile:    Output file\n");
 		exit(0);
@@ -1179,10 +1195,10 @@ int main(int argc, char **argv) {
 					free(aux_image);
 				}
 
-				write_yuv(img_diff, outfile, dec->depth);
+				write_yuv(img_diff, outfile, dec->depth, endianness);
 			}
 			else {
-				write_yuv(video[1], outfile, dec->depth);
+				write_yuv(video[1], outfile, dec->depth, endianness);
 			}
 
 			if (diff != 0 && f == 0) img_diff = video[1];
@@ -1460,17 +1476,17 @@ int main(int argc, char **argv) {
 
 		if (diff == 0) {
 			for (f = 0; f < frames; f++) {
-				write_yuv(seq[f], outfile, dec->depth);
+				write_yuv(seq[f], outfile, dec->depth, endianness);
 				free(seq[f]->val);
 				free(seq[f]);
 			}
 		}
 		else {
-			write_yuv(seq[0], outfile, dec->depth);
+			write_yuv(seq[0], outfile, dec->depth, endianness);
 			img_diff = seq[0];
 			for (f = 1; f < frames; f++) {
 				img_diff = sum_diff(img_diff, seq[f], f, dec->depth);
-				write_yuv(img_diff, outfile, dec->depth);
+				write_yuv(img_diff, outfile, dec->depth, endianness);
 				free(seq[f - 1]->val);
 				free(seq[f - 1]);
 			}
