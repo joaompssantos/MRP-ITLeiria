@@ -122,15 +122,15 @@ int bref9[10][5] = {{10, -10, -1, 0, -1},
 				   {1, -1, 1, 8, 10}
 };
 
-const mask[9] = {0x00FF,
-				 0x01FF,
-				 0x03FF,
-				 0x07FF,
-				 0x0FFF,
-				 0x1FFF,
-				 0x3FFF,
-				 0x7FFF,
-				 0xFFFF
+const int mask[9] = {0x00FF,
+				 	 0x01FF,
+					 0x03FF,
+					 0x07FF,
+					 0x0FFF,
+					 0x1FFF,
+					 0x3FFF,
+					 0x7FFF,
+					 0xFFFF
 };
 
 double sigma_h[] = {0.85, 1.15, 1.50, 1.90, 2.55, 3.30, 4.25, 5.60, 7.15, 9.20,12.05,15.35,19.95,25.85,32.95,44.05};
@@ -355,7 +355,7 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 		shift_first = 0;
 		shift_second = 8;
 	}
-	else if (endianness == BIG_ENDIANNESS){
+	else {
 		shift_first = 8;
 		shift_second = 0;
 	}
@@ -375,7 +375,9 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 				img->val[i][j] = (first << shift_first) + (second << shift_second);
 				img->val[i][j] = img->val[i][j] & mask[depth - 8];
 			}
-//			printf("Testes: %d\n", img->val[i][j]);getchar();
+			else {
+				img->val[i][j] = first;
+			}
 		}
 	}
 
