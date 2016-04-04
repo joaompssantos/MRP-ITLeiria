@@ -428,6 +428,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	enc->maxprd = enc->maxval << enc->coef_precision; // Maximum prediction value allowed
 	enc->delta = delta; //Parameter representing the distance between frames
 	enc->depth = depth;
+	enc->etype = 0;
 
 	full_prd_order = enc->prd_order + enc->back_prd_order + enc->for_prd_order;
 
@@ -529,7 +530,9 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	}
 
 	// Table used for the conversion of the error
-	enc->econv = (int **)alloc_2d_array(enc->maxval + 1, (enc->maxval << 1) + 1, sizeof(int));
+	if (enc->depth <= 14) {
+		enc->econv = (int **)alloc_2d_array(enc->maxval + 1, (enc->maxval << 1) + 1, sizeof(int));
+	}
 	// Structure used to convert the prediction to a pointer which indicates the position in the probability vector structure of the prediction error
 	enc->bconv = (img_t *)alloc_mem((enc->maxprd + 1) * sizeof(img_t));
 	// Structure used to fine tune the probability value, given the probability model accuracy
@@ -663,7 +666,9 @@ void free_encoder(ENCODER *enc) {
 	free(enc->class);
 	free(enc->group);
 	free(enc->uquant);
-	free(enc->econv);
+	if (enc->depth <= 14) {
+		free(enc->econv);
+	}
 	free(enc->bconv);
 	free(enc->fconv);
 	free(enc->pmlist);
@@ -851,6 +856,19 @@ void init_class(ENCODER *enc) {
 	free(var);
 }
 
+// Function to fill econv table
+int error_conversion(int org, int prd, int maxval, int mode) {
+	if (mode == 0) {
+		int aux = (org << 1) - prd;
+
+		return (aux > 0) ? (aux - 1) : (-aux);
+	}
+	else {
+		int aux = (prd + 1) >> 1;
+		return e2E(org - aux, aux, prd&1, maxval);
+	}
+}
+
 /*------------------------------ set_cost_model -------------------------*
  |  Function set_cost_model
  |
@@ -867,10 +885,11 @@ void set_cost_model(ENCODER *enc, int f_mmse) {
 	double a, b, c, var;
 	PMODEL *pm;
 
-	for (i = 0; i <= enc->maxval; i++) {
-		for (j = 0; j <= (enc->maxval << 1); j++) {
-			k = (i << 1) - j;
-			enc->econv[i][j] = (k > 0) ? (k - 1) : (-k);
+	if (enc->depth <= 14) {
+		for (i = 0; i <= enc->maxval; i++) {
+			for (j = 0; j <= (enc->maxval << 1); j++) {
+				enc->econv[i][j] = error_conversion(i, j, enc->maxval, enc->etype);
+			}
 		}
 	}
 
@@ -922,10 +941,13 @@ void set_cost_rate(ENCODER *enc) {
 	PMODEL *pm;
 
 	if (enc->pm_accuracy < 0) {
-		for (i = 0; i <= enc->maxval; i++) {
-			for (j = 0; j <= (enc->maxval << 1); j++) {
-				k = (j + 1) >> 1;
-				enc->econv[i][j] = e2E(i - k, k, j&1, enc->maxval);
+		enc->etype = 1;
+
+		if (enc->depth <= 14) {
+			for (i = 0; i <= enc->maxval; i++) {
+				for (j = 0; j <= (enc->maxval << 1); j++) {
+					enc->econv[i][j] = error_conversion(i, j, enc->maxval, enc->etype);
+				}
 			}
 		}
 	}
@@ -1036,8 +1058,13 @@ void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx) {
 			else if (prd > enc->maxprd) prd = enc->maxprd;
 
 			prd >>= (enc->coef_precision - 1);
-//printf("teste: %d %d %d\n", enc->org[1][0][0], org, prd);
-			*err_p++ = enc->econv[org][prd];
+
+			if (enc->depth <= 14) {
+				*err_p++ = enc->econv[org][prd];
+			}
+			else {
+				*err_p++ = error_conversion(org, prd, enc->maxval, enc->etype);
+			}
 		}
 	}
 }
@@ -1552,7 +1579,13 @@ void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int 
 					else if (prd > enc->maxprd) prd = enc->maxprd;
 
 					prd >>= (enc->coef_precision - 1);
-					*errbuf_p++ = enc->econv[org][prd];
+
+					if (enc->depth <= 14) {
+						*errbuf_p++ = enc->econv[org][prd];
+					}
+					else {
+						*errbuf_p++ = error_conversion(org, prd, enc->maxval, enc->etype);
+					}
 				}
 			}
 		}
@@ -1891,7 +1924,10 @@ void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
 			cbuf_p = cbuf;
 
 			if (enc->pm_accuracy < 0) {
-				econv_p = enc->econv[*org_p];
+				if (enc->depth <= 14) {
+					econv_p = enc->econv[*org_p];
+				}
+
 				pmcost_p = pm_p->cost;
 
 				for (i = 0; i < SEARCH_RANGE; i++) {
@@ -1901,7 +1937,13 @@ void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
 						if (prd < 0) prd = 0;
 						else if (prd > maxprd) prd = maxprd;
 
-						(*cbuf_p++) += pmcost_p[econv_p[prd >> shift]];
+						if (enc->depth <= 14) {
+							(*cbuf_p++) += pmcost_p[econv_p[prd >> shift]];
+						}
+						else {
+							(*cbuf_p++) += pmcost_p[error_conversion(*org_p, prd >> shift, enc->maxval, enc->etype)];
+						}
+
 						prd_f -= df2;
 					}
 

@@ -122,6 +122,7 @@ typedef struct {
     char **class; // Keeps the class of each pixel
     char **group; // keeps the group, i.e. the quantized context used for residue entropy coding.
     char **uquant; // Table used for the quantification of the context variable u.
+    int etype; // Error type for the error conversion table
     int **econv; // Table used for the conversion of the error.
     img_t *bconv; // Structure used to convert the prediction to a pointer which indicates the position in the probability vector structure of the prediction error.
     img_t *fconv; // Structure used to fine tune the probability value, given the probability model accuracy.
