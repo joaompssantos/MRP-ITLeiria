@@ -6,17 +6,17 @@
 
 extern POINT dyx[];
 extern POINT idyx[];
-extern double sigma_h[], sigma_a[];        
+extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
 
-uint getbits(FILE *fp, int n){
+uint getbits(FILE *fp, int n) {
 	static int bitpos = 0;
 	static uint bitbuf = 0;
 	int x = 0;
 
 	if (n <= 0) return (0);
 
-	while (n > bitpos){
+	while (n > bitpos) {
 		n -= bitpos;
 		x = (x << bitpos) | bitbuf;
 		bitbuf = getc(fp) & 0xff;
@@ -30,11 +30,11 @@ uint getbits(FILE *fp, int n){
 	return (x);
 }
 
-int read_class(FILE *fp){
+int read_class(FILE *fp) {
 	return(getbits(fp, 8));
 }
 
-DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height, int maxval, int num_comp, int num_group, int prd_order, int inter_prd_order, int num_pmodel, int coef_precision, int pm_accuracy, int f_huffman, int quadtree_depth, int delta){
+DECODER *init_decoder(FILE *fp, int **back_ref_error, int **for_ref_error, int version, int width, int height, int maxval, int num_comp, int num_group, int prd_order, int back_prd_order, int for_prd_order, int num_pmodel, int coef_precision, int pm_accuracy, int f_huffman, int quadtree_depth, int delta) {
 	DECODER *dec;
 	int i;
 
@@ -47,7 +47,8 @@ DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height,
 	dec->num_comp = num_comp;
 	dec->num_group = num_group;
 	dec->prd_order = prd_order;
-	dec->inter_prd_order = inter_prd_order;
+	dec->back_prd_order = back_prd_order;
+	dec->for_prd_order = for_prd_order;
 	dec->num_pmodel = num_pmodel;
 	dec->coef_precision = coef_precision;
 	dec->pm_accuracy = pm_accuracy;
@@ -58,34 +59,44 @@ DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height,
 
 	dec->num_class = read_class(fp);
 
-	dec->predictor = (int **)alloc_2d_array(dec->num_class, dec->prd_order + dec->inter_prd_order, sizeof(int));
+	dec->predictor = (int **)alloc_2d_array(dec->num_class, dec->prd_order + dec->back_prd_order + dec->for_prd_order, sizeof(int));
 
-	dec->err = (int ***)alloc_3d_array(dec->height, dec->width, 2, sizeof(int));
+	dec->err = (int ***)alloc_3d_array(dec->height, dec->width, 3, sizeof(int));
 
-	if(error != NULL){
+	if (back_ref_error != NULL) {
 		int y, x;
 
-		for(y = 0; y < dec->height; y++){
-			for(x = 0; x < dec->width; x++){
-				dec->err[0][y][x] = error[y][x];
+		for (y = 0; y < dec->height; y++) {
+			for (x = 0; x < dec->width; x++) {
+				dec->err[0][y][x] = back_ref_error[y][x];
 			}
 		}
 	}
 
-	dec->ctx_weight = init_ctx_weight(dec->prd_order, dec->inter_prd_order, dec->delta);
+	if (for_ref_error != NULL) {
+		int y, x;
+
+		for (y = 0; y < dec->height; y++) {
+			for (x = 0; x < dec->width; x++) {
+				dec->err[2][y][x] = for_ref_error[y][x];
+			}
+		}
+	}
+
+	dec->ctx_weight = init_ctx_weight(dec->prd_order, dec->back_prd_order, dec->for_prd_order, dec->delta);
 
 	// Quadtree map
-	if (dec->quadtree_depth > 0){
+	if (dec->quadtree_depth > 0) {
 		int x, y, xx, yy;
 
 		yy = (dec->height + MAX_BSIZE - 1) / MAX_BSIZE;
 		xx = (dec->width + MAX_BSIZE - 1) / MAX_BSIZE;
 
-		for (i = dec->quadtree_depth - 1; i >= 0; i--){
+		for (i = dec->quadtree_depth - 1; i >= 0; i--) {
 			dec->qtmap[i] = (char **)alloc_2d_array(yy, xx, sizeof(char));
 
-			for (y = 0; y < yy; y++){
-				for (x = 0; x < xx; x++){
+			for (y = 0; y < yy; y++) {
+				for (x = 0; x < xx; x++) {
 					dec->qtmap[i][y][x] = 0;
 				}
 			}
@@ -100,10 +111,10 @@ DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height,
 
 	dec->uquant = (char **)alloc_2d_array(dec->num_class, MAX_UPARA + 1, sizeof(char));
 
-	if (dec->num_pmodel > 1){
+	if (dec->num_pmodel > 1) {
 		dec->pm_idx = (int *)alloc_mem(dec->num_group * sizeof(int));
 	}
-	else{
+	else {
 		dec->pm_idx = NULL;
 	}
 
@@ -111,10 +122,10 @@ DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height,
 	dec->spm.cumfreq = &(dec->spm.freq[MAX_SYMBOL]);
 
 	//Huffman coding
-	if (dec->f_huffman == 1){
+	if (dec->f_huffman == 1) {
 		dec->sigma = sigma_h;
 	}
-	else{
+	else {
 		dec->sigma = sigma_a;
 	}
 
@@ -123,12 +134,12 @@ DECODER *init_decoder(FILE *fp, int **error, int version, int width, int height,
 	return (dec);
 }
 
-int **get_dec_err(DECODER *dec, int pos){
+int **get_dec_err(DECODER *dec, int pos) {
 	int y, x;
 	int **error = (int **)alloc_2d_array(dec->height + 1, dec->width, sizeof(int));
 
-	for (y = 0; y < dec->height; y++){
-		for (x = 0; x < dec->width; x++){
+	for (y = 0; y < dec->height; y++) {
+		for (x = 0; x < dec->width; x++) {
 			error[y][x] = dec->err[pos][y][x];
 		}
 	}
@@ -137,15 +148,15 @@ int **get_dec_err(DECODER *dec, int pos){
 }
 
 
-void free_decoder(DECODER *dec){
+void free_decoder(DECODER *dec) {
 	int i, j, gr, num_subpm;
 
 	free(dec->predictor);
 	free(dec->err);
 	free(dec->ctx_weight);
 
-	if (dec->quadtree_depth > 0){
-		for (i = dec->quadtree_depth - 1; i >= 0; i--){
+	if (dec->quadtree_depth > 0) {
+		for (i = dec->quadtree_depth - 1; i >= 0; i--) {
 			free(dec->qtmap[i]);
 		}
 	}
@@ -153,20 +164,20 @@ void free_decoder(DECODER *dec){
 	free(dec->class);
 	free(dec->uquant);
 
-	if (dec->num_pmodel > 1){
+	if (dec->num_pmodel > 1) {
 		free(dec->pm_idx);
 	}
 
 	free(dec->spm.freq);
 
-	if(dec->pm_accuracy < 0){
+	if (dec->pm_accuracy < 0) {
 		num_subpm = 1;
 	}
-	else{
+	else {
 		num_subpm = 1 << dec->pm_accuracy;
 	}
-	for (gr = 0; gr < dec->num_group; gr++){
-		for (j = 0; j < num_subpm; j++){
+	for (gr = 0; gr < dec->num_group; gr++) {
+		for (j = 0; j < num_subpm; j++) {
 			PMODEL *aux = &dec->pmodels[gr][0][j];
 			free(aux->freq);
 		}
@@ -176,15 +187,17 @@ void free_decoder(DECODER *dec){
 
 	free(dec->mtfbuf);
 
-	if (dec->f_huffman == 0){
+	if (dec->f_huffman == 0) {
 		free(dec->rc);
 	}
 
 	free(dec);
 }
 
-void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *num_comp, int *num_group, int *prd_order, int *intra_prd_order, int *inter_prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta, int *diff){
-	if (getbits(fp, 16) != MAGIC_NUMBER){
+void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *bframes, int *num_comp, int *num_group, int *prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta, int *diff, int *hevc) {
+	int i = 0;
+
+	if (getbits(fp, 16) != MAGIC_NUMBER) {
 		fprintf(stderr, "Not a compressed file!\n");
 		exit(1);
 	}
@@ -194,11 +207,13 @@ void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, i
 	*height = getbits(fp, 16);
 	*maxval = getbits(fp, 16);
 	*frames = getbits(fp, 16);
+	*bframes = getbits(fp, 8);
+	*hevc = getbits(fp, 1);
 	*num_comp = getbits(fp, 4);
 	*num_group = getbits(fp, 6);
-	*prd_order = getbits(fp, 7);
-	*intra_prd_order = getbits(fp, 7);
-	*inter_prd_order = getbits(fp, 8);
+	for (i = 0; i < 6; i++) {
+		prd_order[i] = getbits(fp, 8);
+	}
 	*diff = getbits(fp, 1);
 	*delta = getbits(fp, 8);
 	*num_pmodel = getbits(fp, 6) + 1;
@@ -206,22 +221,23 @@ void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, i
 	*pm_accuracy = getbits(fp, 3) - 1;
 	*f_huffman = getbits(fp, 1);
 	*quadtree_depth = (getbits(fp, 1))? QUADTREE_DEPTH : -1;
+	getbits(fp, 5);
 }
 
-int decode_vlc(FILE *fp, VLC *vlc){
+int decode_vlc(FILE *fp, VLC *vlc) {
 	int i, k, min, off;
 	uint code;
 
 	code = min = off = k = 0;
 
-	for (i = 0; i < vlc->max_len; i++){
+	for (i = 0; i < vlc->max_len; i++) {
 		code = (code << 1) | getbits(fp, 1);
 		k = vlc->off[i];
 
-		if (k < 0){
+		if (k < 0) {
 			min <<= 1;
 		}
-		else{
+		else {
 			if (code <= vlc->code[vlc->index[k]]) break;
 
 			min = (vlc->code[vlc->index[k]] + 1) << 1;
@@ -234,10 +250,10 @@ int decode_vlc(FILE *fp, VLC *vlc){
 	return (vlc->index[i]);
 }
 
-int decode_golomb(FILE *fp, int m){
+int decode_golomb(FILE *fp, int m) {
 	int v = 0;
 
-	while (getbits(fp, 1) == 0){
+	while (getbits(fp, 1) == 0) {
 		v++;
 	}
 
@@ -246,22 +262,22 @@ int decode_golomb(FILE *fp, int m){
 	return (v);
 }
 
-void decode_predictor(FILE *fp, DECODER *dec, int f){
+void decode_predictor(FILE *fp, DECODER *dec) {
 	int k, m, cl, coef, sgn;
 
-	int prd_order = dec->prd_order + dec->inter_prd_order;
+	int prd_order = dec->prd_order + dec->back_prd_order + dec->for_prd_order;
 
-	if (dec->f_huffman == 1){
-		for (k = 0; k < prd_order; k++){
+	if (dec->f_huffman == 1) {
+		for (k = 0; k < prd_order; k++) {
 			m = getbits(fp, 4);
 
-			for (cl = 0; cl < dec->num_class; cl++){
+			for (cl = 0; cl < dec->num_class; cl++) {
 				coef = decode_golomb(fp, m);
 
-				if (coef > 0){
+				if (coef > 0) {
 					sgn = getbits(fp, 1);
 
-					if (sgn){
+					if (sgn) {
 						coef = -coef;
 					}
 				}
@@ -270,29 +286,29 @@ void decode_predictor(FILE *fp, DECODER *dec, int f){
 			}
 		}
 	}
-	else{
+	else {
 		PMODEL *pm;
 
 		pm = &dec->spm;
 		pm->size = MAX_COEF + 18;
 		pm->cumfreq[MAX_COEF + 2] = 0;
 
-		for(k = MAX_COEF + 2; k < pm->size; k++){
+		for (k = MAX_COEF + 2; k < pm->size; k++) {
 			pm->freq[k] = 1;
 			pm->cumfreq[k + 1] = pm->cumfreq[k] + pm->freq[k];
 		}
 
-		for (k = 0; k < prd_order; k++){
+		for (k = 0; k < prd_order; k++) {
 			m = rc_decode(fp, dec->rc, pm, MAX_COEF + 2, MAX_COEF + 18) - (MAX_COEF + 2);
 			set_spmodel(pm, MAX_COEF + 1, m);
 
-			for (cl = 0; cl < dec->num_class; cl++){
+			for (cl = 0; cl < dec->num_class; cl++) {
 				coef = rc_decode(fp, dec->rc, pm, 0, MAX_COEF + 1);
 
-				if (coef > 0){
+				if (coef > 0) {
 					sgn = rc_decode(fp, dec->rc, pm, MAX_COEF+2, MAX_COEF+4) - (MAX_COEF + 2);
 
-					if (sgn){
+					if (sgn) {
 						coef = -coef;
 					}
 				}
@@ -305,20 +321,20 @@ void decode_predictor(FILE *fp, DECODER *dec, int f){
 	return;
 }
 
-void decode_threshold(FILE *fp, DECODER *dec){
+void decode_threshold(FILE *fp, DECODER *dec) {
 	int cl, gr, m, u, k;
 
-	if (dec->f_huffman == 1){
+	if (dec->f_huffman == 1) {
 		m = getbits(fp, 4);
 
-		for (cl = 0; cl < dec->num_class; cl++){
+		for (cl = 0; cl < dec->num_class; cl++) {
 			k = u = 0;
 
-			for (gr = 0; gr < dec->num_group; gr++){
-				if (k > MAX_UPARA || gr == dec->num_group - 1){
+			for (gr = 0; gr < dec->num_group; gr++) {
+				if (k > MAX_UPARA || gr == dec->num_group - 1) {
 					k = MAX_UPARA + 1;
 				}
-				else{
+				else {
 					if (getbits(fp, 1)) k += decode_golomb(fp, m) + 1;
 				}
 
@@ -326,22 +342,22 @@ void decode_threshold(FILE *fp, DECODER *dec){
 			}
 		}
 
-		if (dec->num_pmodel > 1){
+		if (dec->num_pmodel > 1) {
 			for (k = 1; (1 << k) < dec->num_pmodel; k++);
 
-			for (gr = 0; gr < dec->num_group; gr++){
+			for (gr = 0; gr < dec->num_group; gr++) {
 				dec->pm_idx[gr] = getbits(fp, k);
 			}
 		}
 	}
-	else{
+	else {
 		PMODEL *pm;
 
 		pm = &dec->spm;
 		pm->size = 16;
 		pm->cumfreq[0] = 0;
 
-		for (k = 0; k < pm->size; k++){
+		for (k = 0; k < pm->size; k++) {
 			pm->freq[k] = 1;
 			pm->cumfreq[k + 1] = pm->cumfreq[k] + pm->freq[k];
 		}
@@ -349,14 +365,14 @@ void decode_threshold(FILE *fp, DECODER *dec){
 		m = rc_decode(fp, dec->rc, pm, 0, pm->size);
 		set_spmodel(pm, MAX_UPARA + 2, m);
 
-		for (cl = 0; cl < dec->num_class; cl++){
+		for (cl = 0; cl < dec->num_class; cl++) {
 			k = u = 0;
 
-			for (gr = 0; gr < dec->num_group; gr++){
-				if (k > MAX_UPARA || gr == dec->num_group - 1){
+			for (gr = 0; gr < dec->num_group; gr++) {
+				if (k > MAX_UPARA || gr == dec->num_group - 1) {
 					k = MAX_UPARA + 1;
 				}
-				else{
+				else {
 					k += rc_decode(fp, dec->rc, pm, 0, pm->size - k);
 				}
 
@@ -364,16 +380,16 @@ void decode_threshold(FILE *fp, DECODER *dec){
 			}
 		}
 
-		if (dec->num_pmodel > 1){
+		if (dec->num_pmodel > 1) {
 			pm->size = dec->num_pmodel;
 			pm->freq[0] = 0;
 
-			for (k = 0; k < pm->size; k++){
+			for (k = 0; k < pm->size; k++) {
 				pm->freq[k] = 1;
 				pm->cumfreq[k + 1] = pm->cumfreq[k] + pm->freq[k];
 			}
 
-			for (gr = 0; gr < dec->num_group; gr++){
+			for (gr = 0; gr < dec->num_group; gr++) {
 				dec->pm_idx[gr] = rc_decode(fp, dec->rc, pm, 0, pm->size);
 			}
 		}
@@ -382,7 +398,7 @@ void decode_threshold(FILE *fp, DECODER *dec){
 	return;
 }
 
-void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int tlx, int blksize, int width, int level){
+void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int tlx, int blksize, int width, int level) {
 	int i, cl, y, x, bry, brx, ctx;
 	char **qtmap;
 	PMODEL *pm;
@@ -392,13 +408,13 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int 
 
 	if (tlx >= brx || tly >= bry) return;
 
-	if (level > 0){
+	if (level > 0) {
 		ctx = 0;
 		qtmap = dec->qtmap[level - 1];
 		y = (tly / MIN_BSIZE) >> level;
 		x = (tlx / MIN_BSIZE) >> level;
 
-		if (y > 0){
+		if (y > 0) {
 			if (qtmap[y - 1][x] == 1) ctx++;
 			if (brx < width && qtmap[y - 1][x + 1] == 1) ctx++;
 		}
@@ -407,15 +423,15 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int 
 
 		ctx = ((level - 1) * 4 + ctx) << 1;
 
-		if (dec->f_huffman == 1){
+		if (dec->f_huffman == 1) {
 			i = getbits(fp, 1);
 		}
-		else{
+		else {
 			pm = &dec->spm;
 			i = rc_decode(fp, dec->rc, pm, ctx, ctx + 2) - ctx;
 		}
 
-		if (i == 1){
+		if (i == 1) {
 			qtmap[y][x] = 1;
 			blksize >>= 1;
 			decode_qtindex(fp, dec, vlc, cpm, tly, tlx, blksize, width, level - 1);
@@ -427,21 +443,21 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int 
 		}
 	}
 
-	if (dec->f_huffman == 1){
+	if (dec->f_huffman == 1) {
 		i = decode_vlc(fp, vlc);
 	}
-	else{
+	else {
 		i = rc_decode(fp, dec->rc, cpm, 0, cpm->size);
 	}
 
 	mtf_classlabel(dec->class, dec->mtfbuf, tly, tlx,blksize, width, dec->num_class);
 
-	for (cl = 0; cl < dec->num_class; cl++){
+	for (cl = 0; cl < dec->num_class; cl++) {
 		if (dec->mtfbuf[cl] == i) break;
 	}
 
-	for (y = tly; y < bry; y++){
-		for (x = tlx; x < brx; x++){
+	for (y = tly; y < bry; y++) {
+		for (x = tlx; x < brx; x++) {
 			dec->class[y][x] = cl;
 		}
 	}
@@ -449,7 +465,7 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int 
 	return;
 }
 
-void decode_class(FILE *fp, DECODER *dec){
+void decode_class(FILE *fp, DECODER *dec) {
 	int i, j, x, y, blksize, level;
 	VLC *vlc;
 	PMODEL *pm, cpm[1];
@@ -557,25 +573,27 @@ void decode_class(FILE *fp, DECODER *dec){
 	if (dec->f_huffman == 1) {
 		free_vlc(vlc);
 	}
-	else{
+	else {
 		free(cpm->freq);
 	}
 
 	return;
 }
 
-int calc_udec(DECODER *dec, int y, int x){
+int calc_udec(DECODER *dec, int y, int x) {
 	int ry, rx, u, k;
 	u = 0;
 
 	int min_dx, max_dx, min_dy;
-	int imin_dx, imax_dx, imin_dy, imax_dy;
+	int bmin_dx, bmax_dx, bmin_dy, bmax_dy;
+	int fmin_dx, fmax_dx, fmin_dy, fmax_dy;
 
 	min_dx = max_dx = min_dy = 0;
-	imin_dx = imax_dx = imin_dy = imax_dy = 0;
+	bmin_dx = bmax_dx = bmin_dy = bmax_dy = 0;
+	fmin_dx = fmax_dx = fmin_dy = fmax_dy = 0;
 
 	//Values to check for special cases
-	for (k = 0; k < dec->prd_order; k++){
+	for (k = 0; k < dec->prd_order; k++) {
 		ry = dyx[k].y;
 		rx = dyx[k].x;
 
@@ -584,42 +602,57 @@ int calc_udec(DECODER *dec, int y, int x){
 		if (rx > max_dx) max_dx = rx;
 	}
 
-	for (k = 0; k < dec->inter_prd_order - 1; k++){
+	for (k = 0; k < dec->back_prd_order - 1; k++) {
 		ry = idyx[k].y;
 		rx = idyx[k].x;
 
-		if (ry < imin_dy) imin_dy = ry;
-		if (ry > imax_dy) imax_dy = ry;
-		if (rx < imin_dx) imin_dx = rx;
-		if (rx > imax_dx) imax_dx = rx;
+		if (ry < bmin_dy) bmin_dy = ry;
+		if (ry > bmax_dy) bmax_dy = ry;
+		if (rx < bmin_dx) bmin_dx = rx;
+		if (rx > bmax_dx) bmax_dx = rx;
+	}
+
+	for (k = 0; k < dec->for_prd_order - 1; k++) {
+		ry = idyx[k].y;
+		rx = idyx[k].x;
+
+		if (ry < fmin_dy) fmin_dy = ry;
+		if (ry > fmax_dy) fmax_dy = ry;
+		if (rx < fmin_dx) fmin_dx = rx;
+		if (rx > fmax_dx) fmax_dx = rx;
 	}
 
 	min_dy = -min_dy;
 	min_dx = -min_dx;
 	max_dx = dec->width - max_dx;
 
-	imin_dy = -imin_dy;
-	imin_dx = -imin_dx;
-	imax_dx = dec->width - imax_dx;
-	imax_dy = dec->height - imax_dy;
+	bmin_dy = -bmin_dy;
+	bmin_dx = -bmin_dx;
+	bmax_dx = dec->width - bmax_dx;
+	bmax_dy = dec->height - bmax_dy;
 
-	if (y >= min_dy && x >= min_dx && x <= max_dx){
-		for (k = 0; k < dec->prd_order; k++){
+	fmin_dy = -fmin_dy;
+	fmin_dx = -fmin_dx;
+	fmax_dx = dec->width - fmax_dx;
+	fmax_dy = dec->height - fmax_dy;
+
+	if (y >= min_dy && x >= min_dx && x < max_dx) {
+		for (k = 0; k < dec->prd_order; k++) {
 			ry = y + dyx[k].y;
 			rx = x + dyx[k].x;
 			u += dec->err[1][ry][rx] * dec->ctx_weight[k];
 		}
 	}
-	else if (y == 0){
-		if (x == 0){
-			for (k = 0; k < dec->prd_order; k++){
+	else if (y == 0) {
+		if (x == 0) {
+			for (k = 0; k < dec->prd_order; k++) {
 				u += ((dec->maxval + 1) >> 2) * dec->ctx_weight[k];
 			}
 		}
-		else{
+		else {
 			ry = 0;
 
-			for (k =0; k < dec->prd_order; k++){
+			for (k =0; k < dec->prd_order; k++) {
 				rx = x + dyx[k].x;
 
 				if (rx < 0) rx = 0;
@@ -629,9 +662,9 @@ int calc_udec(DECODER *dec, int y, int x){
 			}
 		}
 	}
-	else{
-		if (x == 0){
-			for (k = 0; k < dec->prd_order; k++){
+	else {
+		if (x == 0) {
+			for (k = 0; k < dec->prd_order; k++) {
 				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
@@ -644,8 +677,8 @@ int calc_udec(DECODER *dec, int y, int x){
 				u += dec->err[1][ry][rx] * dec->ctx_weight[k];
 			}
 		}
-		else{
-			for (k = 0; k < dec->prd_order; k++){
+		else {
+			for (k = 0; k < dec->prd_order; k++) {
 				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
@@ -661,27 +694,54 @@ int calc_udec(DECODER *dec, int y, int x){
 	}
 
 	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
-	if(dec->inter_prd_order > 0){
+	if (dec->back_prd_order > 0) {
 		u += dec->err[0][y][x] * dec->ctx_weight[dec->prd_order];
 
-		if (y >= imin_dy && x >= imin_dx && x <= imax_dx && y < imax_dy){
-			for (k = 0; k < dec->inter_prd_order - 1; k++){
+		if (y >= bmin_dy && x >= bmin_dx && x < bmax_dx && y < bmax_dy) {
+			for (k = 0; k < dec->back_prd_order - 1; k++) {
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
 				u += dec->err[0][ry][rx] * dec->ctx_weight[k + dec->prd_order + 1];
 			}
 		}
-		else{
-			for (k = 0; k < dec->inter_prd_order - 1; k++){
+		else {
+			for (k = 0; k < dec->back_prd_order - 1; k++) {
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
-				if(ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width){
+				if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
 					u += dec->err[0][y][x] * dec->ctx_weight[k + dec->prd_order + 1];
 				}
-				else{
+				else {
 					u += dec->err[0][ry][rx] * dec->ctx_weight[k + dec->prd_order + 1];
+				}
+			}
+		}
+	}
+
+	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
+	if (dec->for_prd_order > 0) {
+		u += dec->err[2][y][x] * dec->ctx_weight[dec->prd_order + dec->back_prd_order];
+
+		if (y >= fmin_dy && x >= fmin_dx && x < fmax_dx && y < fmax_dy) {
+			for (k = 0; k < dec->for_prd_order - 1; k++) {
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				u += dec->err[2][ry][rx] * dec->ctx_weight[k + dec->prd_order + dec->back_prd_order + 1];
+			}
+		}
+		else {
+			for (k = 0; k < dec->for_prd_order - 1; k++) {
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
+					u += dec->err[2][y][x] * dec->ctx_weight[k + dec->prd_order + dec->back_prd_order + 1];
+				}
+				else {
+					u += dec->err[2][ry][rx] * dec->ctx_weight[k + dec->prd_order + dec->back_prd_order + 1];
 				}
 			}
 		}
@@ -694,18 +754,20 @@ int calc_udec(DECODER *dec, int y, int x){
 	return (u);
 }
 
-int calc_prd(IMAGE *video[2], DECODER *dec, int cl, int y, int x){
+int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
 	int k, prd, rx, ry;
 
 	int dy, dx, min_dx, max_dx, min_dy;
-	int imin_dx, imax_dx, imin_dy, imax_dy;
+	int bmin_dx, bmax_dx, bmin_dy, bmax_dy;
+	int fmin_dx, fmax_dx, fmin_dy, fmax_dy;
 	int min_abs_dx, max_abs_dx, min_abs_dy, max_abs_dy;
 
 	min_dx = max_dx = min_dy = 0;
-	imin_dx = imax_dx = imin_dy = imax_dy = 0;
+	bmin_dx = bmax_dx = bmin_dy = bmax_dy = 0;
+	fmin_dx = fmax_dx = fmin_dy = fmax_dy = 0;
 
 	//Values to check for special cases
-	for (k = 0; k < dec->prd_order; k++){
+	for (k = 0; k < dec->prd_order; k++) {
 		dy = dyx[k].y;
 		dx = dyx[k].x;
 
@@ -714,61 +776,60 @@ int calc_prd(IMAGE *video[2], DECODER *dec, int cl, int y, int x){
 		if (dx > max_dx) max_dx = dx;
 	}
 
-	for (k = 0; k < dec->inter_prd_order - 1; k++){
+	for (k = 0; k < dec->back_prd_order - 1; k++) {
 		dy = idyx[k].y;
 		dx = idyx[k].x;
 
-		if (dy < imin_dy) imin_dy = dy;
-		if (dy > imax_dy) imax_dy = dy;
-		if (dx < imin_dx) imin_dx = dx;
-		if (dx > imax_dx) imax_dx = dx;
+		if (dy < bmin_dy) bmin_dy = dy;
+		if (dy > bmax_dy) bmax_dy = dy;
+		if (dx < bmin_dx) bmin_dx = dx;
+		if (dx > bmax_dx) bmax_dx = dx;
 	}
 
-	max_abs_dy = dec->height - imax_dy;
-	if(dec->inter_prd_order <= 1) max_abs_dy = 0;
+	for (k = 0; k < dec->for_prd_order - 1; k++) {
+		dy = idyx[k].y;
+		dx = idyx[k].x;
 
-	if(min_dy < imin_dy){
-		min_abs_dy = -min_dy;
-	}
-	else{
-		min_abs_dy = -imin_dy;
+		if (dy < fmin_dy) fmin_dy = dy;
+		if (dy > fmax_dy) fmax_dy = dy;
+		if (dx < fmin_dx) fmin_dx = dx;
+		if (dx > fmax_dx) fmax_dx = dx;
 	}
 
-	if(max_dx < imax_dx){
-		max_abs_dx = dec->width - imax_dx;
+	min_abs_dy = (min_dy < bmin_dy && min_dy < fmin_dy ? -min_dy : bmin_dy < fmin_dy ? -bmin_dy : -fmin_dy);
+	min_abs_dx = (min_dx < bmin_dx && min_dx < fmin_dx ? -min_dx : bmin_dx < fmin_dx ? -bmin_dx : -fmin_dx);
+
+	if (dec->back_prd_order <= 1 && dec->for_prd_order <= 1) {
+		max_abs_dy = 0;
 	}
-	else{
-		max_abs_dx = dec->width - max_dx;
+	else {
+		max_abs_dy = (fmax_dy > bmax_dy ? dec->height - fmax_dy : dec->height - bmax_dy);
 	}
-	if(min_dx < imin_dx){
-		min_abs_dx = -min_dx;
-	}
-	else{
-		min_abs_dx = -imin_dx;
-	}
+
+	max_abs_dx = (max_dx > bmax_dx && max_dx > fmax_dx ? dec->width - max_dx : bmax_dx > fmax_dx ? dec->width - bmax_dx : dec->width - fmax_dx);
 
 	prd = 0;
 
-	if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy){
-		for (k = 0; k < dec->prd_order; k++){
+	if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy) {
+		for (k = 0; k < dec->prd_order; k++) {
 			ry = y + dyx[k].y;
 			rx = x + dyx[k].x;
 
 			prd += dec->predictor[cl][k] * video[1]->val[ry][rx];
 		}
 	}
-	else if (y == 0){
-		if (x == 0){
-			for (k = 0; k < dec->prd_order; k++){
+	else if (y == 0) {
+		if (x == 0) {
+			for (k = 0; k < dec->prd_order; k++) {
 				prd += dec->predictor[cl][k];
 			}
 
 			prd *= ((video[1]->maxval + 1) >> 1);
 		}
-		else{
+		else {
 			ry = 0;
 
-			for (k = 0; k < dec->prd_order; k++){
+			for (k = 0; k < dec->prd_order; k++) {
 				rx = x + dyx[k].x;
 
 				if (rx < 0) rx = 0;
@@ -778,9 +839,9 @@ int calc_prd(IMAGE *video[2], DECODER *dec, int cl, int y, int x){
 			}
 		}
 	}
-	else{
-		if (x == 0){
-			for (k = 0; k < dec->prd_order; k++){
+	else {
+		if (x == 0) {
+			for (k = 0; k < dec->prd_order; k++) {
 				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
@@ -793,8 +854,8 @@ int calc_prd(IMAGE *video[2], DECODER *dec, int cl, int y, int x){
 				prd += dec->predictor[cl][k] * video[1]->val[ry][rx];
 			}
 		}
-		else{
-			for (k = 0; k < dec->prd_order; k++){
+		else {
+			for (k = 0; k < dec->prd_order; k++) {
 				ry = y + dyx[k].y;
 
 				if (ry < 0) ry = 0;
@@ -809,31 +870,61 @@ int calc_prd(IMAGE *video[2], DECODER *dec, int cl, int y, int x){
 		}
 	}
 
-	//Inter prediction calculation
-	if(dec->inter_prd_order == 1){
+	//Back Inter prediction calculation
+	if (dec->back_prd_order == 1) {
 		prd += dec->predictor[cl][dec->prd_order] * video[0]->val[y][x];
 	}
-	if(dec->inter_prd_order > 1){
+	if (dec->back_prd_order > 1) {
 		prd += dec->predictor[cl][dec->prd_order] * video[0]->val[y][x];
 
-		if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy){
-			for (k = 0; k < dec->inter_prd_order - 1; k++){
+		if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy) {
+			for (k = 0; k < dec->back_prd_order - 1; k++) {
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
 				prd += dec->predictor[cl][k + dec->prd_order + 1] * video[0]->val[ry][rx];
 			}
 		}
-		else{
-			for (k = 0; k < dec->inter_prd_order - 1; k++){
+		else {
+			for (k = 0; k < dec->back_prd_order - 1; k++) {
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
 
-				if(ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width){
+				if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
 					prd += dec->predictor[cl][k + dec->prd_order + 1] * video[0]->val[y][x];
 				}
-				else{
+				else {
 					prd += dec->predictor[cl][k + dec->prd_order + 1] * video[0]->val[ry][rx];
+				}
+			}
+		}
+	}
+
+	//Forward Inter prediction calculation
+	if (dec->for_prd_order == 1) {
+		prd += dec->predictor[cl][dec->prd_order + dec->back_prd_order] * video[2]->val[y][x];
+	}
+	if (dec->for_prd_order > 1) {
+		prd += dec->predictor[cl][dec->prd_order + dec->back_prd_order] * video[2]->val[y][x];
+
+		if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy) {
+			for (k = 0; k < dec->for_prd_order - 1; k++) {
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				prd += dec->predictor[cl][k + dec->prd_order + dec->back_prd_order + 1] * video[2]->val[ry][rx];
+			}
+		}
+		else {
+			for (k = 0; k < dec->for_prd_order - 1; k++) {
+				ry = y + idyx[k].y;
+				rx = x + idyx[k].x;
+
+				if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
+					prd += dec->predictor[cl][k + dec->prd_order + dec->back_prd_order + 1] * video[2]->val[y][x];
+				}
+				else {
+					prd += dec->predictor[cl][k + dec->prd_order + dec->back_prd_order + 1] * video[2]->val[ry][rx];
 				}
 			}
 		}
@@ -845,17 +936,33 @@ int calc_prd(IMAGE *video[2], DECODER *dec, int cl, int y, int x){
 	return (prd);
 }
 
-IMAGE *decode_image(FILE *fp, IMAGE *video[2], DECODER *dec){
+void print_contexts(int modo, uint cumfreq, uint freq, uint totfreq, int max, int min, int prd) {
+	if (modo == 0) system("rm /tmp/decoder_context.txt");
+
+	FILE *fp;
+	fp = fileopen("/tmp/decoder_context.txt", "a");
+
+	if (modo != -1) {
+		fprintf(fp, "Frame: %d\n", modo);
+		fprintf(fp, "Cum. Freq.\tFreq.\tTot. Freq.\tMax\tMin\tPrd:\n");
+	}
+	else {
+		fprintf(fp, "%d\t\t%d\t%d\t\t%d\t%d\t%d\n", cumfreq, freq, totfreq, max, min, prd);
+	}
+
+	fclose(fp);
+}
+IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 	int x, y, cl, gr, prd, u, e, E, p;
 
 	video[1] = alloc_image(dec->width, dec->height, dec->maxval);
 
-	if (dec->f_huffman == 1){
+	if (dec->f_huffman == 1) {
 		VLC *vlc;
 		dec->vlcs = init_vlcs(dec->pmodels, dec->num_group, 1);
 
-		for (y = 0; y < dec->height; y++){
-			for (x = 0; x < dec->width; x++){
+		for (y = 0; y < dec->height; y++) {
+			for (x = 0; x < dec->width; x++) {
 				cl = dec->class[y][x];
 				u = calc_udec(dec, y, x);
 				gr = dec->uquant[cl][u];
@@ -869,11 +976,11 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[2], DECODER *dec){
 			}
 		}
 	}
-	else{
+	else {
 		PMODEL *pm;
-		if (dec->pm_accuracy < 0){
-			for (y = 0; y < dec->height; y++){
-				for (x = 0; x < dec->width; x++){
+		if (dec->pm_accuracy < 0) {
+			for (y = 0; y < dec->height; y++) {
+				for (x = 0; x < dec->width; x++) {
 					cl = dec->class[y][x];
 					u = calc_udec(dec, y, x);
 					gr = dec->uquant[cl][u];
@@ -887,13 +994,13 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[2], DECODER *dec){
 				}
 			}
 		}
-		else{
+		else {
 			int mask, shift, base;
 			mask = (1 << dec->pm_accuracy) - 1;
 			shift = dec->coef_precision - dec->pm_accuracy;
 
-			for (y = 0; y < dec->height; y++){
-				for (x = 0; x < dec->width; x++){
+			for (y = 0; y < dec->height; y++) {
+				for (x = 0; x < dec->width; x++) {
 					cl = dec->class[y][x];
 					u = calc_udec(dec, y, x);
 					gr = dec->uquant[cl][u];
@@ -902,7 +1009,7 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[2], DECODER *dec){
 					pm = dec->pmodels[gr][0] + (base & mask);
 					base >>= dec->pm_accuracy;
 
-					//print_contexts(-1, 0, 0, pm->cumfreq[base+dec->maxval+1] - pm->cumfreq[base], base+dec->maxval+1, base, prd);
+//					print_contexts(-1, 0, 0, pm->cumfreq[base+dec->maxval+1] - pm->cumfreq[base], base+dec->maxval+1, base, prd);
 
 					p = rc_decode(fp, dec->rc, pm, base, base+dec->maxval+1) - base;
 					video[1]->val[y][x] = p;
@@ -917,118 +1024,34 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[2], DECODER *dec){
 	return (video[1]);
 }
 
-void write_yuv(IMAGE *img, char *filename){
-	int i, j;
-	FILE *fp;
-
-	fp = fileopen(filename, "ab");
-
-	for (i = 0; i < img->height; i++){
-		for (j = 0; j < img->width; j++){
-			putc(img->val[i][j], fp);
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++){
-		for (j = 0; j < img->width / 2; j++){
-			putc(128, fp);
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++){
-		for (j = 0; j < img->width / 2; j++){
-			putc(128, fp);
-		}
-	}
-
-	fclose(fp);
-
-	return;
-}
-
-/*------------------------------- read_yuv --------------------------*
- |  Function read_yuv
- |
- |  Purpose:  Reads a yuv file to the program memory
- |
- |  Parameters:
- |      filename 	--> Name of the yuv file (IN)
- |		height		--> Height of the video (IN)
- |		width		--> Width of the video (IN)
- |		frame		--> Frame of the video to copy (IN)
- |
- |  Returns:  IMAGE* --> returns a video type structure
- *-------------------------------------------------------------------*/
-IMAGE *read_yuv(char *filename, int height, int width, int frame){
-	int i, j;
-	IMAGE *img;
-	FILE *fp;
-
-	//Open file
-	fp = fileopen(filename, "rb");
-
-	// Check if image dimensions are correct (It has to be multiple of BASE_BSIZE)
-	if ((width % BASE_BSIZE) || (height % BASE_BSIZE)){
-		fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
-		exit(1);
-	}
-
-	// Image allocation
-	img = alloc_image(width, height, 255);
-
-	if(frame > 0) fseek(fp, img->height * img->width * 1.5 * frame, SEEK_SET);
-
-	for (i = 0; i < img->height; i++){
-		for (j = 0; j < img->width; j++){
-			img->val[i][j] = (img_t)fgetc(fp);
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++){
-		for (j = 0; j < img->width / 2; j++){
-			fgetc(fp);
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++){
-		for (j = 0; j < img->width / 2; j++){
-			fgetc(fp);
-		}
-	}
-
-	fclose(fp);
-	return (img);
-}
-
-IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int frame){
+IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int frame) {
 	int x, y;
 	// Image allocation
 	IMAGE *cur = alloc_image(ref->width, ref->height, 255);
 
-	for(y = 0; y < ref->height; y++){
-		for(x = 0; x < ref->width; x++){
+	for (y = 0; y < ref->height; y++) {
+		for (x = 0; x < ref->width; x++) {
 			cur->val[y][x] = diff->val[y][x] + ref->val[y][x] - 127;
 		}
 	}
 
-	if(frame > 1){
-		free(ref->val);
-		free(ref);
+	if (frame > 1) {
+		safefree_yuv(&ref);
 	}
 
 	return cur;
 }
 
-char *decode_extra_info(FILE *fp, int *num_pels){
+char *decode_extra_info(FILE *fp, int *num_pels) {
 	int i;
 	char *extra_info = NULL;
 
 	*num_pels = getbits(fp, 16);
 
-	if(*num_pels != 0){
+	if (*num_pels != 0) {
 		extra_info = (char *) alloc_mem(*num_pels * sizeof(char));
 
-		for(i = 0; i < *num_pels; i++){
+		for (i = 0; i < *num_pels; i++) {
 			extra_info[i] = getbits(fp, 8);
 		}
 	}
@@ -1036,13 +1059,17 @@ char *decode_extra_info(FILE *fp, int *num_pels){
 	return extra_info;
 }
 
-int main(int argc, char **argv){
-	int i, f, **error;
-	int version, width, height, maxval, frames, num_comp, num_group, prd_order, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, diff;
-	IMAGE *video[2];
+int main(int argc, char **argv) {
+	int i, f, **error = NULL;
+	int version, width, height, maxval, frames, bframes, num_comp, num_group;
+	int num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, diff, hevc;
+	int prd_order[6] = {0, 0, 0, 0, 0, 0};
+
+	IMAGE *video[3] = {NULL, NULL, NULL};
 	DECODER *dec;
 	char *infile, *outfile;
 	FILE *fp;
+
 	cpu_time();
 	setbuf(stdout, 0);
 	infile = outfile = NULL;
@@ -1051,16 +1078,16 @@ int main(int argc, char **argv){
 	int num_pels = 0, x, y;
 	char *extra_info = NULL;
 
-	for (i = 1; i < argc; i++){
-		if (infile == NULL){
+	for (i = 1; i < argc; i++) {
+		if (infile == NULL) {
 			infile = argv[i];
 		}
-		else{
+		else {
 			outfile = argv[i];
 		}
 	}
 
-	if (infile == NULL || outfile == NULL){
+	if (infile == NULL || outfile == NULL) {
 		printf(BANNER"\n", 0.1 * VERSION);
 		printf("usage: decmrp infile outfile\n");
 		printf("infile:     Input file\n");
@@ -1068,105 +1095,411 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
-	if(access(outfile, F_OK) != -1 ){
-		if(remove(outfile) != 0){
+	if (access(outfile, F_OK) != -1 ) {
+		if (remove(outfile) != 0) {
 			printf("Error deleting file %s.\n", outfile);
 			return -1;
 		}
 	}
 
 	fp = fileopen(infile, "rb");
-	read_header(fp, &version, &width, &height, &maxval, &frames, &num_comp, &num_group, &prd_order, &intra_prd_order, &inter_prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &diff);
+	read_header(fp, &version, &width, &height, &maxval, &frames, &bframes, &num_comp, &num_group, prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &diff, &hevc);
 
 	printf("\nMRP-Video Decoder\n\n");
 	// Print file characteristics to screen
 	printf("%s -> %s (%dx%dx%d)\n", infile, outfile, width, height, frames);
 	// Print coding parameters to screen
-	printf("K = %d, L = %d, J = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", prd_order, intra_prd_order, inter_prd_order, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
+	printf("P = %d, V = %d, A = %d, D = %d, p = %s\n\n", coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
+	// Print prediction parameters to screen
+	if (bframes == 0) {
+		printf("Prediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\n", prd_order[0], prd_order[1], prd_order[2]);
+	}
+	else{
+		printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
+	}
 
-	for(f = 0; f < frames; f++){
-		printf("Decoding frame: %03d", f);
+	if (bframes == 0) {
+		for (f = 0; f < frames; f++) {
+			printf("Decoding frame: %03d", f);
 
-		if(f == 0){
-			dec = init_decoder(fp, NULL, version, width, height, maxval, num_comp, num_group, prd_order, 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
+			if (f == 0) {
+				dec = init_decoder(fp, NULL, NULL, version, width, height, maxval, num_comp, num_group, prd_order[0], 0, 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
+			}
+			else {
+				video[0] = video[1];
+
+				dec = init_decoder(fp, error, NULL, version, width, height, maxval, num_comp, num_group, prd_order[1], prd_order[2], 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
+				free(error);
+			}
+
+			if (dec->f_huffman == 0) {
+				dec->rc = rc_init();
+				rc_startdec(fp, dec->rc);
+			}
+
+			decode_class(fp, dec);
+			decode_predictor(fp, dec);
+			decode_threshold(fp, dec);
+
+			dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
+
+			video[1] = decode_image(fp, video, dec);
+
+			if (f > 0 && diff != 0) {
+				extra_info = decode_extra_info(fp, &num_pels);
+
+				IMAGE *aux_image;
+				if (num_pels != 0 && extra_info != NULL) {
+					aux_image = alloc_image(dec->width, dec->height, 255);
+					int conta = 0;
+
+					for (y = 0; y < dec->height; y++) {
+						for (x = 0; x < dec->width; x++) {
+							aux_image->val[y][x] = video[1]->val[y][x];
+
+							if ((video[1]->val[y][x] == 0 || video[1]->val[y][x] == 255) && conta < num_pels) {
+								aux_image->val[y][x] += extra_info[conta];
+								conta++;
+							}
+						}
+					}
+				}
+
+				if (extra_info != NULL) free(extra_info);
+
+				if (num_pels == 0) {
+					img_diff = sum_diff(img_diff, video[1], f);
+				}
+				else {
+					img_diff = sum_diff(img_diff, aux_image, f);
+					free(aux_image);
+				}
+
+				write_yuv(img_diff, outfile);
+			}
+			else {
+				write_yuv(video[1], outfile);
+			}
+
+			if (diff != 0 && f == 0) img_diff = video[1];
+
+			error = get_dec_err(dec, 1);
+			free_decoder(dec);
+
+			if (f > 0) {
+				free(video[0]->val);
+				free(video[0]);
+			}
+
+			printf(" --> Process completed\n");
 		}
-		else{
-			video[0] = video[1];
 
-			dec = init_decoder(fp, error, version, width, height, maxval, num_comp, num_group, intra_prd_order, inter_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
-			free(error);
+		if (diff == 1) {
+			free(img_diff->val);
+			free(img_diff);
+		}
+		free(video[1]->val);
+		free(video[1]);
+
+		free(error);
+	}
+	else {
+		int back_reference = 0, for_reference = 0;
+		int **back_ref_error = NULL, **for_ref_error = NULL;
+		IMAGE **seq = alloc_mem(frames * sizeof(IMAGE));
+		int ***keep_error;
+		int first_frame = 0, conta = 0, final = 0;
+		int (*bref)[5] = NULL;
+
+		if (hevc == 0) {
+			back_reference = 0;
+			for_reference = bframes;
+		}
+		else if (hevc == 1) {
+			keep_error = (int ***)alloc_mem((bframes + 1) * sizeof(int **));
+
+			for (f = 0; f < bframes + 1; f++) keep_error[f] = NULL;
+
+			bref = select_bref(bframes);
+
+			final = ((frames - 1) % bframes != 0) ? bframes * ((int)((frames - 1) / bframes)) + 1 : frames;
 		}
 
-		if (dec->f_huffman == 0){
-			dec->rc = rc_init();
-			rc_startdec(fp, dec->rc);
-		}
+		f = 0;
 
-		decode_class(fp, dec);
-		decode_predictor(fp, dec, f);
-		decode_threshold(fp, dec);
+		while(f < frames) {
+			printf("Decoding frame: %03d", f);
 
-		dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
+			if (f == 0) {
+				dec = init_decoder(fp, NULL, NULL, version, width, height, maxval, num_comp, num_group, prd_order[0], 0, 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
+			}
+			else if ((f - first_frame) % bframes == 0) {
+				dec = init_decoder(fp, back_ref_error, NULL, version, width, height, maxval, num_comp, num_group, prd_order[1], prd_order[2], 0, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
+			}
+			else {
+				dec = init_decoder(fp, back_ref_error, for_ref_error, version, width, height, maxval, num_comp, num_group, prd_order[3], prd_order[4], prd_order[5], num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta);
+			}
 
-		video[1] = decode_image(fp, video, dec);
+			if (dec->f_huffman == 0) {
+				dec->rc = rc_init();
+				rc_startdec(fp, dec->rc);
+			}
 
-		if(f > 0 && diff != 0){
-			extra_info = decode_extra_info(fp, &num_pels);
+			decode_class(fp, dec);
+			decode_predictor(fp, dec);
+			decode_threshold(fp, dec);
 
-			IMAGE *aux_image;
-			if(num_pels != 0 && extra_info != NULL){
-				aux_image = alloc_image(dec->width, dec->height, 255);
-				int conta = 0;
+			dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
 
-				for(y = 0; y < dec->height; y++){
-					for(x = 0; x < dec->width; x++){
-						aux_image->val[y][x] = video[1]->val[y][x];
+			video[1] = decode_image(fp, video, dec);
 
-						if((video[1]->val[y][x] == 0 || video[1]->val[y][x] == 255) && conta < num_pels){
-							aux_image->val[y][x] += extra_info[conta];
-							conta++;
+			if (f > 0 && diff != 0) {
+				extra_info = decode_extra_info(fp, &num_pels);
+
+				IMAGE *aux_image;
+				if (num_pels != 0 && extra_info != NULL) {
+					aux_image = alloc_image(dec->width, dec->height, 255);
+					int conta = 0;
+
+					for (y = 0; y < dec->height; y++) {
+						for (x = 0; x < dec->width; x++) {
+							aux_image->val[y][x] = video[1]->val[y][x];
+
+							if ((video[1]->val[y][x] == 0 || video[1]->val[y][x] == 255) && conta < num_pels) {
+								aux_image->val[y][x] += extra_info[conta];
+								conta++;
+							}
+						}
+					}
+				}
+
+				if (extra_info != NULL) free(extra_info);
+
+				if (num_pels == 0) {
+					seq[f] = copy_yuv(video[1]);
+				}
+				else {
+					seq[f] = copy_yuv(aux_image);
+					safefree_yuv(&aux_image);
+				}
+			}
+			else {
+				seq[f] = copy_yuv(video[1]);
+			}
+
+			printf(" --> Process completed\n");
+
+			if (hevc == 0) {
+				if (f == 0) {
+					f = bframes;
+
+					back_ref_error = get_dec_err(dec, 1);
+					video[0] = video[1];
+				}
+				else if (f == for_reference) {
+					if (f == back_reference + 1) {
+						f = frames;
+					}
+					else {
+						f = back_reference + 1;
+
+						for_ref_error = get_dec_err(dec, 1);
+
+						video[2] = video[1];
+					}
+				}
+				else if (back_reference < f && f < for_reference - 1) {
+					f++;
+
+					safefree_yuv(&video[1]);
+				}
+				else if (f == for_reference - 1) {
+					if (f + 1 == frames - 1) {
+						f = frames;
+					}
+					else if (f + bframes + 1 < frames) {
+						f = f + bframes + 1;
+
+						safefree((void **)&back_ref_error);
+						back_ref_error = NULL;
+						back_ref_error = for_ref_error;
+						back_reference = for_reference;
+						for_reference = f;
+					}
+					else {
+						f = frames - 1;
+
+						safefree((void **)&back_ref_error);
+						back_ref_error = NULL;
+						back_ref_error = for_ref_error;
+						back_reference = for_reference;
+						for_reference = f;
+					}
+
+					if (video[1] != video[0] && video[1] != video[2]) {
+						safefree_yuv(&video[1]);
+					}
+					safefree_yuv(&video[0]);
+					video[0] = video[2];
+				}
+			}
+			else if (hevc == 1) {
+				safefree_yuv(&video[1]);
+
+				if (f == 0) {
+					f = bref[conta][0];
+
+					keep_error[0] = get_dec_err(dec, 1);
+					for_ref_error = NULL;
+					video[2] = NULL;
+					back_ref_error = keep_error[0];
+
+					video[0] = seq[f + bref[conta][1]];
+
+					conta++;
+				}
+				else {
+					if (conta + 1 <= bframes) {
+						keep_error[f - first_frame] = get_dec_err(dec, 1);
+
+						if (f + bref[conta][0] > 2 * first_frame && first_frame != 0) {
+							f = first_frame + bref[conta][0];
+						}
+						else {
+							f = f + bref[conta][0];
+						}
+
+						video[0] = seq[f + bref[conta][1]];
+
+						if (conta < bframes + 1) back_ref_error = keep_error[bref[conta][3]];
+
+						if (bref[conta][2] != -1) {
+							video[2] = seq[f + bref[conta][2]];
+
+							if (conta < bframes + 1) for_ref_error = keep_error[bref[conta][4]];
+						}
+						else {
+							for_ref_error = NULL;
+						}
+
+						conta++;
+					}
+					else if (conta + 1 > bframes) {
+						if (first_frame + 2 * bframes >= frames) {
+							if (f + 1 < final && final != frames) {
+								int numbs = frames - final;
+								int aux_bframes = bframes;
+								bframes = numbs;
+
+								conta = 1;
+
+								video[0] = seq[f + 1];
+
+								first_frame = f + 1;
+								f = frames - 1;
+								final = frames;
+
+								if (numbs == 1) {
+									conta = bframes;
+
+									video[0] = seq[frames - 2];
+
+									first_frame = frames - 2;
+								}
+								else {
+									bref = select_bref(bframes);
+								}
+
+								video[2] = NULL;
+								for_ref_error = NULL;
+
+								back_ref_error = keep_error[aux_bframes];
+								safefree((void **)&keep_error[0]);
+								keep_error[0] = keep_error[aux_bframes];
+
+								for (i = 1; i < aux_bframes; i++) {
+									safefree((void **)&keep_error[i]);
+								}
+							}
+							else {
+								break;
+							}
+						}
+						else {
+							conta = 1;
+							f = first_frame + 2 * bframes;
+
+							video[0] = seq[f + bref[0][1]];
+
+							video[2] = NULL;
+							for_ref_error = NULL;
+
+							back_ref_error = keep_error[bframes];
+							safefree((void **)&keep_error[0]);
+							keep_error[0] = keep_error[bframes];
+
+							for (i = 1; i < bframes; i++) {
+								safefree((void **)&keep_error[i]);
+							}
+
+							first_frame = first_frame + bframes;
 						}
 					}
 				}
 			}
 
-			if(extra_info != NULL) free(extra_info);
+			free_decoder(dec);
+			dec = NULL;
+		}
 
-			if(num_pels == 0){
-				img_diff = sum_diff(img_diff, video[1], f);
+		if (dec != NULL) free_decoder(dec);
+
+		if (diff == 0) {
+			for (f = 0; f < frames; f++) {
+				write_yuv(seq[f], outfile);
+				free(seq[f]->val);
+				free(seq[f]);
 			}
-			else{
-				img_diff = sum_diff(img_diff, aux_image, f);
-				free(aux_image);
+		}
+		else {
+			write_yuv(seq[0], outfile);
+			img_diff = seq[0];
+			for (f = 1; f < frames; f++) {
+				img_diff = sum_diff(img_diff, seq[f], f);
+				write_yuv(img_diff, outfile);
+				free(seq[f - 1]->val);
+				free(seq[f - 1]);
 			}
+			free(seq[frames - 1]->val);
+			free(seq[frames - 1]);
 
-			write_yuv(img_diff, outfile);
-		}
-		else{
-			write_yuv(video[1], outfile);
-		}
-
-		if(diff != 0 && f == 0) img_diff = video[1];
-
-		error = get_dec_err(dec, 1);
-		free_decoder(dec);
-
-		if(f > 0){
-			free(video[0]->val);
-			free(video[0]);
+			safefree_yuv(&img_diff);
 		}
 
-		printf(" --> Process completed\n");
+		if (hevc == 0) {
+			if (video[1] != video[0] && video[1] != video[2]) {
+				if (video[1] != NULL) safefree_yuv(&video[1]);
+			}
+			if (video[0] != video[2]) {
+				safefree_yuv(&video[0]);
+			}
+			safefree_yuv(&video[2]);
+
+			if (back_ref_error != for_ref_error) {
+				safefree((void **)&back_ref_error);
+			}
+			safefree((void **)&for_ref_error);
+		}
+		else if (hevc == 1) {
+			for (i = 0; i < bframes + 1; i++) {
+				safefree((void **)&keep_error[i]);
+			}
+			safefree((void **)&keep_error);
+		}
+
+		free(seq);
 	}
 
-	if(diff == 1){
-		free(img_diff->val);
-		free(img_diff);
-	}
-	free(video[1]->val);
-	free(video[1]);
-
-	free(error);
 	fclose(fp);
 
 	printf("\ncpu time: %.2f sec.\n", cpu_time());

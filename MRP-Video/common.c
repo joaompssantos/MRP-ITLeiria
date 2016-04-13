@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -49,9 +50,101 @@ const POINT idyx[] = {
 //		{-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
 };
 
+int bref1[4][5] = {{2, -2, -1, 0, -1},
+				   {-1, -1, 1, 0, 2},
+};
+
+int bref2[3][5] = {{3, -3, -1, 0, -1},
+				   {-2, -1, 2, 0, 3},
+				   {1, -1, 1, 1, 3}
+};
+
+int bref3[4][5] = {{4, -4, -1, 0, -1},
+				   {-2, -2, 2, 0, 4},
+				   {-1, -1, 1, 0, 2},
+				   {2, -1, 1, 2, 4}
+};
+
+int bref4[5][5] = {{5, -5, -1, 0, -1},
+				   {-3, -2, 3, 0, 5},
+				   {-1, -1, 1, 0, 2},
+				   {2, -1, 2, 2, 5},
+				   {1, -1, 1, 3, 5}
+};
+
+int bref5[6][5] = {{6, -6, -1, 0, -1},
+				   {-3, -3, 3, 0, 6},
+				   {-2, -1, 2, 0, 3},
+				   {1, -1, 1, 1, 3},
+				   {2, -1, 2, 3, 6},
+				   {1, -1, 1, 4, 6}
+};
+
+int bref6[7][5] = {{7, -7, -1, 0, -1},
+				   {-4, -3, 4, 0, 7},
+				   {-2, -1, 2, 0, 3},
+				   {1, -1, 1, 1, 3},
+				   {3, -2, 2, 3, 7},
+				   {-1, -1, 1, 3, 5},
+				   {2, -1, 1, 5, 7}
+};
+
+int bref7[8][5] = {{8, -8, -1, 0, -1},
+				   {-4, -4, 4, 0, 8},
+				   {-2, -2, 2, 0, 4},
+				   {-1, -1, 1, 0, 2},
+				   {2, -1, 1, 2, 4},
+				   {3, -2, 2, 4, 8},
+				   {-1, -1, 1, 4, 8},
+				   {2, -1, 1, 6, 8}
+};
+
+int bref8[9][5] = {{9, -9, -1, 0, -1},
+				   {-5, -4, 5, 0, 9},
+				   {-2, -2, 2, 0, 4},
+				   {-1, -1, 1, 0, 2},
+				   {2, -1, 1, 2, 4},
+				   {3, -2, 3, 4, 9},
+				   {-1, -1, 1, 4, 6},
+				   {2, -1, 2, 6, 9},
+				   {1, -1, 1, 7, 9}
+};
+
+int bref9[10][5] = {{10, -10, -1, 0, -1},
+				   {-5, -5, 5, 0, 10},
+				   {-3, -2, 3, 0, 5},
+				   {-1, -1, 1, 0, 2},
+				   {2, -1, 2, 2, 5},
+				   {1, -1, 1, 3, 5},
+				   {3, -2, 3, 5, 10},
+				   {-1, -1, 1, 5, 7},
+				   {2, -1, 2, 7, 10},
+				   {1, -1, 1, 8, 10}
+};
+
 double sigma_h[] = {0.85, 1.15, 1.50, 1.90, 2.55, 3.30, 4.25, 5.60, 7.15, 9.20,12.05,15.35,19.95,25.85,32.95,44.05};
 double sigma_a[] = {0.15, 0.26, 0.38, 0.57, 0.83, 1.18, 1.65, 2.31, 3.22, 4.47, 6.19, 8.55,11.80,16.27,22.42,30.89};
 double qtree_prob[] = {0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95};
+
+/* Alternative version for 'free()' */
+void safefree(void **pp) {
+    /* in debug mode, abort if pp is NULL */
+    assert(pp);
+    if (pp != NULL) {               /* safety check */
+        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
+        *pp = NULL;                 /* reset original pointer */
+    }
+}
+
+void safefree_yuv(IMAGE **pp) {
+    /* in debug mode, abort if pp is NULL */
+    assert(pp);
+    if (pp != NULL) {               /* safety check */
+    	free((*pp)->val);
+        free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
+        *pp = NULL;                 /* reset original pointer */
+    }
+}
 
 /*------------------------------- fileopen --------------------------*
  |  Function fileopen
@@ -64,7 +157,7 @@ double qtree_prob[] = {0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95};
  |
  |  Returns:  fp* --> returns a file type structure
  *-------------------------------------------------------------------*/
-FILE *fileopen(char *filename, char *mode){
+FILE *fileopen(char *filename, char *mode) {
 	FILE *fp;
 	fp = fopen(filename, mode);
 	if (fp == NULL) {
@@ -75,7 +168,7 @@ FILE *fileopen(char *filename, char *mode){
 }
 
 // Memory allocation
-void *alloc_mem(size_t size){
+void *alloc_mem(size_t size) {
 	void *ptr;
 
 	// Check if memory was allocated
@@ -87,7 +180,7 @@ void *alloc_mem(size_t size){
 }
 
 // Image matrix allocation
-void **alloc_2d_array(int height, int width, int size){
+void **alloc_2d_array(int height, int width, int size) {
 	void **mat;
 	char *ptr;
 	int k;
@@ -95,7 +188,7 @@ void **alloc_2d_array(int height, int width, int size){
 	mat = (void **) alloc_mem(sizeof(void **) * height + height * width * size);
 	ptr = (char *) (mat + height);
 
-	for(k = 0; k < height; k++){
+	for (k = 0; k < height; k++) {
 		mat[k] =  ptr;
 		ptr += width * size;
 	}
@@ -104,7 +197,7 @@ void **alloc_2d_array(int height, int width, int size){
 }
 
 // Image matrix allocation
-void ***alloc_3d_array(int height, int width, int frames, int size){
+void ***alloc_3d_array(int height, int width, int frames, int size) {
 	void ***mat;
 	int i, j;
 
@@ -113,12 +206,12 @@ void ***alloc_3d_array(int height, int width, int frames, int size){
 	void** hei = (void**)(mat + frames);
 	char* wid = (char*)(hei + frames * height);
 
-	for(i = 0; i < frames; i++){
+	for (i = 0; i < frames; i++) {
 		mat[i] = &hei[i * height];
 	}
 
-	for(i = 0; i < frames; i++){
-		for(j = 0; j < height; j++){
+	for (i = 0; i < frames; i++) {
+		for (j = 0; j < height; j++) {
 			hei[i * height + j] = &wid[i * height * width * size + j * width * size];
 		}
 	}
@@ -127,7 +220,7 @@ void ***alloc_3d_array(int height, int width, int frames, int size){
 }
 
 // Function to alloc image
-IMAGE *alloc_image(int width, int height, int maxval){
+IMAGE *alloc_image(int width, int height, int maxval) {
 	// Image struct vector
 	IMAGE *img;
 
@@ -143,7 +236,107 @@ IMAGE *alloc_image(int width, int height, int maxval){
 	return (img);
 }
 
-int *gen_hufflen(uint *hist, int size, int max_len){
+// Function to copy YUV image
+IMAGE *copy_yuv(IMAGE *img) {
+	int i, j;
+
+	IMAGE *new_img = alloc_image(img->width, img->height, img->maxval);
+
+	for (i = 0; i < new_img->height; i++) {
+		for (j = 0; j < new_img->width; j++) {
+			new_img->val[i][j] = img->val[i][j];
+		}
+	}
+
+	return(new_img);
+}
+
+// Write YUV image to file
+void write_yuv(IMAGE *img, char *filename) {
+	int i, j;
+	FILE *fp;
+
+	fp = fileopen(filename, "ab");
+
+	for (i = 0; i < img->height; i++) {
+		for (j = 0; j < img->width; j++) {
+			putc(img->val[i][j], fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++) {
+		for (j = 0; j < img->width / 2; j++) {
+			putc(128, fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++) {
+		for (j = 0; j < img->width / 2; j++) {
+			putc(128, fp);
+		}
+	}
+
+	fclose(fp);
+
+	return;
+}
+
+/*------------------------------- read_yuv --------------------------*
+ |  Function read_yuv
+ |
+ |  Purpose:  Reads a yuv file to the program memory
+ |
+ |  Parameters:
+ |      filename 	--> Name of the yuv file (IN)
+ |		height		--> Height of the video (IN)
+ |		width		--> Width of the video (IN)
+ |		frame		--> Frame of the video to copy (IN)
+ |
+ |  Returns:  IMAGE* --> returns a video type structure
+ *-------------------------------------------------------------------*/
+IMAGE *read_yuv(char *filename, int height, int width, int frame) {
+	int i, j;
+	IMAGE *img;
+	FILE *fp;
+
+	//Open file
+	fp = fileopen(filename, "rb");
+
+	// Check if image dimensions are correct (It has to be multiple of BASE_BSIZE)
+	if ((width % BASE_BSIZE) || (height % BASE_BSIZE)) {
+		fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
+		exit(1);
+	}
+
+	// Image allocation
+	img = alloc_image(width, height, 255);
+
+	if (frame > 0) fseek(fp, img->height * img->width * 1.5 * frame, SEEK_SET);
+
+	for (i = 0; i < img->height; i++) {
+		for (j = 0; j < img->width; j++) {
+			img->val[i][j] = (img_t)fgetc(fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++) {
+		for (j = 0; j < img->width / 2; j++) {
+			fgetc(fp);
+		}
+	}
+
+	for (i = 0; i < img->height / 2; i++) {
+		for (j = 0; j < img->width / 2; j++) {
+			fgetc(fp);
+		}
+	}
+
+	fclose(fp);
+	return (img);
+}
+
+
+int *gen_hufflen(uint *hist, int size, int max_len) {
 	int i, j, k, l, *len, *index, *bits, *link;
 
 	len = (int *)alloc_mem(size * sizeof(int));
@@ -222,7 +415,7 @@ int *gen_hufflen(uint *hist, int size, int max_len){
 	return (len);
 }
 
-void gen_huffcode(VLC *vlc){
+void gen_huffcode(VLC *vlc) {
 	int i, j, *idx, *len;
 	uint k;
 
@@ -267,7 +460,7 @@ void gen_huffcode(VLC *vlc){
 	return;
 }
 
-VLC *make_vlc(uint *hist, int size, int max_len){
+VLC *make_vlc(uint *hist, int size, int max_len) {
 	VLC *vlc;
 
 	vlc = (VLC *)alloc_mem(sizeof(VLC));
@@ -278,7 +471,7 @@ VLC *make_vlc(uint *hist, int size, int max_len){
 	return (vlc);
 }
 
-void free_vlc(VLC *vlc){
+void free_vlc(VLC *vlc) {
 	free(vlc->code);
 	free(vlc->off);
 	free(vlc->index);
@@ -287,14 +480,14 @@ void free_vlc(VLC *vlc){
 	return;
 }
 
-VLC **init_vlcs(PMODEL ***pmodels, int num_group, int num_pmodel){
+VLC **init_vlcs(PMODEL ***pmodels, int num_group, int num_pmodel) {
 	VLC **vlcs, *vlc;
 	PMODEL *pm;
 	int gr, k;
 
 	vlcs = (VLC **)alloc_2d_array(num_group, num_pmodel, sizeof(VLC));
-	for(gr = 0; gr < num_group; gr++){
-		for(k = 0; k < num_pmodel; k++){
+	for (gr = 0; gr < num_group; gr++) {
+		for (k = 0; k < num_pmodel; k++) {
 			vlc = &vlcs[gr][k];
 			pm = pmodels[gr][k];
 			vlc->size = pm->size;
@@ -311,7 +504,7 @@ VLC **init_vlcs(PMODEL ***pmodels, int num_group, int num_pmodel){
   cf. "Numerical Recipes in C", 6.1
   http://www.ulib.org/webRoot/Books/Numerical_Recipes/bookcpdf.html
  */
-double lngamma(double xx){
+double lngamma(double xx) {
 	int j;
 	double x,y,tmp,ser;
 	double cof[6] = {
@@ -328,16 +521,16 @@ double lngamma(double xx){
 	return (log(2.5066282746310005 * ser / x) - tmp);
 }
 
-void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, int center, int idx, double sigma){
+void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, int center, int idx, double sigma) {
 	double shape, beta, norm, sw, x;
 	int i, j, n;
 
-	if(center == 0) sigma *= 2.0;
+	if (center == 0) sigma *= 2.0;
 
-	if(idx < 0){
+	if (idx < 0) {
 		shape = 2.0;
 	}
-	else{
+	else {
 		shape = 3.2 * (idx + 1) / (double)num_pmodel;
 	}
 
@@ -347,35 +540,35 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
 	n = pm->size * num_subpm;
 	center *= num_subpm;
 
-	if(center == 0){    /* one-sided distribution */
-		for (i = 0; i < n; i++){
+	if (center == 0) {    /* one-sided distribution */
+		for (i = 0; i < n; i++) {
 			x = (double)i * sw;
 			pdfsamp[i] = exp(-pow(beta * x, shape));
 		}
 	}
-	else{
-		for(i = center; i < n; i++){
+	else {
+		for (i = center; i < n; i++) {
 			x = (double)(i - (double)center + 0.5) * sw;
 			pdfsamp[i + 1] = exp(-pow(beta * x, shape));
 		}
 
-		for(i = 0; i <= center; i++){
+		for (i = 0; i <= center; i++) {
 			pdfsamp[center - i] =  pdfsamp[center + i + 1];
 		}
 
-		for(i = 0; i < n; i++){
-			if(i == center){
+		for (i = 0; i < n; i++) {
+			if (i == center) {
 				pdfsamp[i] = (2.0 + pdfsamp[i] + pdfsamp[i + 1]) / 2.0;
 			}
-			else{
+			else {
 				pdfsamp[i] = pdfsamp[i] + pdfsamp[i + 1];
 			}
 		}
 	}
 
-	for(j = 0; j < num_subpm; j++){
+	for (j = 0; j < num_subpm; j++) {
 		norm = 0.0;
-		for(i = 0; i < pm->size; i++){
+		for (i = 0; i < pm->size; i++) {
 			norm += pdfsamp[i * num_subpm + j];
 		}
 
@@ -383,7 +576,7 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
 		norm += 1E-8;	/* to avoid machine dependent rounding errors */
 		pm->cumfreq[0] = 0;
 
-		for (i = 0; i < pm->size; i++){
+		for (i = 0; i < pm->size; i++) {
 			pm->freq[i] = norm * pdfsamp[i * num_subpm + j] + MIN_FREQ;
 			pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
 		}
@@ -408,17 +601,17 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
  |
  |  Returns:  PMODEL*** --> returns a PMODEL type structure
  *-------------------------------------------------------------------*/
-PMODEL ***init_pmodels(int num_group, int num_pmodel, int pm_accuracy, int *pm_idx, double *sigma, int size){
+PMODEL ***init_pmodels(int num_group, int num_pmodel, int pm_accuracy, int *pm_idx, double *sigma, int size) {
 	PMODEL ***pmodels, *pmbuf, *pm;
 	int gr, i, j, num_subpm, num_pm, ssize, idx;
 	double *pdfsamp;
 
 	//??
-	if(pm_accuracy < 0){
+	if (pm_accuracy < 0) {
 		num_subpm = 1;
 		ssize = 1;
 	}
-	else{
+	else {
 		num_subpm = 1 << pm_accuracy;
 		ssize = size;
 		size = size + ssize - 1;
@@ -431,11 +624,11 @@ PMODEL ***init_pmodels(int num_group, int num_pmodel, int pm_accuracy, int *pm_i
 	pmbuf = (PMODEL *)alloc_mem(num_group * num_pm * num_subpm * sizeof(PMODEL));
 
 	//Vector initializations
-	for (gr = 0; gr < num_group; gr++){
-		for (i = 0; i < num_pm; i++){
+	for (gr = 0; gr < num_group; gr++) {
+		for (i = 0; i < num_pm; i++) {
 			pmodels[gr][i] = pmbuf;
 
-			for (j = 0; j < num_subpm; j++){
+			for (j = 0; j < num_subpm; j++) {
 				pm = pmbuf++;
 				pm->id = i;
 				pm->size = size;
@@ -452,15 +645,15 @@ PMODEL ***init_pmodels(int num_group, int num_pmodel, int pm_accuracy, int *pm_i
 
 	pdfsamp = alloc_mem((size * num_subpm + 1) * sizeof(double));
 
-	for (gr = 0; gr < num_group; gr++){
-		for (i = 0; i < num_pm; i++){
-			if (pm_idx != NULL){
+	for (gr = 0; gr < num_group; gr++) {
+		for (i = 0; i < num_pm; i++) {
+			if (pm_idx != NULL) {
 				idx = pm_idx[gr];
 			}
-			else if (num_pm > 1){
+			else if (num_pm > 1) {
 				idx = i;
 			}
-			else{
+			else {
 				idx = -1;
 			}
 
@@ -474,7 +667,7 @@ PMODEL ***init_pmodels(int num_group, int num_pmodel, int pm_accuracy, int *pm_i
 }
 
 /* probability model for coefficients and thresholds */
-void set_spmodel(PMODEL *pm, int size, int m){
+void set_spmodel(PMODEL *pm, int size, int m) {
 	int i, sum;
 	double p;
 
@@ -509,24 +702,23 @@ void set_spmodel(PMODEL *pm, int size, int m){
 	return;
 }
 
-// ?
-int *init_ctx_weight(int prd_order, int inter_prd_order, int delta){
+int *init_ctx_weight(int prd_order, int back_prd_order, int for_prd_order, int delta) {
 	int *ctx_weight, k;
 	double dy, dx;
 
-	ctx_weight = (int *)alloc_mem((prd_order + inter_prd_order) * sizeof(int));
+	ctx_weight = (int *)alloc_mem((prd_order + back_prd_order + for_prd_order) * sizeof(int));
 
-	for(k = 0; k < prd_order; k++){
+	for (k = 0; k < prd_order; k++) {
 		dy = dyx[k].y;
 		dx = dyx[k].x;
 
 		ctx_weight[k] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
 	}
 
-	if(inter_prd_order > 0){
+	if (back_prd_order > 0) {
 		ctx_weight[prd_order] = 64.0 / sqrt(delta * delta) + 0.5;
 
-		for(k = 0; k < inter_prd_order - 1; k++){
+		for (k = 0; k < back_prd_order - 1; k++) {
 			dy = idyx[k].y;
 			dx = idyx[k].x;
 
@@ -534,10 +726,21 @@ int *init_ctx_weight(int prd_order, int inter_prd_order, int delta){
 		}
 	}
 
+	if (for_prd_order > 0) {
+		ctx_weight[prd_order + back_prd_order] = 64.0 / sqrt(delta * delta) + 0.5;
+
+		for (k = 0; k < for_prd_order - 1; k++) {
+			dy = idyx[k].y;
+			dx = idyx[k].x;
+
+			ctx_weight[k + prd_order + back_prd_order + 1] = 64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5;
+		}
+	}
+
 	return (ctx_weight);
 }
 
-int e2E(int e, int prd, int flag, int maxval){
+int e2E(int e, int prd, int flag, int maxval) {
 	int E, th;
 
 	E = (e > 0)? e : -e;
@@ -556,7 +759,7 @@ int e2E(int e, int prd, int flag, int maxval){
 	return (E);
 }
 
-int E2e(int E, int prd, int flag, int maxval){
+int E2e(int E, int prd, int flag, int maxval) {
 	int e, th;
 
 	th = (prd < ((maxval + 1) >> 1))? prd : maxval - prd;
@@ -572,7 +775,7 @@ int E2e(int E, int prd, int flag, int maxval){
 	return (e);
 }
 
-void mtf_classlabel(char **class, int *mtfbuf, int y, int x, int bsize, int width, int num_class){
+void mtf_classlabel(char **class, int *mtfbuf, int y, int x, int bsize, int width, int num_class) {
 	int i, j, k, ref[3];
 
 	if (y == 0) {
@@ -610,7 +813,7 @@ void mtf_classlabel(char **class, int *mtfbuf, int y, int x, int bsize, int widt
 }
 
 // Returns time
-double cpu_time(void){
+double cpu_time(void) {
 #include <time.h>
 #ifndef HAVE_CLOCK
 #  include <sys/times.h>
@@ -628,10 +831,10 @@ double cpu_time(void){
 	times(&t);
 	cur = t.tms_utime + t.tms_stime;
 #endif
-	if (cur > prev){
+	if (cur > prev) {
 		dif = cur - prev;
 	}
-	else{
+	else {
 		dif = (unsigned)cur - prev;
 	}
 	prev = cur;
@@ -641,4 +844,43 @@ double cpu_time(void){
 #else
 	return ((double)dif / CLK_TCK);
 #endif
+}
+
+int **select_bref(int bframes) {
+	int (*aux)[5] = NULL;
+
+	switch(bframes) {
+		case 2:
+			aux = bref1;
+			break;
+		case 3:
+			aux = bref2;
+			break;
+		case 4:
+			aux = bref3;
+			break;
+		case 5:
+			aux = bref4;
+			break;
+		case 6:
+			aux = bref5;
+			break;
+		case 7:
+			aux = bref6;
+			break;
+		case 8:
+			aux = bref7;
+			break;
+		case 9:
+			aux = bref8;
+			break;
+		case 10:
+			aux = bref9;
+			break;
+		default:
+			aux = bref3;
+			break;
+	}
+
+	return aux;
 }
