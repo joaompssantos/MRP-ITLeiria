@@ -396,6 +396,7 @@ int ***init_ref_offset(IMAGE *img, int prd_order, int back_prd_order, int for_pr
  |		num_pmodel		--> Number of probability models (IN)
  |		pm_accuracy		--> Probability model accuracy (IN)
  |		delta			--> Parameter representing the distance between frames (IN)
+ |		depth			--> Input sequence bit depth (IN)
  |
  |  Returns:  ENCODER* --> returns a encoder type structure
  *-------------------------------------------------------------------*/
@@ -787,7 +788,6 @@ void free_encoder(ENCODER *enc) {
  |
  |  Parameters:
  |		enc				--> Encoder structure (IN / OUT)
- |		frame			--> Frame to be processed (IN)
  |
  |  Returns:  void
  *-------------------------------------------------------------------*/

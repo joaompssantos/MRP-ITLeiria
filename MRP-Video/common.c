@@ -266,7 +266,7 @@ IMAGE *copy_yuv(IMAGE *img) {
 unsigned short reverse_endianness (unsigned short s, int endianness) {
     unsigned char c1, c2;
 
-    if (endianness == 1) {
+    if (endianness == BIG_ENDIANNESS) {
         return s;
     }
     else {
@@ -365,7 +365,7 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 
 	if (frame > 0) {
 		if (depth > 8) {
-			fseek(fp, img->height * img->width * 1.5 * frame * 2, SEEK_SET);
+			fseek(fp, img->height * img->width * 2 * 1.5 * frame, SEEK_SET);
 		}
 		else {
 			fseek(fp, img->height * img->width * 1.5 * frame, SEEK_SET);
