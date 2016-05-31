@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libgen.h>
 #include <math.h>
 #include <limits.h>
 #include "mrp.h"
@@ -3054,7 +3055,7 @@ int main(int argc, char **argv) {
 	int endianness = LITTLE_ENDIANNESS;
 	int full_prd_order;
 	char *infile, *outfile;
-	char resfile[100];
+	char resfile[1000];
 	FILE *fp, *res;
 
 	//Print results variables
@@ -3305,7 +3306,7 @@ int main(int argc, char **argv) {
 	}
 
 	char *aux = remove_ext(outfile, '.', '/');
-	sprintf(resfile, "res_%s.txt", aux);
+	sprintf(resfile, "%s/res_%s.txt", dirname(aux), basename(aux));
 	free(aux);
 
 	res = fileopen(resfile, "w");
