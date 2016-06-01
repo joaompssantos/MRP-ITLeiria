@@ -3029,6 +3029,68 @@ int encode_extra_info(FILE *fp, char *extra_info, int num_pels) {
 	return bits;
 }
 
+/*--------------------------- total_variation ---------------------------*
+ |  Function total_variation
+ |
+ |  Purpose: Calculates the total variation of an image
+ |
+ |  Parameters:
+ |		img				--> Image to analyse (IN)
+ |
+ |  Returns:  boudle	--> Returns the total variation
+ *----------------------------------------------------------------------*/
+double total_variation(IMAGE *img) {
+	int x, y;
+
+	double tv = 0.0, dx, dy;
+
+	for (y = 0; y < img->height; y++) {
+		for (x = 0; x < img->width; x++) {
+			dy = (y == 0) ? 0 : (img->val[y][x] - img->val[y][x - 1]) * (img->val[y][x] - img->val[y - 1][x]);
+			dx = (x == 0) ? 0 : (img->val[y][x] - img->val[y][x - 1]) * (img->val[y][x] - img->val[y][x - 1]);
+			tv = tv + sqrt(dx + dy);
+		}
+	}
+
+	return tv;
+}
+
+/*------------------------- histogram_packing -------------------------*
+ |  Function histogram_packing
+ |
+ |  Purpose: Writes the extra infor to file
+ |
+ |  Parameters:
+ |		fp				--> File to write into (IN)
+ |		extra_info		--> Array with the extra info (IN)
+ |		num_pels		--> Number of pixels in need of extra info (IN)
+ |
+ |  Returns:  int		--> Returns the number of bits used
+ *---------------------------------------------------------------------*/
+int histogram_packing(IMAGE *img) {
+	int x, y, *hist = (int *) alloc_mem(sizeof(int) * log2(img->maxval + 1));
+	int conta = 0;
+
+	for (y = 0; y < log2(img->maxval + 1); y++) {
+		hist[y] = 0;
+	}
+
+	for (y = 0; y < img->height; y++) {
+		for (x = 0; x < img->width; x++) {
+			hist[img->val[y][x]]++;
+		}
+	}
+
+	for (y = 0; y < log2(img->maxval + 1); y++) {
+		if (hist[y] != 0) {
+			hist[conta] = y;
+			conta++;
+		}
+	}
+
+	return 0;
+}
+
 int main(int argc, char **argv) {
 	// Variable declaration
 	cost_t cost, min_cost, side_cost = 0;
