@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <unistd.h>
 #include "mrp.h"
@@ -195,7 +196,7 @@ void free_decoder(DECODER *dec) {
 	free(dec);
 }
 
-void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *depth, int *bframes, int *num_comp, int *num_group, int *prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta, int *diff, int *hevc) {
+void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *depth, int *bframes, int *num_comp, int *num_group, int *prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta, int *diff, int *hevc, int *hist_bytes) {
 	int i = 0;
 
 	if (getbits(fp, 16) != MAGIC_NUMBER) {
@@ -223,6 +224,7 @@ void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, i
 	*pm_accuracy = getbits(fp, 3) - 1;
 	*f_huffman = getbits(fp, 1);
 	*quadtree_depth = (getbits(fp, 1))? QUADTREE_DEPTH : -1;
+	*hist_bytes = getbits(fp, 16);
 }
 
 int decode_vlc(FILE *fp, VLC *vlc) {
@@ -1060,10 +1062,191 @@ char *decode_extra_info(FILE *fp, int *num_pels) {
 	return extra_info;
 }
 
+/*------------------------- decode_lookuptable -------------------------*
+ |  Function decode_lookuptable
+ |
+ |  Purpose: Recovers lookup table from file
+ |
+ |  Parameters:
+ |		fp				--> File to read from (IN)
+ |		hist_bytes		--> Number of bytes to read from file (IN)
+ |		depth			--> Length of the histogram (IN)
+ |
+ |  Returns:  IMGAE		--> Returns the reconstructed image
+ *----------------------------------------------------------------------*/
+int *decode_lookuptable(FILE *fp, int hist_bytes, int depth) {
+	char *new_str = (char *) alloc_mem(sizeof(char));
+	new_str[0] = '\0';
+
+	char phrase[25] = {};
+	int i = 0, j = 0, size, count = 0;
+
+	int *forward_table = (int *) alloc_mem(sizeof(int) * (depth + 1));
+	for (i = 0; i < depth; i++) {
+		forward_table[i] = 0;
+	}
+
+	// Read values from file
+	for (i = 0; i < hist_bytes; i++) {
+		new_str = cat_str(new_str, int2bin(getbits(fp, 8), 8), 1);
+	}
+
+	size = strlen(new_str);
+
+	for (i = 0; i < size; i++) {
+		phrase[0] = '\0';
+
+		for (j = 0; j < 7; j++) {
+			phrase[j] = new_str[j + i + 1];
+		}
+
+		phrase[j] = '\0';
+
+		if (new_str[i] == '0') {
+			if (strtol(phrase, NULL, 2) < 126) {
+				count += strtol(phrase, NULL, 2) + 1;
+
+				forward_table[count] = 1;
+
+				count++;
+
+				i = i + 7;
+			}
+			else {
+				phrase[0] = '\0';
+
+				if (new_str[i + 7] == '0') {
+					for (j = 0; j < 8; j++) {
+						phrase[j] = new_str[j + i + 8];
+					}
+
+					phrase[j] = '\0';
+
+					count += strtol(phrase, NULL, 2) + 127;
+
+					forward_table[count] = 1;
+
+					count++;
+
+					i = i + 15;
+				}
+				else {
+					for (j = 0; j < 16; j++) {
+						phrase[j] = new_str[j + i + 8];
+					}
+
+					phrase[j] = '\0';
+
+					count += strtol(phrase, NULL, 2) + 383;
+
+					forward_table[count] = 1;
+
+					count++;
+
+					i = i + 23;
+				}
+			}
+		}
+		else {
+			if (strtol(phrase, NULL, 2) < 126) {
+				for (j = count; j < count + strtol(phrase, NULL, 2) + 1; j++) {
+					forward_table[j] = 1;
+				}
+
+				count += strtol(phrase, NULL, 2) + 2;
+
+				i = i + 7;
+			}
+			else {
+				phrase[0] = '\0';
+
+				if (new_str[i + 7] == '0') {
+					for (j = 0; j < 8; j++) {
+						phrase[j] = new_str[j + i + 8];
+					}
+
+					phrase[j] = '\0';
+
+					for (j = count; j < count + strtol(phrase, NULL, 2) + 127; j++) {
+						forward_table[j] = 1;
+					}
+
+					count += strtol(phrase, NULL, 2) + 128;
+
+					i = i + 15;
+				}
+				else {
+					for (j = 0; j < 16; j++) {
+						phrase[j] = new_str[j + i + 8];
+					}
+
+					phrase[j] = '\0';
+
+					for (j = count; j < count + strtol(phrase, NULL, 2) + 383; j++) {
+						forward_table[j] = 1;
+					}
+
+					count += strtol(phrase, NULL, 2) + 384;
+
+					i = i + 23;
+				}
+			}
+		}
+	}
+
+	free(new_str);
+
+	count = 0;
+	j = 0;
+
+	for (i = 0; i < depth; i++) {
+		count += forward_table[i];
+	}
+
+	int *backward_table = (int *) alloc_mem(sizeof(int) * count);
+
+	for (i = 0; i < depth; i++) {
+		if (forward_table[i] != 0) {
+			backward_table[j] = i;
+			j++;
+		}
+	}
+	safefree((void **) &forward_table);
+
+	return backward_table;
+}
+
+/*------------------------- histogram_unpacking -------------------------*
+ |  Function histogram_unpacking
+ |
+ |  Purpose: Peforms the histogram packing and checks if the
+ |			 total variation is lower
+ |
+ |  Parameters:
+ |		img				--> Image to pack (IN/OUT)
+ |		backward_table	--> Lookup table to use (IN)
+ |
+ |  Returns:  IMGAE		--> Returns the reconstructed image
+ *----------------------------------------------------------------------*/
+IMAGE *histogram_unpacking(IMAGE *img, int *backward_table) {
+	int x, y;
+	IMAGE *u_img = alloc_image(img->width, img->height, img->maxval);
+
+	// Perform the histogram packing of the image
+	for (y = 0; y < img->height; y++) {
+		for (x = 0; x < img->width; x++) {
+			u_img->val[y][x] = backward_table[img->val[y][x]];
+		}
+	}
+
+	return u_img;
+}
+
 int main(int argc, char **argv) {
 	int i, f, **error = NULL;
 	int version, width, height, maxval, frames, depth, bframes, num_comp, num_group, endianness = LITTLE_ENDIANNESS;
-	int num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, diff, hevc;
+	int num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, diff, hevc, hist_bytes;
+	int *backward_table = NULL;
 	int prd_order[6] = {0, 0, 0, 0, 0, 0};
 
 	IMAGE *video[3] = {NULL, NULL, NULL};
@@ -1120,7 +1303,11 @@ int main(int argc, char **argv) {
 	}
 
 	fp = fileopen(infile, "rb");
-	read_header(fp, &version, &width, &height, &maxval, &frames, &depth, &bframes, &num_comp, &num_group, prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &diff, &hevc);
+	read_header(fp, &version, &width, &height, &maxval, &frames, &depth, &bframes, &num_comp, &num_group, prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &diff, &hevc, &hist_bytes);
+
+	if (hist_bytes != 0) {
+		backward_table = decode_lookuptable(fp, hist_bytes, (int) pow(2, depth));
+	}
 
 	printf("\nMRP-Video Decoder\n\n");
 	// Print file characteristics to screen
@@ -1198,7 +1385,16 @@ int main(int argc, char **argv) {
 				write_yuv(img_diff, outfile, dec->depth, endianness);
 			}
 			else {
-				write_yuv(video[1], outfile, dec->depth, endianness);
+				if (backward_table != NULL) {
+					IMAGE *unpacked = histogram_unpacking(video[1], backward_table);
+
+					write_yuv(unpacked, outfile, dec->depth, endianness);
+
+					safefree_yuv(&unpacked);
+				}
+				else {
+					write_yuv(video[1], outfile, dec->depth, endianness);
+				}
 			}
 
 			if (diff != 0 && f == 0) img_diff = video[1];
@@ -1476,7 +1672,17 @@ int main(int argc, char **argv) {
 
 		if (diff == 0) {
 			for (f = 0; f < frames; f++) {
-				write_yuv(seq[f], outfile, dec->depth, endianness);
+				if (backward_table != NULL) {
+					IMAGE *unpacked = histogram_unpacking(seq[f], backward_table);
+
+					write_yuv(unpacked, outfile, dec->depth, endianness);
+
+					safefree_yuv(&unpacked);
+				}
+				else {
+					write_yuv(seq[f], outfile, dec->depth, endianness);
+				}
+
 				free(seq[f]->val);
 				free(seq[f]);
 			}
@@ -1519,6 +1725,8 @@ int main(int argc, char **argv) {
 
 		free(seq);
 	}
+
+	safefree((void **) &backward_table);
 
 	fclose(fp);
 

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include "mrp.h"
 
@@ -334,6 +335,8 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
  |		height		--> Height of the video (IN)
  |		width		--> Width of the video (IN)
  |		frame		--> Frame of the video to copy (IN)
+ |		depth		--> Image dynamic range (bpp) (IN)
+ |		endianness	--> YUV endianness, for depth > 8 bpp (IN)
  |
  |  Returns:  IMAGE* --> returns a video type structure
  *-------------------------------------------------------------------*/
@@ -960,4 +963,41 @@ int **select_bref(int bframes) {
 	}
 
 	return aux;
+}
+
+char* cat_str(char* str1, char* str2, int type) {
+	char *new_str = (char *)alloc_mem(sizeof(char) * (strlen(str1) + strlen(str2) + 1));
+
+	if(new_str != NULL){
+		new_str[0] = '\0';   // ensures the memory is an empty string
+
+		strcat(new_str, str1);
+		strcat(new_str, str2);
+	}
+	else {
+		printf("malloc failed!\n");
+		exit(-12);
+	}
+
+	if (type == 1 ) safefree((void **)&str1);
+	safefree((void **)&str2);
+
+	return new_str;
+}
+
+// buffer must have length >= sizeof(int) + 1
+// Write to the buffer backwards so that the binary representation
+// is in the correct order i.e.  the LSB is on the far right
+// instead of the far left of the printed string
+char *int2bin(int a, int buf_size) {
+    char *buffer = (char *)alloc_mem(sizeof(char) * (buf_size + 1));
+    buffer[buf_size] = '\0';
+
+    for (int i = buf_size - 1; i >= 0; i--) {
+        buffer[i] = (a & 1) + '0';
+
+        a >>= 1;
+    }
+
+    return buffer;
 }
