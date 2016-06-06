@@ -1375,10 +1375,29 @@ int main(int argc, char **argv) {
 				if (extra_info != NULL) free(extra_info);
 
 				if (num_pels == 0) {
-					img_diff = sum_diff(img_diff, video[1], f, dec->depth);
+					if (backward_table != NULL) {
+						IMAGE *unpacked = histogram_unpacking(video[1], backward_table);
+
+						img_diff = sum_diff(img_diff, unpacked, f, dec->depth);
+
+						safefree_yuv(&unpacked);
+					}
+					else {
+						img_diff = sum_diff(img_diff, video[1], f, dec->depth);
+					}
 				}
 				else {
-					img_diff = sum_diff(img_diff, aux_image, f, dec->depth);
+					if (backward_table != NULL) {
+						IMAGE *unpacked = histogram_unpacking(aux_image, backward_table);
+
+						img_diff = sum_diff(img_diff, unpacked, f, dec->depth);
+
+						safefree_yuv(&unpacked);
+					}
+					else {
+						img_diff = sum_diff(img_diff, aux_image, f, dec->depth);
+					}
+
 					free(aux_image);
 				}
 
@@ -1397,7 +1416,14 @@ int main(int argc, char **argv) {
 				}
 			}
 
-			if (diff != 0 && f == 0) img_diff = video[1];
+			if (diff != 0 && f == 0) {
+				if (backward_table != NULL) {
+					img_diff = histogram_unpacking(video[1], backward_table);
+				}
+				else {
+					img_diff = video[1];
+				}
+			}
 
 			error = get_dec_err(dec, 1);
 			free_decoder(dec);
@@ -1688,14 +1714,35 @@ int main(int argc, char **argv) {
 			}
 		}
 		else {
-			write_yuv(seq[0], outfile, dec->depth, endianness);
+			if (backward_table != NULL) {
+				seq[0] = histogram_unpacking(seq[0], backward_table);
+
+				write_yuv(seq[0], outfile, dec->depth, endianness);
+			}
+			else {
+				write_yuv(seq[0], outfile, dec->depth, endianness);
+			}
+
 			img_diff = seq[0];
+
 			for (f = 1; f < frames; f++) {
-				img_diff = sum_diff(img_diff, seq[f], f, dec->depth);
+				if (backward_table != NULL) {
+					IMAGE *unpacked = histogram_unpacking(seq[f], backward_table);
+
+					img_diff = sum_diff(img_diff, unpacked, f, dec->depth);
+
+					safefree_yuv(&unpacked);
+				}
+				else {
+					img_diff = sum_diff(img_diff, seq[f], f, dec->depth);
+				}
+
 				write_yuv(img_diff, outfile, dec->depth, endianness);
+
 				free(seq[f - 1]->val);
 				free(seq[f - 1]);
 			}
+
 			free(seq[frames - 1]->val);
 			free(seq[frames - 1]);
 

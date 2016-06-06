@@ -3071,9 +3071,11 @@ double total_variation(IMAGE *img) {
  |
  |  Returns: double	--> Returns the percentage of used values
  *-------------------------------------------------------------------------*/
-double utilization_level(char *infile, int height, int width, int frames, int depth, int endianness) {
+double utilization_level(char *infile, int height, int width, int frames, int depth, int endianness, int diff) {
 	int x, y, f, L = 0;
 	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
+	int num_pels;
+	char *extra_info = NULL;
 	IMAGE *img = NULL;
 
 	for (y = 0; y < (int)pow(2, depth); y++) {
@@ -3082,7 +3084,12 @@ double utilization_level(char *infile, int height, int width, int frames, int de
 
 	// Operations to obtain the lookup table
 	for (f = 0; f < frames; f++) {
-		img = read_yuv(infile, height, width, f, depth, endianness);
+		if (f == 0 || diff == 0) {
+			img = read_yuv(infile, height, width, f, depth, endianness);
+		}
+		else {
+			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
+		}
 
 		for (y = 0; y < img->height; y++) {
 			for (x = 0; x < img->width; x++) {
@@ -3100,6 +3107,7 @@ double utilization_level(char *infile, int height, int width, int frames, int de
 	}
 
 	free(hist);
+	safefree((void **)&extra_info);
 
 	return (double) (L / pow(2, depth) * 100.0);
 }
@@ -3119,11 +3127,13 @@ double utilization_level(char *infile, int height, int width, int frames, int de
  |
  |  Returns:  int*	--> Returns the lookup table
  *----------------------------------------------------------------------*/
-int* histogram_check(char *infile, int height, int width, int frames, int depth, int endianness) {
+int* histogram_check(char *infile, int height, int width, int frames, int depth, int endianness, int diff) {
 	int x, y, f;
 	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
 	int *forward_table = (int *) alloc_mem(sizeof(int) * (int)(pow(2, depth)));
 	double tv_original = 0.0, tv_packed = 0.0;
+	int num_pels;
+	char *extra_info = NULL;
 	IMAGE *aux_img, *img = NULL;
 
 	for (y = 0; y < (int)pow(2, depth); y++) {
@@ -3133,7 +3143,12 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 
 	// Operations to obtain the lookup table
 	for (f = 0; f < frames; f++) {
-		img = read_yuv(infile, height, width, f, depth, endianness);
+		if (f == 0 || diff == 0) {
+			img = read_yuv(infile, height, width, f, depth, endianness);
+		}
+		else {
+			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
+		}
 
 		for (y = 0; y < img->height; y++) {
 			for (x = 0; x < img->width; x++) {
@@ -3156,7 +3171,12 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 
 	// Perform the histogram packing of the image
 	for (f = 0; f < frames; f++) {
-		img = read_yuv(infile, height, width, f, depth, endianness);
+		if (f == 0 || diff == 0) {
+			img = read_yuv(infile, height, width, f, depth, endianness);
+		}
+		else {
+			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
+		}
 
 		for (y = 0; y < img->height; y++) {
 			for (x = 0; x < img->width; x++) {
@@ -3177,6 +3197,7 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 		safefree((void**)&forward_table);
 	}
 
+	safefree((void **)&extra_info);
 	return forward_table;
 }
 
@@ -3599,7 +3620,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (do_histogram_packing == 1) forward_table = histogram_check(infile, height, width, frames, depth, endianness);
+	if (do_histogram_packing == 1) forward_table = histogram_check(infile, height, width, frames, depth, endianness, diff);
 
 	printf("\nMRP-Video Encoder\n\n");
 	// Print file characteristics to screen
@@ -3608,7 +3629,7 @@ int main(int argc, char **argv) {
 	printf("M = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
 	// Print prediction parameters to screen
 	if (forward_table != NULL) {
-		printf("Histogram packing, U = %3.1f%%\n\n", utilization_level(infile, height, width, frames, depth, endianness));
+		printf("Histogram packing, U = %3.1f%%\n\n", utilization_level(infile, height, width, frames, depth, endianness, diff));
 	}
 	if (frames == 1) {
 		printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
