@@ -302,9 +302,13 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
 
 	for (i = 0; i < img->height / 2; i++) {
 		for (j = 0; j < img->width / 2; j++) {
-			putc((int) (pow(2, depth) / 2), fp);
-
 			if (depth > 8) {
+				byte = reverse_endianness((int) (pow(2, depth) / 2), endianness);
+
+				putc((byte >> 8) & 0x00FF, fp);
+				putc(byte & 0x00FF, fp);
+			}
+			else {
 				putc((int) (pow(2, depth) / 2), fp);
 			}
 		}
@@ -312,9 +316,13 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
 
 	for (i = 0; i < img->height / 2; i++) {
 		for (j = 0; j < img->width / 2; j++) {
-			putc((int) (pow(2, depth) / 2), fp);
-
 			if (depth > 8) {
+				byte = reverse_endianness((int) (pow(2, depth) / 2), endianness);
+
+				putc((byte >> 8) & 0x00FF, fp);
+				putc(byte & 0x00FF, fp);
+			}
+			else {
 				putc((int) (pow(2, depth) / 2), fp);
 			}
 		}
