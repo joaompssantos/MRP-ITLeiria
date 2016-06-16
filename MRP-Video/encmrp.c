@@ -532,7 +532,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	}
 
 	// Table used for the conversion of the error
-	if (enc->depth <= 14) {
+	if (enc->depth <= 8) {
 		enc->econv = (int **)alloc_2d_array(enc->maxval + 1, (enc->maxval << 1) + 1, sizeof(int));
 	}
 	// Structure used to convert the prediction to a pointer which indicates the position in the probability vector structure of the prediction error
@@ -668,7 +668,7 @@ void free_encoder(ENCODER *enc) {
 	free(enc->class);
 	free(enc->group);
 	free(enc->uquant);
-	if (enc->depth <= 14) {
+	if (enc->depth <= 8) {
 		free(enc->econv);
 	}
 	free(enc->bconv);
@@ -886,7 +886,7 @@ void set_cost_model(ENCODER *enc, int f_mmse) {
 	double a, b, c, var;
 	PMODEL *pm;
 
-	if (enc->depth <= 14) {
+	if (enc->depth <= 8) {
 		for (i = 0; i <= enc->maxval; i++) {
 			for (j = 0; j <= (enc->maxval << 1); j++) {
 				enc->econv[i][j] = error_conversion(i, j, enc->maxval, enc->etype);
@@ -944,7 +944,7 @@ void set_cost_rate(ENCODER *enc) {
 	if (enc->pm_accuracy < 0) {
 		enc->etype = 1;
 
-		if (enc->depth <= 14) {
+		if (enc->depth <= 8) {
 			for (i = 0; i <= enc->maxval; i++) {
 				for (j = 0; j <= (enc->maxval << 1); j++) {
 					enc->econv[i][j] = error_conversion(i, j, enc->maxval, enc->etype);
@@ -1060,7 +1060,7 @@ void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx) {
 
 			prd >>= (enc->coef_precision - 1);
 
-			if (enc->depth <= 14) {
+			if (enc->depth <= 8) {
 				*err_p++ = enc->econv[org][prd];
 			}
 			else {
@@ -1581,7 +1581,7 @@ void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int 
 
 					prd >>= (enc->coef_precision - 1);
 
-					if (enc->depth <= 14) {
+					if (enc->depth <= 8) {
 						*errbuf_p++ = enc->econv[org][prd];
 					}
 					else {
@@ -1925,7 +1925,7 @@ void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
 			cbuf_p = cbuf;
 
 			if (enc->pm_accuracy < 0) {
-				if (enc->depth <= 14) {
+				if (enc->depth <= 8) {
 					econv_p = enc->econv[*org_p];
 				}
 
@@ -1938,7 +1938,7 @@ void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
 						if (prd < 0) prd = 0;
 						else if (prd > maxprd) prd = maxprd;
 
-						if (enc->depth <= 14) {
+						if (enc->depth <= 8) {
 							(*cbuf_p++) += pmcost_p[econv_p[prd >> shift]];
 						}
 						else {
@@ -3121,8 +3121,10 @@ double utilization_level(char *infile, int height, int width, int frames, int de
  *----------------------------------------------------------------------*/
 int* histogram_check(char *infile, int height, int width, int frames, int depth, int endianness) {
 	int x, y, f;
+	int used_values = 0;
 	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
 	int *forward_table = (int *) alloc_mem(sizeof(int) * (int)(pow(2, depth)));
+	int *table = (int *) alloc_mem(sizeof(int) * (int)pow(2, depth));
 	double tv_original = 0.0, tv_packed = 0.0;
 	IMAGE *aux_img, *img = NULL;
 
@@ -3154,13 +3156,24 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 
 	aux_img = alloc_image(height, width, (int) (pow(2, depth) - 1));
 
+	// Produces the actual forward table
+	for (y = 0; y < (int)pow(2, depth); y++) {
+		if (forward_table[y] != 0) {
+			table[y] = used_values;
+			used_values++;
+		}
+		else {
+			table[y] = -1;
+		}
+	}
+
 	// Perform the histogram packing of the image
 	for (f = 0; f < frames; f++) {
 		img = read_yuv(infile, height, width, f, depth, endianness);
 
 		for (y = 0; y < img->height; y++) {
 			for (x = 0; x < img->width; x++) {
-				aux_img->val[y][x] = forward_table[img->val[y][x]];
+				aux_img->val[y][x] = table[img->val[y][x]];
 			}
 		}
 
@@ -3214,6 +3227,8 @@ void histogram_packing(IMAGE *img, int *forward_table, int depth) {
 			img->val[y][x] = table[img->val[y][x]];
 		}
 	}
+
+	img->maxval = used_values - 1;
 
 	free(table);
 }
