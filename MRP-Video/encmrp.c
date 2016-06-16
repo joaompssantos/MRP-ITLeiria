@@ -532,7 +532,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	}
 
 	// Table used for the conversion of the error
-	if (enc->depth <= 14) {
+	if (enc->depth <= 8) {
 		enc->econv = (int **)alloc_2d_array(enc->maxval + 1, (enc->maxval << 1) + 1, sizeof(int));
 	}
 	// Structure used to convert the prediction to a pointer which indicates the position in the probability vector structure of the prediction error
@@ -668,7 +668,7 @@ void free_encoder(ENCODER *enc) {
 	free(enc->class);
 	free(enc->group);
 	free(enc->uquant);
-	if (enc->depth <= 14) {
+	if (enc->depth <= 8) {
 		free(enc->econv);
 	}
 	free(enc->bconv);
@@ -886,7 +886,7 @@ void set_cost_model(ENCODER *enc, int f_mmse) {
 	double a, b, c, var;
 	PMODEL *pm;
 
-	if (enc->depth <= 14) {
+	if (enc->depth <= 8) {
 		for (i = 0; i <= enc->maxval; i++) {
 			for (j = 0; j <= (enc->maxval << 1); j++) {
 				enc->econv[i][j] = error_conversion(i, j, enc->maxval, enc->etype);
@@ -944,7 +944,7 @@ void set_cost_rate(ENCODER *enc) {
 	if (enc->pm_accuracy < 0) {
 		enc->etype = 1;
 
-		if (enc->depth <= 14) {
+		if (enc->depth <= 8) {
 			for (i = 0; i <= enc->maxval; i++) {
 				for (j = 0; j <= (enc->maxval << 1); j++) {
 					enc->econv[i][j] = error_conversion(i, j, enc->maxval, enc->etype);
@@ -1060,7 +1060,7 @@ void predict_region(ENCODER *enc, int tly, int tlx, int bry, int brx) {
 
 			prd >>= (enc->coef_precision - 1);
 
-			if (enc->depth <= 14) {
+			if (enc->depth <= 8) {
 				*err_p++ = enc->econv[org][prd];
 			}
 			else {
@@ -1581,7 +1581,7 @@ void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int 
 
 					prd >>= (enc->coef_precision - 1);
 
-					if (enc->depth <= 14) {
+					if (enc->depth <= 8) {
 						*errbuf_p++ = enc->econv[org][prd];
 					}
 					else {
@@ -1925,7 +1925,7 @@ void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
 			cbuf_p = cbuf;
 
 			if (enc->pm_accuracy < 0) {
-				if (enc->depth <= 14) {
+				if (enc->depth <= 8) {
 					econv_p = enc->econv[*org_p];
 				}
 
@@ -1938,7 +1938,7 @@ void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
 						if (prd < 0) prd = 0;
 						else if (prd > maxprd) prd = maxprd;
 
-						if (enc->depth <= 14) {
+						if (enc->depth <= 8) {
 							(*cbuf_p++) += pmcost_p[econv_p[prd >> shift]];
 						}
 						else {
@@ -3023,7 +3023,7 @@ int encode_extra_info(FILE *fp, char *extra_info, int num_pels) {
 	bits = putbits(fp, 16, num_pels);
 
 	for (i = 0; i < num_pels; i++) {
-		bits += putbits(fp, 8, extra_info[i]);
+		bits += putbits(fp, 8, extra_info[i] + 128);
 	}
 
 	return bits;
@@ -3044,8 +3044,8 @@ double total_variation(IMAGE *img) {
 
 	double tv = 0.0, dx, dy;
 
-	for (y = 1; y < img->height; y++) {
-		for (x = 1; x < img->width; x++) {
+	for (y = 0; y < img->height; y++) {
+		for (x = 0; x < img->width; x++) {
 			dy = (y == 0) ? 0 : (img->val[y][x] - img->val[y - 1][x]) * (img->val[y][x] - img->val[y - 1][x]);
 			dx = (x == 0) ? 0 : (img->val[y][x] - img->val[y][x - 1]) * (img->val[y][x] - img->val[y][x - 1]);
 
@@ -3129,8 +3129,10 @@ double utilization_level(char *infile, int height, int width, int frames, int de
  *----------------------------------------------------------------------*/
 int* histogram_check(char *infile, int height, int width, int frames, int depth, int endianness, int diff) {
 	int x, y, f;
+	int used_values = 0;
 	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
 	int *forward_table = (int *) alloc_mem(sizeof(int) * (int)(pow(2, depth)));
+	int *table = (int *) alloc_mem(sizeof(int) * (int)pow(2, depth));
 	double tv_original = 0.0, tv_packed = 0.0;
 	int num_pels;
 	char *extra_info = NULL;
@@ -3169,6 +3171,17 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 
 	aux_img = alloc_image(height, width, (int) (pow(2, depth) - 1));
 
+	// Produces the actual forward table
+	for (y = 0; y < (int)pow(2, depth); y++) {
+		if (forward_table[y] != 0) {
+			table[y] = used_values;
+			used_values++;
+		}
+		else {
+			table[y] = -1;
+		}
+	}
+
 	// Perform the histogram packing of the image
 	for (f = 0; f < frames; f++) {
 		if (f == 0 || diff == 0) {
@@ -3180,7 +3193,7 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 
 		for (y = 0; y < img->height; y++) {
 			for (x = 0; x < img->width; x++) {
-				aux_img->val[y][x] = forward_table[img->val[y][x]];
+				aux_img->val[y][x] = table[img->val[y][x]];
 			}
 		}
 
@@ -3235,6 +3248,8 @@ void histogram_packing(IMAGE *img, int *forward_table, int depth) {
 			img->val[y][x] = table[img->val[y][x]];
 		}
 	}
+
+	img->maxval = used_values - 1;
 
 	free(table);
 }
@@ -3682,13 +3697,22 @@ int main(int argc, char **argv) {
 				if (diff == 0) {
 					video[0] = video[1];
 					video[1] = read_yuv(infile, height, width, f, depth, endianness);
+
+					if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 				}
 				else {
 					video[0] = video[1];
-					video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
-				}
 
-				if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
+					IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
+					IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
+
+					if (forward_table != NULL) {
+						histogram_packing(aux1, forward_table, depth);
+						histogram_packing(aux2, forward_table, depth);
+					}
+
+					video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
+				}
 
 				enc = init_encoder(video[1], video[0], NULL, error, NULL, num_class, num_group, prd_order[1], prd_order[2], 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta, depth);
 
@@ -3939,6 +3963,7 @@ int main(int argc, char **argv) {
 			if (f == 0) {
 				// Read input file
 				video[1] = read_yuv(infile, height, width, f, depth, endianness);
+
 				if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 
 				enc = init_encoder(video[1], NULL, NULL, NULL, NULL, num_class, num_group, prd_order[0], 0, 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta, depth);
@@ -4156,12 +4181,20 @@ int main(int argc, char **argv) {
 
 					if (diff == 0) {
 						video[1] = read_yuv(infile, height, width, f, depth, endianness);
+
+						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 					}
 					else {
-						video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
-					}
+						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
+						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
 
-					if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
+						if (forward_table != NULL) {
+							histogram_packing(aux1, forward_table, depth);
+							histogram_packing(aux2, forward_table, depth);
+						}
+
+						video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
+					}
 				}
 				else if (f == for_reference) {
 					if (f == back_reference + 1) {
@@ -4179,12 +4212,20 @@ int main(int argc, char **argv) {
 
 						if (diff == 0) {
 							video[1] = read_yuv(infile, height, width, f, depth, endianness);
+
+							if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 						}
 						else {
-							video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
-						}
+							IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
+							IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
 
-						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
+							if (forward_table != NULL) {
+								histogram_packing(aux1, forward_table, depth);
+								histogram_packing(aux2, forward_table, depth);
+							}
+
+							video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
+						}
 					}
 				}
 				else if (back_reference < f && f < for_reference - 1) {
@@ -4193,13 +4234,21 @@ int main(int argc, char **argv) {
 					safefree_yuv(&video[1]);
 
 					if (diff == 0) {
+						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
+
 						video[1] = read_yuv(infile, height, width, f, depth, endianness);
 					}
 					else {
-						video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
-					}
+						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
+						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
 
-					if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
+						if (forward_table != NULL) {
+							histogram_packing(aux1, forward_table, depth);
+							histogram_packing(aux2, forward_table, depth);
+						}
+
+						video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
+					}
 				}
 				else if (f == for_reference - 1) {
 					if (f + 1 == frames - 1) {
@@ -4229,12 +4278,20 @@ int main(int argc, char **argv) {
 
 					if (diff == 0) {
 						video[1] = read_yuv(infile, height, width, f, depth, endianness);
+
+						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 					}
 					else {
-						video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
-					}
+						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
+						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
 
-					if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
+						if (forward_table != NULL) {
+							histogram_packing(aux1, forward_table, depth);
+							histogram_packing(aux2, forward_table, depth);
+						}
+
+						video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
+					}
 				}
 			}
 			else if (hevc == 1) {
@@ -4247,18 +4304,26 @@ int main(int argc, char **argv) {
 					back_ref_error = keep_error[0];
 
 					safefree_yuv(&video[1]);
+
+					video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness);
+
+					if (forward_table != NULL) histogram_packing(video[0], forward_table, depth);
+
 					if (diff == 0) {
-						video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness);
 						video[1] = read_yuv(infile, height, width, f, depth, endianness);
+
+						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 					}
 					else {
-						video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness);
-						video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
-					}
+						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
+						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
 
-					if (forward_table != NULL) {
-						histogram_packing(video[0], forward_table, depth);
-						histogram_packing(video[1], forward_table, depth);
+						if (forward_table != NULL) {
+							histogram_packing(aux1, forward_table, depth);
+							histogram_packing(aux2, forward_table, depth);
+						}
+
+						video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
 					}
 
 					conta++;
@@ -4276,23 +4341,43 @@ int main(int argc, char **argv) {
 
 						safefree_yuv(&video[1]);
 						safefree_yuv(&video[0]);
+
 						if (diff == 0) {
 							video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness);
 							video[1] = read_yuv(infile, height, width, f, depth, endianness);
+
+							if (forward_table != NULL) {
+								histogram_packing(video[0], forward_table, depth);
+								histogram_packing(video[1], forward_table, depth);
+							}
 						}
 						else {
 							if (f + bref[conta][1] == 0) {
 								video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness);
+
+								if (forward_table != NULL) histogram_packing(video[0], forward_table, depth);
 							}
 							else {
-								video[0] = calc_diff(read_yuv(infile, height, width, f + bref[conta][1] - 1, depth, endianness), read_yuv(infile, height, width, f + bref[conta][1], depth, endianness), &extra_info, &num_pels, depth);
-							}
-							video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
-						}
+								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[conta][1] - 1, depth, endianness);
+								IMAGE *aux2 = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness);
 
-						if (forward_table != NULL) {
-							histogram_packing(video[0], forward_table, depth);
-							histogram_packing(video[1], forward_table, depth);
+								if (forward_table != NULL) {
+									histogram_packing(aux1, forward_table, depth);
+									histogram_packing(aux2, forward_table, depth);
+								}
+
+								video[0] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
+							}
+
+							IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
+							IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
+
+							if (forward_table != NULL) {
+								histogram_packing(aux1, forward_table, depth);
+								histogram_packing(aux2, forward_table, depth);
+							}
+
+							video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
 						}
 
 						if (conta < bframes + 1) back_ref_error = keep_error[bref[conta][3]];
@@ -4301,9 +4386,19 @@ int main(int argc, char **argv) {
 							if (video[2] != NULL) safefree_yuv(&video[2]);
 							if (diff == 0) {
 								video[2] = read_yuv(infile, height, width, f + bref[conta][2], depth, endianness);
+
+								if (forward_table != NULL) histogram_packing(video[2], forward_table, depth);
 							}
 							else {
-								video[2] = calc_diff(read_yuv(infile, height, width, f + bref[conta][2] - 1, depth, endianness), read_yuv(infile, height, width, f + bref[conta][2], depth, endianness), &extra_info, &num_pels, depth);
+								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[conta][2] - 1, depth, endianness);
+								IMAGE *aux2 = read_yuv(infile, height, width, f + bref[conta][2], depth, endianness);
+
+								if (forward_table != NULL) {
+									histogram_packing(aux1, forward_table, depth);
+									histogram_packing(aux2, forward_table, depth);
+								}
+
+								video[2] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
 							}
 
 							if (conta < bframes + 1) for_ref_error = keep_error[bref[conta][4]];
@@ -4311,10 +4406,6 @@ int main(int argc, char **argv) {
 						else {
 							if (video[2] != NULL) safefree_yuv(&video[2]);
 							for_ref_error = NULL;
-						}
-
-						if (forward_table != NULL) {
-							histogram_packing(video[2], forward_table, depth);
 						}
 
 						conta++;
@@ -4332,15 +4423,32 @@ int main(int argc, char **argv) {
 								if (diff == 0) {
 									video[0] = read_yuv(infile, height, width, f + 1, depth, endianness);
 									video[1] = read_yuv(infile, height, width, frames - 1, depth, endianness);
+
+									if (forward_table != NULL) {
+										histogram_packing(video[0], forward_table, depth);
+										histogram_packing(video[1], forward_table, depth);
+									}
 								}
 								else {
-									video[0] = calc_diff(read_yuv(infile, height, width, f, depth, endianness), read_yuv(infile, height, width, f + 1, depth, endianness), &extra_info, &num_pels, depth);
-									video[1] = calc_diff(read_yuv(infile, height, width, frames - 2, depth, endianness), read_yuv(infile, height, width, frames - 1, depth, endianness), &extra_info, &num_pels, depth);
-								}
+									IMAGE *aux1 = read_yuv(infile, height, width, f, depth, endianness);
+									IMAGE *aux2 = read_yuv(infile, height, width, f + 1, depth, endianness);
 
-								if (forward_table != NULL) {
-									histogram_packing(video[0], forward_table, depth);
-									histogram_packing(video[1], forward_table, depth);
+									if (forward_table != NULL) {
+										histogram_packing(aux1, forward_table, depth);
+										histogram_packing(aux2, forward_table, depth);
+									}
+
+									video[0] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
+
+									aux1 = read_yuv(infile, height, width, frames - 2, depth, endianness);
+									aux2 = read_yuv(infile, height, width, frames - 1, depth, endianness);
+
+									if (forward_table != NULL) {
+										histogram_packing(aux1, forward_table, depth);
+										histogram_packing(aux2, forward_table, depth);
+									}
+
+									video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
 								}
 
 								first_frame = f + 1;
@@ -4355,15 +4463,32 @@ int main(int argc, char **argv) {
 									if (diff == 0) {
 										video[0] = read_yuv(infile, height, width, frames - 2, depth, endianness);
 										video[1] = read_yuv(infile, height, width, frames - 1, depth, endianness);
+
+										if (forward_table != NULL) {
+											histogram_packing(video[0], forward_table, depth);
+											histogram_packing(video[1], forward_table, depth);
+										}
 									}
 									else {
-										video[0] = calc_diff(read_yuv(infile, height, width, frames - 3, depth, endianness), read_yuv(infile, height, width, frames - 2, depth, endianness), &extra_info, &num_pels, depth);
-										video[1] = calc_diff(read_yuv(infile, height, width, frames - 2, depth, endianness), read_yuv(infile, height, width, frames - 1, depth, endianness), &extra_info, &num_pels, depth);
-									}
+										IMAGE *aux1 = read_yuv(infile, height, width, frames - 3, depth, endianness);
+										IMAGE *aux2 = read_yuv(infile, height, width, frames - 2, depth, endianness);
 
-									if (forward_table != NULL) {
-										histogram_packing(video[0], forward_table, depth);
-										histogram_packing(video[1], forward_table, depth);
+										if (forward_table != NULL) {
+											histogram_packing(aux1, forward_table, depth);
+											histogram_packing(aux2, forward_table, depth);
+										}
+
+										video[0] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
+
+										aux1 = read_yuv(infile, height, width, frames - 2, depth, endianness);
+										aux2 = read_yuv(infile, height, width, frames - 1, depth, endianness);
+
+										if (forward_table != NULL) {
+											histogram_packing(aux1, forward_table, depth);
+											histogram_packing(aux2, forward_table, depth);
+										}
+
+										video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
 									}
 
 									first_frame = frames - 2;
@@ -4397,15 +4522,32 @@ int main(int argc, char **argv) {
 							if (diff == 0) {
 								video[0] = read_yuv(infile, height, width, f + bref[0][1], depth, endianness);
 								video[1] = read_yuv(infile, height, width, f, depth, endianness);
+
+								if (forward_table != NULL) {
+									histogram_packing(video[0], forward_table, depth);
+									histogram_packing(video[1], forward_table, depth);
+								}
 							}
 							else {
-								video[0] = calc_diff(read_yuv(infile, height, width, f + bref[0][1] - 1, depth, endianness), read_yuv(infile, height, width, f + bref[0][1], depth, endianness), &extra_info, &num_pels, depth);
-								video[1] = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
-							}
+								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[0][1] - 1, depth, endianness);
+								IMAGE *aux2 =  read_yuv(infile, height, width, f + bref[0][1], depth, endianness);
 
-							if (forward_table != NULL) {
-								histogram_packing(video[0], forward_table, depth);
-								histogram_packing(video[1], forward_table, depth);
+								if (forward_table != NULL) {
+									histogram_packing(aux1, forward_table, depth);
+									histogram_packing(aux2, forward_table, depth);
+								}
+
+								video[0] = calc_diff(aux1,aux2, &extra_info, &num_pels, depth);
+
+								aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
+								aux2 = read_yuv(infile, height, width, f, depth, endianness);
+
+								if (forward_table != NULL) {
+									histogram_packing(aux1, forward_table, depth);
+									histogram_packing(aux2, forward_table, depth);
+								}
+
+								video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
 							}
 
 							safefree_yuv(&video[2]);

@@ -1027,14 +1027,19 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 	return (video[1]);
 }
 
-IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int frame, int depth) {
-	int x, y;
+IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int *extra_info, int num_pels, int frame, int depth) {
+	int x, y, conta = 0;
 	// Image allocation
 	IMAGE *cur = alloc_image(ref->width, ref->height, (int) (pow(2, depth) - 1));
 
 	for (y = 0; y < ref->height; y++) {
 		for (x = 0; x < ref->width; x++) {
 			cur->val[y][x] = diff->val[y][x] + ref->val[y][x] - (int) (pow(2, depth) / 2 - 1);
+
+			if ((diff->val[y][x] == 0 || diff->val[y][x] == (int) (pow(2, depth) - 1)) && conta < num_pels) {
+				cur->val[y][x] += extra_info[conta + 1];
+				conta++;
+			}
 		}
 	}
 
@@ -1042,20 +1047,24 @@ IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int frame, int depth) {
 		safefree_yuv(&ref);
 	}
 
+	safefree((void **)&extra_info);
+
 	return cur;
 }
 
-char *decode_extra_info(FILE *fp, int *num_pels) {
-	int i;
-	char *extra_info = NULL;
+int *decode_extra_info(FILE *fp) {
+	int i, num_pels = 0;
+	int *extra_info = NULL;
 
-	*num_pels = getbits(fp, 16);
+	num_pels = getbits(fp, 16);
 
-	if (*num_pels != 0) {
-		extra_info = (char *) alloc_mem(*num_pels * sizeof(char));
+	if (num_pels != 0) {
+		extra_info = (int *) alloc_mem((num_pels + 1) * sizeof(int));
 
-		for (i = 0; i < *num_pels; i++) {
-			extra_info[i] = getbits(fp, 8);
+		extra_info[0] = num_pels;
+
+		for (i = 0; i < num_pels; i++) {
+			extra_info[i + 1] = getbits(fp, 8) - 128;
 		}
 	}
 
@@ -1211,6 +1220,7 @@ int *decode_lookuptable(FILE *fp, int hist_bytes, int depth) {
 			j++;
 		}
 	}
+
 	safefree((void **) &forward_table);
 
 	return backward_table;
@@ -1223,7 +1233,7 @@ int *decode_lookuptable(FILE *fp, int hist_bytes, int depth) {
  |			 total variation is lower
  |
  |  Parameters:
- |		img				--> Image to pack (IN/OUT)
+ |		img				--> Image to pack (IN)
  |		backward_table	--> Lookup table to use (IN)
  |
  |  Returns:  IMGAE		--> Returns the reconstructed image
@@ -1259,8 +1269,7 @@ int main(int argc, char **argv) {
 	infile = outfile = NULL;
 
 	IMAGE *img_diff = NULL;
-	int num_pels = 0, x, y;
-	char *extra_info = NULL;
+	int **extra_info = NULL;
 
 	for (i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
@@ -1314,6 +1323,9 @@ int main(int argc, char **argv) {
 	printf("%s (%dx%dx%dx%d) -> %s\n", infile, width, height, frames, depth, outfile);
 	// Print coding parameters to screen
 	printf("P = %d, V = %d, A = %d, D = %d, p = %s\n\n", coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
+	if (backward_table != NULL) {
+		printf("Histogram packing on\n\n");
+	}
 	// Print prediction parameters to screen
 	if (frames == 1) {
 		printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
@@ -1324,6 +1336,8 @@ int main(int argc, char **argv) {
 	else {
 		printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
 	}
+
+	extra_info = (int **) alloc_mem(sizeof(int *) * (frames - 1));
 
 	if (bframes == 0) {
 		for (f = 0; f < frames; f++) {
@@ -1353,55 +1367,25 @@ int main(int argc, char **argv) {
 			video[1] = decode_image(fp, video, dec);
 
 			if (f > 0 && diff != 0) {
-				extra_info = decode_extra_info(fp, &num_pels);
+				extra_info[f - 1] = decode_extra_info(fp);
 
-				IMAGE *aux_image;
-				if (num_pels != 0 && extra_info != NULL) {
-					aux_image = alloc_image(dec->width, dec->height, (int) (pow(2, dec->depth) - 1));
-					int conta = 0;
-
-					for (y = 0; y < dec->height; y++) {
-						for (x = 0; x < dec->width; x++) {
-							aux_image->val[y][x] = video[1]->val[y][x];
-
-							if ((video[1]->val[y][x] == 0 || video[1]->val[y][x] == (int) (pow(2, dec->depth) - 1)) && conta < num_pels) {
-								aux_image->val[y][x] += extra_info[conta];
-								conta++;
-							}
-						}
-					}
-				}
-
-				if (extra_info != NULL) free(extra_info);
-
-				if (num_pels == 0) {
-					if (backward_table != NULL) {
-						IMAGE *unpacked = histogram_unpacking(video[1], backward_table);
-
-						img_diff = sum_diff(img_diff, unpacked, f, dec->depth);
-
-						safefree_yuv(&unpacked);
-					}
-					else {
-						img_diff = sum_diff(img_diff, video[1], f, dec->depth);
-					}
+				if (extra_info[f - 1] == NULL) {
+					img_diff = sum_diff(img_diff, video[1], NULL, 0, f, dec->depth);
 				}
 				else {
-					if (backward_table != NULL) {
-						IMAGE *unpacked = histogram_unpacking(aux_image, backward_table);
-
-						img_diff = sum_diff(img_diff, unpacked, f, dec->depth);
-
-						safefree_yuv(&unpacked);
-					}
-					else {
-						img_diff = sum_diff(img_diff, aux_image, f, dec->depth);
-					}
-
-					free(aux_image);
+					img_diff = sum_diff(img_diff, video[1], extra_info[f - 1], extra_info[f - 1][0], f, dec->depth);
 				}
 
-				write_yuv(img_diff, outfile, dec->depth, endianness);
+				if (backward_table != NULL) {
+					IMAGE *unpacked = histogram_unpacking(img_diff, backward_table);
+
+					write_yuv(unpacked, outfile, dec->depth, endianness);
+
+					safefree_yuv(&unpacked);
+				}
+				else {
+					write_yuv(img_diff, outfile, dec->depth, endianness);
+				}
 			}
 			else {
 				if (backward_table != NULL) {
@@ -1416,14 +1400,7 @@ int main(int argc, char **argv) {
 				}
 			}
 
-			if (diff != 0 && f == 0) {
-				if (backward_table != NULL) {
-					img_diff = histogram_unpacking(video[1], backward_table);
-				}
-				else {
-					img_diff = video[1];
-				}
-			}
+			if (diff != 0 && f == 0) img_diff = video[1];
 
 			error = get_dec_err(dec, 1);
 			free_decoder(dec);
@@ -1448,7 +1425,7 @@ int main(int argc, char **argv) {
 	else {
 		int back_reference = 0, for_reference = 0;
 		int **back_ref_error = NULL, **for_ref_error = NULL;
-		IMAGE **seq = alloc_mem(frames * sizeof(IMAGE));
+		IMAGE **seq = (IMAGE **) alloc_mem(frames * sizeof(IMAGE));
 		int ***keep_error;
 		int first_frame = 0, conta = 0, final = 0;
 		int (*bref)[5] = NULL;
@@ -1496,38 +1473,10 @@ int main(int argc, char **argv) {
 			video[1] = decode_image(fp, video, dec);
 
 			if (f > 0 && diff != 0) {
-				extra_info = decode_extra_info(fp, &num_pels);
-
-				IMAGE *aux_image;
-				if (num_pels != 0 && extra_info != NULL) {
-					aux_image = alloc_image(dec->width, dec->height, (int) (pow(2, dec->depth) - 1));
-					int conta = 0;
-
-					for (y = 0; y < dec->height; y++) {
-						for (x = 0; x < dec->width; x++) {
-							aux_image->val[y][x] = video[1]->val[y][x];
-
-							if ((video[1]->val[y][x] == 0 || video[1]->val[y][x] == (int) (pow(2, dec->depth) - 1)) && conta < num_pels) {
-								aux_image->val[y][x] += extra_info[conta];
-								conta++;
-							}
-						}
-					}
-				}
-
-				if (extra_info != NULL) free(extra_info);
-
-				if (num_pels == 0) {
-					seq[f] = copy_yuv(video[1]);
-				}
-				else {
-					seq[f] = copy_yuv(aux_image);
-					safefree_yuv(&aux_image);
-				}
+				extra_info[f - 1] = decode_extra_info(fp);
 			}
-			else {
-				seq[f] = copy_yuv(video[1]);
-			}
+
+			seq[f] = copy_yuv(video[1]);
 
 			printf(" --> Process completed\n");
 
@@ -1701,12 +1650,12 @@ int main(int argc, char **argv) {
 				if (backward_table != NULL) {
 					IMAGE *unpacked = histogram_unpacking(seq[f], backward_table);
 
-					write_yuv(unpacked, outfile, dec->depth, endianness);
+					write_yuv(unpacked, outfile, depth, endianness);
 
 					safefree_yuv(&unpacked);
 				}
 				else {
-					write_yuv(seq[f], outfile, dec->depth, endianness);
+					write_yuv(seq[f], outfile, depth, endianness);
 				}
 
 				free(seq[f]->val);
@@ -1715,36 +1664,41 @@ int main(int argc, char **argv) {
 		}
 		else {
 			if (backward_table != NULL) {
-				seq[0] = histogram_unpacking(seq[0], backward_table);
+				IMAGE *unpacked = histogram_unpacking(seq[0], backward_table);
 
-				write_yuv(seq[0], outfile, dec->depth, endianness);
+				write_yuv(unpacked, outfile, depth, endianness);
+
+				safefree_yuv(&unpacked);
 			}
 			else {
-				write_yuv(seq[0], outfile, dec->depth, endianness);
+				write_yuv(seq[0], outfile, depth, endianness);
 			}
 
 			img_diff = seq[0];
 
 			for (f = 1; f < frames; f++) {
-				if (backward_table != NULL) {
-					IMAGE *unpacked = histogram_unpacking(seq[f], backward_table);
+				if (extra_info[f - 1] == NULL) {
+					img_diff = sum_diff(img_diff, seq[f], NULL, 0, f, depth);
+				}
+				else {
+					img_diff = sum_diff(img_diff, seq[f], extra_info[f - 1], extra_info[f - 1][0], f, depth);
+				}
 
-					img_diff = sum_diff(img_diff, unpacked, f, dec->depth);
+				if (backward_table != NULL) {
+					IMAGE *unpacked = histogram_unpacking(img_diff, backward_table);
+
+					write_yuv(unpacked, outfile, depth, endianness);
 
 					safefree_yuv(&unpacked);
 				}
 				else {
-					img_diff = sum_diff(img_diff, seq[f], f, dec->depth);
+					write_yuv(img_diff, outfile, depth, endianness);
 				}
 
-				write_yuv(img_diff, outfile, dec->depth, endianness);
-
-				free(seq[f - 1]->val);
-				free(seq[f - 1]);
+				safefree_yuv(&seq[f - 1]);
 			}
 
-			free(seq[frames - 1]->val);
-			free(seq[frames - 1]);
+			safefree_yuv(&seq[frames - 1]);
 
 			safefree_yuv(&img_diff);
 		}
@@ -1773,6 +1727,7 @@ int main(int argc, char **argv) {
 		free(seq);
 	}
 
+	free(extra_info);
 	safefree((void **) &backward_table);
 
 	fclose(fp);
