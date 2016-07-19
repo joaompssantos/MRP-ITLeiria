@@ -3056,8 +3056,8 @@ double total_variation(IMAGE *img) {
 	return tv;
 }
 
-/*--------------------------- utilization_level ---------------------------*
- |  Function utilization_level
+/*--------------------------- sparseness_index ----------------------------*
+ |  Function sparseness_index
  |
  |  Purpose: Calculates the percentage of used values in the dynamic range
  |
@@ -3069,12 +3069,12 @@ double total_variation(IMAGE *img) {
  |		depth		--> Image dynamic range (bpp) (IN)
  |		endianness	--> YUV endianness, for depth > 8 bpp (IN)
  |
- |  Returns: double	--> Returns the percentage of used values
+ |  Returns: double	--> Returns the sparseness index
  *-------------------------------------------------------------------------*/
-double utilization_level(char *infile, int height, int width, int frames, int depth, int endianness, int diff) {
+double sparseness_index(char *infile, int height, int width, int frames, int depth, int endianness, int diff) {
 	int x, y, f, L = 0;
 	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
-	int num_pels;
+	int num_pels, max = 0, min = ((int) pow(2, depth) - 1);
 	char *extra_info = NULL;
 	IMAGE *img = NULL;
 
@@ -3103,13 +3103,16 @@ double utilization_level(char *infile, int height, int width, int frames, int de
 	for (y = 0; y < (int)pow(2, depth); y++) {
 		if (hist[y] != 0) {
 			L++;
+
+			if (y < min) min = y;
+			if (y > max) max = y;
 		}
 	}
 
 	free(hist);
 	safefree((void **)&extra_info);
 
-	return (double) (L / pow(2, depth) * 100.0);
+	return ((double) (1 - (L / (double)(1 + max - min))) * 100.0);
 }
 
 /*--------------------------- histogram_check ---------------------------*
@@ -3644,7 +3647,7 @@ int main(int argc, char **argv) {
 	printf("M = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
 	// Print prediction parameters to screen
 	if (forward_table != NULL) {
-		printf("Histogram packing, U = %3.1f%%\n\n", utilization_level(infile, height, width, frames, depth, endianness, diff));
+		printf("Histogram packing, U = %3.1f%%\n\n", sparseness_index(infile, height, width, frames, depth, endianness, diff));
 	}
 	if (frames == 1) {
 		printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
