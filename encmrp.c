@@ -3647,7 +3647,7 @@ int main(int argc, char **argv) {
 	printf("M = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
 	// Print prediction parameters to screen
 	if (forward_table != NULL) {
-		printf("Histogram packing, U = %3.1f%%\n\n", sparseness_index(infile, height, width, frames, depth, endianness, diff));
+		printf("Sparseness Index, S = %3.1f%%\n\n", sparseness_index(infile, height, width, frames, depth, endianness, diff));
 	}
 	if (frames == 1) {
 		printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
