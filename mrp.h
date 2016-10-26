@@ -27,7 +27,7 @@
 #define OPT_SIDEINFO
 #define VLC_MAXLEN      32
 #define MAGIC_NUMBER    ('M' << 8) + 'R'
-#define BANNER          "\nMRP Video Inter\nencmrp/decmrp version %.1f (July 2016)"
+#define BANNER          "\nIT - Leiria: Minimum Rate Predictors\nencmrp/decmrp version %.1f (July 2016)"
 #define VERSION         9
 #define uint            unsigned int
 #define img_t           unsigned short
