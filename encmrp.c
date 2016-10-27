@@ -3068,10 +3068,11 @@ double total_variation(IMAGE *img) {
  |		frame		--> Frame of the video to copy (IN)
  |		depth		--> Image dynamic range (bpp) (IN)
  |		endianness	--> YUV endianness, for depth > 8 bpp (IN)
+ |		chroma  	--> YUV chroma type (IN)
  |
  |  Returns: double	--> Returns the sparseness index
  *-------------------------------------------------------------------------*/
-double sparseness_index(char *infile, int height, int width, int frames, int depth, int endianness, int diff) {
+double sparseness_index(char *infile, int height, int width, int frames, int depth, int endianness, int chroma, int diff) {
 	int x, y, f, L = 0;
 	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
 	int num_pels, max = 0, min = ((int) pow(2, depth) - 1);
@@ -3085,10 +3086,10 @@ double sparseness_index(char *infile, int height, int width, int frames, int dep
 	// Operations to obtain the lookup table
 	for (f = 0; f < frames; f++) {
 		if (f == 0 || diff == 0) {
-			img = read_yuv(infile, height, width, f, depth, endianness);
+			img = read_yuv(infile, height, width, f, depth, endianness, chroma);
 		}
 		else {
-			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
+			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness, chroma), read_yuv(infile, height, width, f, depth, endianness, chroma), &extra_info, &num_pels, depth);
 		}
 
 		for (y = 0; y < img->height; y++) {
@@ -3127,10 +3128,11 @@ double sparseness_index(char *infile, int height, int width, int frames, int dep
  |		frame		--> Frame of the video to copy (IN)
  |		depth		--> Image dynamic range (bpp) (IN)
  |		endianness	--> YUV endianness, for depth > 8 bpp (IN)
+ |		chroma  	--> YUV chroma type (IN)
  |
  |  Returns:  int*	--> Returns the lookup table
  *----------------------------------------------------------------------*/
-int* histogram_check(char *infile, int height, int width, int frames, int depth, int endianness, int diff) {
+int* histogram_check(char *infile, int height, int width, int frames, int depth, int endianness, int chroma, int diff) {
 	int x, y, f;
 	int used_values = 0;
 	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
@@ -3149,10 +3151,10 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 	// Operations to obtain the lookup table
 	for (f = 0; f < frames; f++) {
 		if (f == 0 || diff == 0) {
-			img = read_yuv(infile, height, width, f, depth, endianness);
+			img = read_yuv(infile, height, width, f, depth, endianness, chroma);
 		}
 		else {
-			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
+			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness, chroma), read_yuv(infile, height, width, f, depth, endianness, chroma), &extra_info, &num_pels, depth);
 		}
 
 		for (y = 0; y < img->height; y++) {
@@ -3188,10 +3190,10 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 	// Perform the histogram packing of the image
 	for (f = 0; f < frames; f++) {
 		if (f == 0 || diff == 0) {
-			img = read_yuv(infile, height, width, f, depth, endianness);
+			img = read_yuv(infile, height, width, f, depth, endianness, chroma);
 		}
 		else {
-			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness), read_yuv(infile, height, width, f, depth, endianness), &extra_info, &num_pels, depth);
+			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness, chroma), read_yuv(infile, height, width, f, depth, endianness, chroma), &extra_info, &num_pels, depth);
 		}
 
 		for (y = 0; y < img->height; y++) {
@@ -3412,7 +3414,9 @@ int main(int argc, char **argv) {
 	int height = 0, width = 0;
 	int depth = DEPTH;
 	int endianness = LITTLE_ENDIANNESS;
+    int chroma = GRAY;
 	int full_prd_order;
+    char *chroma_name = NULL;
 	char *infile, *outfile;
 	char resfile[1000];
 	FILE *fp, *res;
@@ -3429,134 +3433,163 @@ int main(int argc, char **argv) {
 	infile = outfile = NULL;
 
 	// Read input parameters
-	for (i = 1; i < argc; i++) {
-		if (argv[i][0] == '-') {
-			switch(argv[i][1]) {
-			case 'H':
-				height = atoi(argv[++i]);
-				if (height <= 0) {
-					fprintf(stderr, "The height of the image cannot be less than %d!\n", BASE_BSIZE);
-					exit(-1);
-				}
-				break;
-			case 'W':
-				width = atoi(argv[++i]);
-				if (width <= 0) {
-					fprintf(stderr, "The width of the image cannot be less than %d!\n", BASE_BSIZE);
-					exit(-2);
-				}
-				break;
-			case 'F':
-				frames = atoi(argv[++i]);
-				if (frames <= 0) {
-					frames = FRAMES;
-				}
-				break;
-			case 'p':
-				diff = 1;
-				break;
-			case 'M':
-				num_class = atoi(argv[++i]);
-				if (num_class <= 0 || num_class > 63) {
-					num_class = NUM_CLASS;
-				}
-				break;
-			case 'B':
-				hevc = 1;
-				break;
-			case 'G':
-				bframes = atoi(argv[++i]);
-				if (bframes <= 0) {
-					bframes = 0;
-				}
-				else {
-					bframes = bframes + 1;
-				}
-				break;
-			case 'K':
-				for (j = 0; j < 6; j++) {
-					prd_order[j] = atoi(argv[++i]);
+    for (i = 1; i < argc; i++) {
+        if (argv[i][0] == '-') {
+            switch(argv[i][1]) {
+                case 'H':
+                    height = atoi(argv[++i]);
+                    if (height <= 0) {
+                        fprintf(stderr, "The height of the image cannot be less than %d!\n", BASE_BSIZE);
+                        exit(-1);
+                    }
+                    break;
+                case 'W':
+                    width = atoi(argv[++i]);
+                    if (width <= 0) {
+                        fprintf(stderr, "The width of the image cannot be less than %d!\n", BASE_BSIZE);
+                        exit(-2);
+                    }
+                    break;
+                case 'F':
+                    frames = atoi(argv[++i]);
+                    if (frames <= 0) {
+                        frames = FRAMES;
+                    }
+                    break;
+                case 'p':
+                    diff = 1;
+                    break;
+                case 'M':
+                    num_class = atoi(argv[++i]);
+                    if (num_class <= 0 || num_class > 63) {
+                        num_class = NUM_CLASS;
+                    }
+                    break;
+                case 'B':
+                    hevc = 1;
+                    break;
+                case 'G':
+                    bframes = atoi(argv[++i]);
+                    if (bframes <= 0) {
+                        bframes = 0;
+                    }
+                    else {
+                        bframes = bframes + 1;
+                    }
+                    break;
+                case 'K':
+                    for (j = 0; j < 6; j++) {
+                        prd_order[j] = atoi(argv[++i]);
 
-					if (prd_order[j] < 0 || prd_order[j] > 72) {
-						if (j == 0 || j == 1 || j == 3) {
-							prd_order[j] = INTRA_PRD_ORDER;
-						}
-						else {
-							prd_order[j] = INTER_PRD_ORDER;
-						}
-					}
-				}
-				break;
-			case 'P':
-				coef_precision = atoi(argv[++i]);
-				if (coef_precision <= 0 || coef_precision > 16) {
-					coef_precision = COEF_PRECISION;
-				}
-				break;
-			case 'V':
-				num_pmodel = atoi(argv[++i]);
-				if (num_pmodel <= 0 || num_pmodel > 64) {
-					num_pmodel = NUM_PMODEL;
-				}
-				break;
-			case 'A':
-				pm_accuracy = atoi(argv[++i]);
-				if (pm_accuracy < -1 || pm_accuracy > 6) {
-					pm_accuracy = PM_ACCURACY;
-				}
-				break;
-			case 'I':
-				max_iteration = atoi(argv[++i]);
-				if (max_iteration <= 0) {
-					max_iteration = MAX_ITERATION;
-				}
-				break;
-			case 'm':
-				f_mmse = 1;
-				break;
-			case 'o':
-				f_optpred = 1;
-				break;
-			case 'h':
-				f_huffman = 1;
-				break;
-			case 'f':
-				quadtree_depth = -1;
-				break;
-			case 'u':
-				do_histogram_packing = 0;
-				break;
-			case 'D':
-				delta = atoi(argv[++i]);
-				if (delta <= 0) {
-					delta = 1;
-				}
-				break;
-			case 'd':
-				depth = atoi(argv[++i]);
-				if (depth < 8) {
-					depth = DEPTH;
-				}
-				else if (depth > 16) {
-					depth = 16;
-				}
-				break;
-			case 'E':
-				endianness = atoi(argv[++i]);
-				if (endianness == 0) {
-					endianness = LITTLE_ENDIANNESS;
-				}
-				else if (endianness == 1) {
-					endianness = BIG_ENDIANNESS;
-				}
-				else if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
-					endianness = LITTLE_ENDIANNESS;
-				}
-				break;
-			default:
-				fprintf(stderr, "Unknown option: %s!\n", argv[i]);
-				exit (1);
-			}
+                        if (prd_order[j] < 0 || prd_order[j] > 72) {
+                            if (j == 0 || j == 1 || j == 3) {
+                                prd_order[j] = INTRA_PRD_ORDER;
+                            }
+                            else {
+                                prd_order[j] = INTER_PRD_ORDER;
+                            }
+                        }
+                    }
+                    break;
+                case 'P':
+                    coef_precision = atoi(argv[++i]);
+                    if (coef_precision <= 0 || coef_precision > 16) {
+                        coef_precision = COEF_PRECISION;
+                    }
+                    break;
+                case 'V':
+                    num_pmodel = atoi(argv[++i]);
+                    if (num_pmodel <= 0 || num_pmodel > 64) {
+                        num_pmodel = NUM_PMODEL;
+                    }
+                    break;
+                case 'A':
+                    pm_accuracy = atoi(argv[++i]);
+                    if (pm_accuracy < -1 || pm_accuracy > 6) {
+                        pm_accuracy = PM_ACCURACY;
+                    }
+                    break;
+                case 'I':
+                    max_iteration = atoi(argv[++i]);
+                    if (max_iteration <= 0) {
+                        max_iteration = MAX_ITERATION;
+                    }
+                    break;
+                case 'm':
+                    f_mmse = 1;
+                    break;
+                case 'o':
+                    f_optpred = 1;
+                    break;
+                case 'h':
+                    f_huffman = 1;
+                    break;
+                case 'f':
+                    quadtree_depth = -1;
+                    break;
+                case 'u':
+                    do_histogram_packing = 0;
+                    break;
+                case 'D':
+                    delta = atoi(argv[++i]);
+                    if (delta <= 0) {
+                        delta = 1;
+                    }
+                    break;
+                case 'd':
+                    depth = atoi(argv[++i]);
+                    if (depth < 8) {
+                        depth = DEPTH;
+                    }
+                    else if (depth > 16) {
+                        depth = 16;
+                    }
+                    break;
+                case 'E':
+                    endianness = atoi(argv[++i]);
+                    if (endianness == 0) {
+                        endianness = LITTLE_ENDIANNESS;
+                    }
+                    else if (endianness == 1) {
+                        endianness = BIG_ENDIANNESS;
+                    }
+                    else if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
+                        endianness = LITTLE_ENDIANNESS;
+                    }
+                    break;
+                case 'C':
+                    chroma_name = argv[++i];
+
+                    if (strcmp(chroma_name, "GRAY") == 0) {
+                        chroma = GRAY;
+                    }
+                    else if (strcmp(chroma_name, "444") == 0) {
+                        chroma = S444;
+                    }
+                    else if (strcmp(chroma_name, "422") == 0) {
+                        chroma = S422;
+                    }
+                    else if (strcmp(chroma_name, "411") == 0) {
+                        chroma = S411;
+                    }
+                    else if (strcmp(chroma_name, "420") == 0) {
+                        chroma = S420;
+                    }
+                    else {
+                        printf("Chroma format not recognised: %s.\n", chroma_name);
+                        printf("Supported formats:\n");
+                        printf("\tGRAY;\n"
+                               "\t444;\n"
+                               "\t422; --> Not yet implemented\n"
+                               "\t411; --> Not yet implemented\n"
+                               "\t420.\n");
+                        exit(-2);
+                    }
+                    break;
+                default:
+                    fprintf(stderr, "Unknown option: %s!\n", argv[i]);
+                    exit (1);
+            }
 		}
 		else {
 			if (infile == NULL) {
@@ -3581,7 +3614,14 @@ int main(int argc, char **argv) {
 		printf("    -H num  	Height*\n");
 		printf("    -W num  	Width*\n");
 		printf("    -d num  	Bit depth [%d]\n", depth);
-		printf("	-E num		Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
+		printf("    -E num  	Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
+        printf("    -C str  	Chroma format [%s]. Supported formats:\n", "GRAY");
+        printf("\t\tGRAY;\n"
+               "\t\t444;\n"
+               "\t\t422; --> Not yet implemented\n"
+               "\t\t411; --> Not yet implemented\n"
+               "\t\t420.\n"
+               "\t\t(Notice: Currently MRP is a Luma only encoder. Thus this step is used only to skip the Chromas.)\n");
 		printf("    -F num  	Frames*\n");
 		printf("    -D num  	Distance between frames [%d]*\n", delta);
 		printf("    -p      	Pixel difference prediction\n");
@@ -3638,7 +3678,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (do_histogram_packing == 1) forward_table = histogram_check(infile, height, width, frames, depth, endianness, diff);
+	if (do_histogram_packing == 1) forward_table = histogram_check(infile, height, width, frames, depth, endianness, chroma, diff);
 
 	printf("\nMRP-Video Encoder\n\n");
 	// Print file characteristics to screen
@@ -3647,7 +3687,7 @@ int main(int argc, char **argv) {
 	printf("M = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
 	// Print prediction parameters to screen
 	if (forward_table != NULL) {
-		printf("Sparseness Index, S = %3.1f%%\n\n", sparseness_index(infile, height, width, frames, depth, endianness, diff));
+		printf("Sparseness Index, S = %3.1f%%\n\n", sparseness_index(infile, height, width, frames, depth, endianness, chroma, diff));
 	}
 	if (frames == 1) {
 		printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
@@ -3689,7 +3729,7 @@ int main(int argc, char **argv) {
 			// Creates new ENCODER structure
 			if (f == 0) {
 				// Read input file
-				video[1] = read_yuv(infile, height, width, f, depth, endianness);
+				video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 				if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 
@@ -3699,15 +3739,15 @@ int main(int argc, char **argv) {
 				// Read input file
 				if (diff == 0) {
 					video[0] = video[1];
-					video[1] = read_yuv(infile, height, width, f, depth, endianness);
+					video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 					if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 				}
 				else {
 					video[0] = video[1];
 
-					IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
-					IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
+					IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
+					IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 					if (forward_table != NULL) {
 						histogram_packing(aux1, forward_table, depth);
@@ -3965,7 +4005,7 @@ int main(int argc, char **argv) {
 			// Creates new ENCODER structure
 			if (f == 0) {
 				// Read input file
-				video[1] = read_yuv(infile, height, width, f, depth, endianness);
+				video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 				if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 
@@ -4183,13 +4223,13 @@ int main(int argc, char **argv) {
 					safefree_yuv(&video[1]);
 
 					if (diff == 0) {
-						video[1] = read_yuv(infile, height, width, f, depth, endianness);
+						video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 					}
 					else {
-						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
-						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
+						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
+						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 						if (forward_table != NULL) {
 							histogram_packing(aux1, forward_table, depth);
@@ -4214,13 +4254,13 @@ int main(int argc, char **argv) {
 						safefree_yuv(&video[1]);
 
 						if (diff == 0) {
-							video[1] = read_yuv(infile, height, width, f, depth, endianness);
+							video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 							if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 						}
 						else {
-							IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
-							IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
+							IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
+							IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 							if (forward_table != NULL) {
 								histogram_packing(aux1, forward_table, depth);
@@ -4239,11 +4279,11 @@ int main(int argc, char **argv) {
 					if (diff == 0) {
 						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 
-						video[1] = read_yuv(infile, height, width, f, depth, endianness);
+						video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 					}
 					else {
-						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
-						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
+						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
+						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 						if (forward_table != NULL) {
 							histogram_packing(aux1, forward_table, depth);
@@ -4280,13 +4320,13 @@ int main(int argc, char **argv) {
 					safefree_yuv(&video[1]);
 
 					if (diff == 0) {
-						video[1] = read_yuv(infile, height, width, f, depth, endianness);
+						video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 					}
 					else {
-						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
-						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
+						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
+						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 						if (forward_table != NULL) {
 							histogram_packing(aux1, forward_table, depth);
@@ -4308,18 +4348,18 @@ int main(int argc, char **argv) {
 
 					safefree_yuv(&video[1]);
 
-					video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness);
+					video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness, chroma);
 
 					if (forward_table != NULL) histogram_packing(video[0], forward_table, depth);
 
 					if (diff == 0) {
-						video[1] = read_yuv(infile, height, width, f, depth, endianness);
+						video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 					}
 					else {
-						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
-						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
+						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
+						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 						if (forward_table != NULL) {
 							histogram_packing(aux1, forward_table, depth);
@@ -4346,8 +4386,8 @@ int main(int argc, char **argv) {
 						safefree_yuv(&video[0]);
 
 						if (diff == 0) {
-							video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness);
-							video[1] = read_yuv(infile, height, width, f, depth, endianness);
+							video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness, chroma);
+							video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 							if (forward_table != NULL) {
 								histogram_packing(video[0], forward_table, depth);
@@ -4356,13 +4396,13 @@ int main(int argc, char **argv) {
 						}
 						else {
 							if (f + bref[conta][1] == 0) {
-								video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness);
+								video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness, chroma);
 
 								if (forward_table != NULL) histogram_packing(video[0], forward_table, depth);
 							}
 							else {
-								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[conta][1] - 1, depth, endianness);
-								IMAGE *aux2 = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness);
+								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[conta][1] - 1, depth, endianness, chroma);
+								IMAGE *aux2 = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness, chroma);
 
 								if (forward_table != NULL) {
 									histogram_packing(aux1, forward_table, depth);
@@ -4372,8 +4412,8 @@ int main(int argc, char **argv) {
 								video[0] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
 							}
 
-							IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
-							IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness);
+							IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
+							IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 							if (forward_table != NULL) {
 								histogram_packing(aux1, forward_table, depth);
@@ -4388,13 +4428,13 @@ int main(int argc, char **argv) {
 						if (bref[conta][2] != -1) {
 							if (video[2] != NULL) safefree_yuv(&video[2]);
 							if (diff == 0) {
-								video[2] = read_yuv(infile, height, width, f + bref[conta][2], depth, endianness);
+								video[2] = read_yuv(infile, height, width, f + bref[conta][2], depth, endianness, chroma);
 
 								if (forward_table != NULL) histogram_packing(video[2], forward_table, depth);
 							}
 							else {
-								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[conta][2] - 1, depth, endianness);
-								IMAGE *aux2 = read_yuv(infile, height, width, f + bref[conta][2], depth, endianness);
+								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[conta][2] - 1, depth, endianness, chroma);
+								IMAGE *aux2 = read_yuv(infile, height, width, f + bref[conta][2], depth, endianness, chroma);
 
 								if (forward_table != NULL) {
 									histogram_packing(aux1, forward_table, depth);
@@ -4424,8 +4464,8 @@ int main(int argc, char **argv) {
 								safefree_yuv(&video[0]);
 								safefree_yuv(&video[1]);
 								if (diff == 0) {
-									video[0] = read_yuv(infile, height, width, f + 1, depth, endianness);
-									video[1] = read_yuv(infile, height, width, frames - 1, depth, endianness);
+									video[0] = read_yuv(infile, height, width, f + 1, depth, endianness, chroma);
+									video[1] = read_yuv(infile, height, width, frames - 1, depth, endianness, chroma);
 
 									if (forward_table != NULL) {
 										histogram_packing(video[0], forward_table, depth);
@@ -4433,8 +4473,8 @@ int main(int argc, char **argv) {
 									}
 								}
 								else {
-									IMAGE *aux1 = read_yuv(infile, height, width, f, depth, endianness);
-									IMAGE *aux2 = read_yuv(infile, height, width, f + 1, depth, endianness);
+									IMAGE *aux1 = read_yuv(infile, height, width, f, depth, endianness, chroma);
+									IMAGE *aux2 = read_yuv(infile, height, width, f + 1, depth, endianness, chroma);
 
 									if (forward_table != NULL) {
 										histogram_packing(aux1, forward_table, depth);
@@ -4443,8 +4483,8 @@ int main(int argc, char **argv) {
 
 									video[0] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
 
-									aux1 = read_yuv(infile, height, width, frames - 2, depth, endianness);
-									aux2 = read_yuv(infile, height, width, frames - 1, depth, endianness);
+									aux1 = read_yuv(infile, height, width, frames - 2, depth, endianness, chroma);
+									aux2 = read_yuv(infile, height, width, frames - 1, depth, endianness, chroma);
 
 									if (forward_table != NULL) {
 										histogram_packing(aux1, forward_table, depth);
@@ -4464,8 +4504,8 @@ int main(int argc, char **argv) {
 									safefree_yuv(&video[0]);
 									safefree_yuv(&video[1]);
 									if (diff == 0) {
-										video[0] = read_yuv(infile, height, width, frames - 2, depth, endianness);
-										video[1] = read_yuv(infile, height, width, frames - 1, depth, endianness);
+										video[0] = read_yuv(infile, height, width, frames - 2, depth, endianness, chroma);
+										video[1] = read_yuv(infile, height, width, frames - 1, depth, endianness, chroma);
 
 										if (forward_table != NULL) {
 											histogram_packing(video[0], forward_table, depth);
@@ -4473,8 +4513,8 @@ int main(int argc, char **argv) {
 										}
 									}
 									else {
-										IMAGE *aux1 = read_yuv(infile, height, width, frames - 3, depth, endianness);
-										IMAGE *aux2 = read_yuv(infile, height, width, frames - 2, depth, endianness);
+										IMAGE *aux1 = read_yuv(infile, height, width, frames - 3, depth, endianness, chroma);
+										IMAGE *aux2 = read_yuv(infile, height, width, frames - 2, depth, endianness, chroma);
 
 										if (forward_table != NULL) {
 											histogram_packing(aux1, forward_table, depth);
@@ -4483,8 +4523,8 @@ int main(int argc, char **argv) {
 
 										video[0] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
 
-										aux1 = read_yuv(infile, height, width, frames - 2, depth, endianness);
-										aux2 = read_yuv(infile, height, width, frames - 1, depth, endianness);
+										aux1 = read_yuv(infile, height, width, frames - 2, depth, endianness, chroma);
+										aux2 = read_yuv(infile, height, width, frames - 1, depth, endianness, chroma);
 
 										if (forward_table != NULL) {
 											histogram_packing(aux1, forward_table, depth);
@@ -4523,8 +4563,8 @@ int main(int argc, char **argv) {
 							safefree_yuv(&video[0]);
 							safefree_yuv(&video[1]);
 							if (diff == 0) {
-								video[0] = read_yuv(infile, height, width, f + bref[0][1], depth, endianness);
-								video[1] = read_yuv(infile, height, width, f, depth, endianness);
+								video[0] = read_yuv(infile, height, width, f + bref[0][1], depth, endianness, chroma);
+								video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 								if (forward_table != NULL) {
 									histogram_packing(video[0], forward_table, depth);
@@ -4532,8 +4572,8 @@ int main(int argc, char **argv) {
 								}
 							}
 							else {
-								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[0][1] - 1, depth, endianness);
-								IMAGE *aux2 =  read_yuv(infile, height, width, f + bref[0][1], depth, endianness);
+								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[0][1] - 1, depth, endianness, chroma);
+								IMAGE *aux2 =  read_yuv(infile, height, width, f + bref[0][1], depth, endianness, chroma);
 
 								if (forward_table != NULL) {
 									histogram_packing(aux1, forward_table, depth);
@@ -4542,8 +4582,8 @@ int main(int argc, char **argv) {
 
 								video[0] = calc_diff(aux1,aux2, &extra_info, &num_pels, depth);
 
-								aux1 = read_yuv(infile, height, width, f - 1, depth, endianness);
-								aux2 = read_yuv(infile, height, width, f, depth, endianness);
+								aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
+								aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 								if (forward_table != NULL) {
 									histogram_packing(aux1, forward_table, depth);

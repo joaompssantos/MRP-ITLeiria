@@ -52,6 +52,13 @@
 #define LITTLE_ENDIANNESS 0
 #define BIG_ENDIANNESS 1
 
+// Chroma format
+#define GRAY				0
+#define S444				1
+#define S422				2
+#define S411				3
+#define S420				4
+
 // Image
 typedef struct {
     int height;
@@ -187,7 +194,7 @@ IMAGE *alloc_image(int, int, int);
 IMAGE *copy_yuv(IMAGE*);
 unsigned short reverse_endianness (unsigned short, int);
 void write_yuv(IMAGE*, char*, int, int);
-IMAGE *read_yuv(char *, int, int, int, int, int);
+IMAGE *read_yuv(char *, int, int, int, int, int, int);
 int *gen_hufflen(uint *, int, int);
 void gen_huffcode(VLC *);
 VLC *make_vlc(uint *, int, int);

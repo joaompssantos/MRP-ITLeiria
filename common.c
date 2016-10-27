@@ -300,7 +300,7 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
 		}
 	}
 
-	for (i = 0; i < img->height / 2; i++) {
+/*	for (i = 0; i < img->height / 2; i++) {
 		for (j = 0; j < img->width / 2; j++) {
 			if (depth > 8) {
 				byte = reverse_endianness((int) (pow(2, depth) / 2), endianness);
@@ -326,7 +326,7 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
 				putc((int) (pow(2, depth) / 2), fp);
 			}
 		}
-	}
+	}*/
 
 	fclose(fp);
 
@@ -348,8 +348,9 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
  |
  |  Returns:  IMAGE* --> returns a video type structure
  *-------------------------------------------------------------------*/
-IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int endianness) {
+IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int endianness, int chroma) {
 	int i, j, shift_first, shift_second, first, second;
+    double chroma_pass = (chroma == GRAY ? 1 : (chroma == S444 ? 3 : 1.5));
 	IMAGE *img;
 	FILE *fp;
 
@@ -376,10 +377,10 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 
 	if (frame > 0) {
 		if (depth > 8) {
-			fseek(fp, img->height * img->width * 2 * 1.5 * frame, SEEK_SET);
+			fseek(fp, img->height * img->width * 2 * chroma_pass * frame, SEEK_SET);
 		}
 		else {
-			fseek(fp, img->height * img->width * 1.5 * frame, SEEK_SET);
+			fseek(fp, img->height * img->width * chroma_pass * frame, SEEK_SET);
 		}
 	}
 
@@ -399,7 +400,7 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 		}
 	}
 
-	for (i = 0; i < img->height / 2; i++) {
+/*	for (i = 0; i < img->height / 2; i++) {
 		for (j = 0; j < img->width / 2; j++) {
 			fgetc(fp);
 
@@ -417,7 +418,7 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 				fgetc(fp);
 			}
 		}
-	}
+	}*/
 
 	fclose(fp);
 	return (img);
