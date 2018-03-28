@@ -5,6 +5,7 @@
 #include <math.h>
 #include <limits.h>
 #include "mrp.h"
+#include "mrp_config.h"
 
 extern POINT dyx[];
 extern POINT idyx[];
@@ -527,7 +528,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 
 	for (i = 0; i < enc->num_class; i++) {
 		for (j = 0; j <= MAX_UPARA; j++) {
-			enc->uquant[i][j] = enc->num_group - 1;
+			enc->uquant[i][j] = (char) (enc->num_group - 1);
 		}
 	}
 
@@ -765,7 +766,6 @@ void free_encoder(ENCODER *enc) {
 	free(enc->pmodels);
 
 	if (enc->f_huffman == 1) {
-		int gr;
 		VLC *aux;
 		for (gr = 0; gr < enc->num_group; gr++) {
 			for (k = 0; k < enc->num_pmodel; k++) {
@@ -848,7 +848,7 @@ void init_class(ENCODER *enc) {
 		//Sets the class number for each pixel
 		for (i = 0; i < BASE_BSIZE; i++) {
 			for (j = 0; j < BASE_BSIZE; j++) {
-				enc->class[y + i][x + j] = cl;
+				enc->class[y + i][x + j] = (char) cl;
 			}
 		}
 	}
@@ -911,8 +911,8 @@ void set_cost_model(ENCODER *enc, int f_mmse) {
 		enc->pmlist[gr] = pm = enc->pmodels[gr][enc->num_pmodel >> 1];
 
 		for (k = 0; k <= pm->size; k++) {
-			c = (double)k * 0.5 + 0.25;
-			pm->cost[k] = a + b * c * c;
+			c = (double) k * 0.5 + 0.25;
+			pm->cost[k] = (float) (a + b * c * c);
 		}
 
 		pm->subcost[0] = 0.0;
@@ -963,8 +963,8 @@ void set_cost_rate(ENCODER *enc) {
 
 		for (k = 0; k <= enc->maxprd; k++) {
 			i = (enc->maxprd - k + (1 << shift) / 2) >> shift;
-			enc->fconv[k] = (i & mask);
-			enc->bconv[k] = (i >> enc->pm_accuracy);
+			enc->fconv[k] = (img_t) (i & mask);
+			enc->bconv[k] = (img_t) (i >> enc->pm_accuracy);
 		}
 
 		num_spm = 1 << enc->pm_accuracy;
@@ -985,20 +985,20 @@ void set_cost_rate(ENCODER *enc) {
 			}
 			else if (enc->pm_accuracy < 0) {
 				for (k = 0; k < pm->size; k++) {
-					pm->cost[k] = -a * log(pm->freq[k]);
+					pm->cost[k] = (float) (-a * log(pm->freq[k]));
 				}
 
 				c = pm->cumfreq[enc->maxval + 1];
-				pm->subcost[0] = a * log(c);
+				pm->subcost[0] = (float) (a * log(c));
 			}
 			else {
 				for (j = 0; j < num_spm; j++) {
 					for (k = 0; k < pm->size; k++) {
-						pm->cost[k] = -a * log(pm->freq[k]);
+						pm->cost[k] = (float) (-a * log(pm->freq[k]));
 					}
 					for (k = 0; k <= enc->maxval; k++) {
 						c = pm->cumfreq[k + enc->maxval + 1] - pm->cumfreq[k];
-						pm->subcost[k] = a * log(c);
+						pm->subcost[k] = (float) (a * log(c));
 					}
 
 					pm++;
@@ -1144,7 +1144,8 @@ cost_t calc_cost(ENCODER *enc, int tly, int tlx, int bry, int brx) {
 		for (x = tlx; x < brx; x++) {
 			cl = *class_p++;
 			*upara_p++ = u = calc_uenc(enc, y, x);
-			*group_p++ = gr = enc->uquant[cl][u];
+            gr = enc->uquant[cl][u];
+			*group_p++ = (char) gr;
 			e = *encval_p++;
 			prd = *prd_p++;
 
@@ -1284,14 +1285,14 @@ cost_t design_predictor(ENCODER *enc, int f_mmse) {
 				d = 0.0;
 			}
 
-			k = d;
+			k = (int) d;
 			if (k > d) k--;
 
 			if (k < -MAX_COEF) {
-				k = d = -MAX_COEF;
+				d = k = -MAX_COEF;
 			}
 			else if (k > MAX_COEF) {
-				k = d = MAX_COEF;
+				d = k = MAX_COEF;
 			}
 
 			enc->predictor[cl][i] = k; //Coefficient for a given reference in the predictor
@@ -1301,7 +1302,7 @@ cost_t design_predictor(ENCODER *enc, int f_mmse) {
 		}
 
 		/* minimize mean rounding errors */
-		k = e + 0.5;
+		k = (int) (e + 0.5);
 		for (;k > 0; k--) {
 			d = 0;
 			for (j = i = 0; i < full_prd_order; i++) {
@@ -1433,7 +1434,7 @@ cost_t optimize_group(ENCODER *enc) {
 
 		for (gr = 0; gr < enc->num_group; gr++) {
 			for (; u < enc->th[cl][gr]; u++) {
-				enc->uquant[cl][u] = gr;
+				enc->uquant[cl][u] = (char) gr;
 			}
 		}
 	}
@@ -1446,7 +1447,7 @@ cost_t optimize_group(ENCODER *enc) {
 		for (x = 0; x < enc->width; x++) {
 			cl = enc->class[y][x];
 			u = enc->upara[y][x];
-			enc->group[y][x] = gr = enc->uquant[cl][u];
+            gr = enc->group[y][x] = enc->uquant[cl][u];
 			e = enc->encval[y][x];
 			prd = enc->prd[y][x];
 
@@ -1633,7 +1634,7 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int b
 			bufptr += bufsize;
 
 			for (x = tlx; x < brx; x++) {
-				*class_p++ = cl;
+				*class_p++ = (char) cl;
 				*prd_p++ = *prdbuf_p++;
 				*err_p++ = *errbuf_p++;
 			}
@@ -1656,7 +1657,7 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int b
 		errbuf_p = &errbuf[min_cl][bufptr];
 		bufptr += bufsize;
 		for (x = tlx; x < brx; x++) {
-			*class_p++ = min_cl;
+			*class_p++ = (char) min_cl;
 			*prd_p++ = *prdbuf_p++;
 			*err_p++ = *errbuf_p++;
 		}
@@ -1772,7 +1773,7 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int
 				bufptr += bufsize;
 
 				for (x = tlx; x < brx; x++) {
-					*class_p++ = cl;
+					*class_p++ = (char) cl;
 					*prd_p++ = *prdbuf_p++;
 					*err_p++ = *errbuf_p++;
 				}
@@ -1877,7 +1878,7 @@ void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
 	cost_t cbuf[SEARCH_RANGE * SUBSEARCH_RANGE], *cbuf_p;
 	float *pmcost_p;
 	int i, j, k, x, y, df1, df2, base;
-	int prd, prd_f, shift, maxprd, *coef_p, *econv_p, *roff_p, *org_p;
+	int prd, prd_f, shift, maxprd, *coef_p, *econv_p = NULL, *roff_p, *org_p;
 	char *class_p;
 	img_t *bconv_p, *fconv_p;
 	PMODEL *pm, *pm_p;
@@ -2115,7 +2116,7 @@ void remove_emptyclass(ENCODER *enc) {
 	for (y = 0; y < enc->height; y++) {
 		for (x = 0; x < enc->width; x++) {
 			i = enc->class[y][x];
-			enc->class[y][x] = enc->mtfbuf[i];
+			enc->class[y][x] = (char) enc->mtfbuf[i];
 		}
 	}
 
@@ -2145,35 +2146,33 @@ void remove_emptyclass(ENCODER *enc) {
  |		prd_order		--> Array that stores the prediction orders (IN)
  |		frames			--> Number of encoded frames (IN)
  |		bframes			--> Distance between B frames (IN)
- |		diff			--> Usage of pixelwise difference (IN)
  |		hevc			--> Usage of HEVC B frames type (IN)
  |		fp				--> File to write into (IN)
  |
  |  Returns:  int		--> Returns the number of bits used
  *---------------------------------------------------------------------*/
-int write_header(ENCODER *enc, int prd_order[6], int frames, int bframes, int diff, int hevc, FILE *fp) {
+int write_header(ENCODER *enc, int prd_order[6], int frames, int bframes, int hevc, FILE *fp) {
 	int bits, i;
 
 	bits = putbits(fp, 16, MAGIC_NUMBER);
-	bits += putbits(fp, 8, VERSION);
-	bits += putbits(fp, 16, enc->width);
-	bits += putbits(fp, 16, enc->height);
-	bits += putbits(fp, 16, enc->maxval);
-	bits += putbits(fp, 16, frames);
-	bits += putbits(fp, 5, enc->depth);
-	bits += putbits(fp, 8, bframes);
-	bits += putbits(fp, 1, hevc);
+	bits += putbits(fp, 16, MRP_VERSION_MAJOR * 100 + MRP_VERSION_MINOR); //TODO: remove this??
+	bits += putbits(fp, 16, (uint) enc->width);
+	bits += putbits(fp, 16, (uint) enc->height);
+	bits += putbits(fp, 16, (uint) enc->maxval);
+	bits += putbits(fp, 16, (uint) frames);
+	bits += putbits(fp, 5, (uint) enc->depth);
+	bits += putbits(fp, 8, (uint) bframes);
+	bits += putbits(fp, 1, (uint) hevc);
 	bits += putbits(fp, 4, 1);	/* number of components (1 = monochrome) */
-	bits += putbits(fp, 6, enc->num_group);
+	bits += putbits(fp, 6, (uint) enc->num_group);
 	for (i = 0; i < 6; i++) {
-		bits += putbits(fp, 8, prd_order[i]);
+		bits += putbits(fp, 8, (uint) prd_order[i]);
 	}
-	bits += putbits(fp, 1, diff);
-	bits += putbits(fp, 8, enc->delta);
-	bits += putbits(fp, 6, enc->num_pmodel - 1);
-	bits += putbits(fp, 4, enc->coef_precision - 1);
-	bits += putbits(fp, 3, enc->pm_accuracy + 1);
-	bits += putbits(fp, 1, enc->f_huffman);
+	bits += putbits(fp, 8, (uint) enc->delta);
+	bits += putbits(fp, 6, (uint) enc->num_pmodel - 1);
+	bits += putbits(fp, 4, (uint) enc->coef_precision - 1);
+	bits += putbits(fp, 4, (uint) enc->pm_accuracy + 1);
+	bits += putbits(fp, 1, (uint) enc->f_huffman);
 	bits += putbits(fp, 1, (enc->quadtree_depth < 0)? 0 : 1);
 
 	return (bits);
@@ -2193,7 +2192,7 @@ int write_header(ENCODER *enc, int prd_order[6], int frames, int bframes, int di
 int write_class(ENCODER *enc, FILE *fp) {
 	int bits;
 
-	bits = putbits(fp, 8, enc->num_class);
+	bits = putbits(fp, 8, (uint) enc->num_class);
 	return (bits);
 }
 
@@ -2208,7 +2207,7 @@ int encode_golomb(FILE *fp, int m, int v) {
 	}
 
 	putbits(fp, p, 1);	/* prefix code */
-	putbits(fp, m, v);
+	putbits(fp, m, (uint) v);
 
 	return (bits + m);
 }
@@ -2349,7 +2348,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 		}
 		else {	/* actually encode */
 			for (i = 0; i < enc->num_class; i++) {
-				bits += putbits(fp, 4, vlc->len[i] - 1);
+				bits += putbits(fp, 4, (uint) (vlc->len[i] - 1));
 			}
 
 			for (j = 0; j < numidx; j++) {
@@ -2357,7 +2356,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 
 				if (i < 0) {
 					ctx = -(i + 1);
-					putbits(fp, 1, ctx & 1);
+					putbits(fp, 1, (uint) (ctx & 1));
 				}
 				else {
 					bits += putbits(fp, vlc->len[i], vlc->code[i]);
@@ -2403,7 +2402,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 			p = (double)hist[i] / c;
 
 			if (p > 0.0) {
-				mtf_code[i] = -log(p) / log(2.0) * (PMCLASS_LEVEL / PMCLASS_MAX);
+				mtf_code[i] = (int) (-log(p) / log(2.0) * (PMCLASS_LEVEL / PMCLASS_MAX));
 
 				if (mtf_code[i] >= PMCLASS_LEVEL) {
 					mtf_code[i] = PMCLASS_LEVEL - 1;
@@ -2415,7 +2414,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 
 			p = exp(-log(2.0) * ((double)mtf_code[i] + 0.5) * PMCLASS_MAX / PMCLASS_LEVEL);
 			enc->class_cost[i] = -log(p) / log(2.0);
-			hist[i] = p * (1 << 10);
+			hist[i] = (uint) (p * (1 << 10));
 
 			if (hist[i] <= 0) hist[i] = 1;
 		}
@@ -2480,9 +2479,9 @@ int encode_class(FILE *fp, ENCODER *enc) {
 				for (ctx = 0; ctx < QUADTREE_DEPTH << 2; ctx++) {
 					i = qtree_code[ctx];
 					p = qtree_prob[i];
-					pm->freq[(ctx << 1) + 1] = p * (1 << 10);
+					pm->freq[(ctx << 1) + 1] = (uint) (p * (1 << 10));
 					p = 1.0 - p;
-					pm->freq[(ctx << 1)] = p * (1 << 10);
+					pm->freq[(ctx << 1)] = (uint) (p * (1 << 10));
 				}
 
 				for (i = 0; i < pm->size; i++) {
@@ -2571,14 +2570,14 @@ int encode_predictor(FILE *fp, ENCODER *enc) {
 		enc->coef_m[k] = min_m;
 	}
 
-	bits = t_cost;
+	bits = (int) t_cost;
 
 	if (fp != NULL) {
 		bits = 0;
 
 		if (enc->f_huffman == 1) {	/* Huffman */
 			for (k = 0; k < full_prd_order; k++) {
-				bits += putbits(fp, 4, enc->coef_m[k]);
+				bits += putbits(fp, 4, (uint) enc->coef_m[k]);
 
 				for (cl = 0; cl < enc->num_class; cl++) {
 					coef = enc->predictor[cl][k];
@@ -2589,7 +2588,7 @@ int encode_predictor(FILE *fp, ENCODER *enc) {
 					bits += encode_golomb(fp, enc->coef_m[k], coef);
 
 					if (coef != 0) {
-						bits += putbits(fp, 1, sgn);
+						bits += putbits(fp, 1, (uint) sgn);
 					}
 				}
 			}
@@ -2599,7 +2598,7 @@ int encode_predictor(FILE *fp, ENCODER *enc) {
 
 			for (k = 0; k < full_prd_order; k++) {
 				set_spmodel(pm, MAX_COEF + 1, enc->coef_m[k]);
-				rc_encode(fp, enc->rc, enc->coef_m[k], 1, 16);
+				rc_encode(fp, enc->rc, (uint) enc->coef_m[k], 1, 16);
 
 				for (cl = 0; cl < enc->num_class; cl++) {
 					coef = enc->predictor[cl][k];
@@ -2610,12 +2609,12 @@ int encode_predictor(FILE *fp, ENCODER *enc) {
 					rc_encode(fp, enc->rc, pm->cumfreq[coef],  pm->freq[coef], pm->cumfreq[pm->size]);
 
 					if (coef > 0) {
-						rc_encode(fp, enc->rc, sgn, 1, 2);
+						rc_encode(fp, enc->rc, (uint) sgn, 1, 2);
 					}
 				}
 			}
 
-			bits = enc->rc->code;
+			bits = (int) enc->rc->code;
 			enc->rc->code = 0;
 		}
 	}
@@ -2678,10 +2677,10 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
 				enc->th_cost[i] =((i - 1) >> min_m) + min_m + 1 + 1;
 			}
 
-			bits = min_cost;
+			bits = (int) min_cost;
 		}
 		else {
-			bits = putbits(fp, 4, min_m);
+			bits = putbits(fp, 4, (uint) min_m);
 
 			for (cl = 0; cl < enc->num_class; cl++) {
 				k = 0;
@@ -2707,7 +2706,7 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
 
 				for (gr = 0; gr < enc->num_group; gr++) {
 					pm = enc->pmlist[gr];
-					bits += putbits(fp, k, pm->id);
+					bits += putbits(fp, k, (uint) pm->id);
 				}
 			}
 		}
@@ -2750,10 +2749,10 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
 				enc->th_cost[i] = (p - log(pm->freq[i])) / log(2.0);
 			}
 
-			bits = min_cost;
+			bits = (int) min_cost;
 		}
 		else {
-			rc_encode(fp, enc->rc, min_m, 1, 16);
+			rc_encode(fp, enc->rc, (uint) min_m, 1, 16);
 
 			for (cl = 0; cl < enc->num_class; cl++) {
 				k = 0;
@@ -2770,11 +2769,11 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
 			if (enc->num_pmodel > 1) {
 				for (gr = 0; gr < enc->num_group; gr++) {
 					pm = enc->pmlist[gr];
-					rc_encode(fp, enc->rc, pm->id, 1, enc->num_pmodel);
+					rc_encode(fp, enc->rc, (uint) pm->id, 1, (uint) enc->num_pmodel);
 				}
 			}
 
-			bits = enc->rc->code;
+			bits = (int) enc->rc->code;
 			enc->rc->code = 0;
 		}
 	}
@@ -2877,7 +2876,7 @@ char *remove_ext (char* mystr, char dot, char sep) {
 	return retstr;
 }
 
-void print_results(FILE *res, int frames, int height, int width, int header, int *class_info, int *predictors, int *thresholds, int *errors, int *extrainfo, int prate, int pframes) {
+void print_results(FILE *res, int frames, int height, int width, int header, int *class_info, int *predictors, int *thresholds, int *errors, int prate, int pframes) {
 	int f, rate = 0, total_bits = 0;
 
 	printf("\n---------------------------------\n");
@@ -2895,11 +2894,6 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 		printf("pred. errors\t :%10d bits\n", errors[f]);
 
 		rate = class_info[f] + predictors[f] + thresholds[f] + errors[f];
-
-		if (extrainfo != NULL) {
-			printf("extra info\t :%10d bits\n", extrainfo[f]);
-			rate += extrainfo[f];
-		}
 
 		total_bits += rate;
 
@@ -2929,104 +2923,6 @@ void print_results(FILE *res, int frames, int height, int width, int header, int
 		fprintf(res, "Average P bitrate:%10.5f bpp (%d frames)\n", (double) prate / (pframes * height * width), pframes);
 		fprintf(res, "Average B bitrate:%10.5f bpp (%d frames)\n", (double) (total_bits - (class_info[0] + predictors[0] + thresholds[0] + errors[0]) - prate) / ((frames - pframes - 1) * height * width), frames - pframes - 1);
 	}
-
-	if (extrainfo != NULL) {
-		total_bits = 0;
-		for (f = 0; f < frames; f++) {
-			total_bits += extrainfo[f];
-		}
-
-		printf("\nExtra info due to pixelwise difference: %d bits --> %f bpp.", total_bits, (double)total_bits / (height * width * frames));
-	}
-}
-
-/*----------------------------- calc_diff -----------------------------*
- |  Function calc_diff
- |
- |  Purpose: Calculates the pixelwise difference image
- |
- |  Parameters:
- |      ref		 		--> Reference image struct (IN)
- |      cur		 		--> Current image struct (IN)
- |		extra_info		--> Stores the extra info if needed (OUT)
- |		num_pels		--> Number of pixels in need of extra info (OUT)
- |
- |  Returns:  IMAGE*	--> Returns the pixelwise difference image
- *---------------------------------------------------------------------*/
-IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels, int depth) {
-	int x, y;
-	// Image allocation
-	IMAGE *diff = alloc_image(ref->width, ref->height, (int) (pow(2, depth) - 1));
-	int aux, conta = 0;
-	char *aux_extra_info;
-
-	aux_extra_info = (char *) alloc_mem(ref->width * ref->height * sizeof(char));
-
-	(*extra_info) = NULL;
-
-	for (y = 0; y < ref->height; y++) {
-		for (x = 0; x < ref->width; x++) {
-			aux = cur->val[y][x] - ref->val[y][x] + (int) (pow(2, depth) / 2 - 1);
-
-			if (aux > 0 && aux < (int) (pow(2, depth) - 1)) {
-				diff->val[y][x] = aux;
-			}
-			else if (aux <= 0) {
-				diff->val[y][x] = 0;
-
-				aux_extra_info[conta] = aux;
-
-				conta++;
-			}
-			else if (aux >= (int) (pow(2, depth) - 1)) {
-				diff->val[y][x] = (int) (pow(2, depth) - 1);
-
-				aux_extra_info[conta] = aux - (int) (pow(2, depth) - 1);
-
-				conta++;
-			}
-		}
-	}
-
-	(*extra_info) = (char *) alloc_mem(conta * sizeof(char));
-
-	for (y = 0; y < conta; y++) {
-		(*extra_info)[y] = aux_extra_info[y];
-	}
-
-	*num_pels = conta;
-
-	free(aux_extra_info);
-	free(ref->val);
-	free(ref);
-	free(cur->val);
-	free(cur);
-
-	return diff;
-}
-
-/*------------------------- encode_extra_info -------------------------*
- |  Function encode_extra_info
- |
- |  Purpose: Writes the extra infor to file
- |
- |  Parameters:
- |		fp				--> File to write into (IN)
- |		extra_info		--> Array with the extra info (IN)
- |		num_pels		--> Number of pixels in need of extra info (IN)
- |
- |  Returns:  int		--> Returns the number of bits used
- *---------------------------------------------------------------------*/
-int encode_extra_info(FILE *fp, char *extra_info, int num_pels) {
-	int bits = 0, i;
-
-	bits = putbits(fp, 16, num_pels);
-
-	for (i = 0; i < num_pels; i++) {
-		bits += putbits(fp, 8, extra_info[i] + 128);
-	}
-
-	return bits;
 }
 
 /*--------------------------- total_variation ---------------------------*
@@ -3072,10 +2968,10 @@ double total_variation(IMAGE *img) {
  |
  |  Returns: double	--> Returns the sparseness index
  *-------------------------------------------------------------------------*/
-double sparseness_index(char *infile, int height, int width, int frames, int depth, int endianness, int chroma, int diff) {
+double sparseness_index(char *infile, int height, int width, int frames, int depth, int endianness, int chroma) {
 	int x, y, f, L = 0;
 	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
-	int num_pels, max = 0, min = ((int) pow(2, depth) - 1);
+	int max = 0, min = ((int) pow(2, depth) - 1);
 	char *extra_info = NULL;
 	IMAGE *img = NULL;
 
@@ -3085,12 +2981,7 @@ double sparseness_index(char *infile, int height, int width, int frames, int dep
 
 	// Operations to obtain the lookup table
 	for (f = 0; f < frames; f++) {
-		if (f == 0 || diff == 0) {
-			img = read_yuv(infile, height, width, f, depth, endianness, chroma);
-		}
-		else {
-			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness, chroma), read_yuv(infile, height, width, f, depth, endianness, chroma), &extra_info, &num_pels, depth);
-		}
+		img = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 		for (y = 0; y < img->height; y++) {
 			for (x = 0; x < img->width; x++) {
@@ -3113,7 +3004,7 @@ double sparseness_index(char *infile, int height, int width, int frames, int dep
 	free(hist);
 	safefree((void **)&extra_info);
 
-	return ((double) (1 - (L / (double)(1 + max - min))) * 100.0);
+	return (1 - (L / (double) (1 + max - min))) * 100.0;
 }
 
 /*--------------------------- histogram_check ---------------------------*
@@ -3132,14 +3023,13 @@ double sparseness_index(char *infile, int height, int width, int frames, int dep
  |
  |  Returns:  int*	--> Returns the lookup table
  *----------------------------------------------------------------------*/
-int* histogram_check(char *infile, int height, int width, int frames, int depth, int endianness, int chroma, int diff) {
+int* histogram_check(char *infile, int height, int width, int frames, int depth, int endianness, int chroma) {
 	int x, y, f;
 	int used_values = 0;
 	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
 	int *forward_table = (int *) alloc_mem(sizeof(int) * (int)(pow(2, depth)));
 	int *table = (int *) alloc_mem(sizeof(int) * (int)pow(2, depth));
 	double tv_original = 0.0, tv_packed = 0.0;
-	int num_pels;
 	char *extra_info = NULL;
 	IMAGE *aux_img, *img = NULL;
 
@@ -3150,12 +3040,7 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 
 	// Operations to obtain the lookup table
 	for (f = 0; f < frames; f++) {
-		if (f == 0 || diff == 0) {
-			img = read_yuv(infile, height, width, f, depth, endianness, chroma);
-		}
-		else {
-			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness, chroma), read_yuv(infile, height, width, f, depth, endianness, chroma), &extra_info, &num_pels, depth);
-		}
+        img = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 		for (y = 0; y < img->height; y++) {
 			for (x = 0; x < img->width; x++) {
@@ -3174,7 +3059,7 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 
 	free(hist);
 
-	aux_img = alloc_image(height, width, (int) (pow(2, depth) - 1));
+	aux_img = alloc_image(width, height, (int) (pow(2, depth) - 1));
 
 	// Produces the actual forward table
 	for (y = 0; y < (int)pow(2, depth); y++) {
@@ -3189,16 +3074,11 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 
 	// Perform the histogram packing of the image
 	for (f = 0; f < frames; f++) {
-		if (f == 0 || diff == 0) {
-			img = read_yuv(infile, height, width, f, depth, endianness, chroma);
-		}
-		else {
-			img = calc_diff(read_yuv(infile, height, width, f - 1, depth, endianness, chroma), read_yuv(infile, height, width, f, depth, endianness, chroma), &extra_info, &num_pels, depth);
-		}
+		img = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
 		for (y = 0; y < img->height; y++) {
 			for (x = 0; x < img->width; x++) {
-				aux_img->val[y][x] = table[img->val[y][x]];
+				aux_img->val[y][x] = (img_t) table[img->val[y][x]];
 			}
 		}
 
@@ -3215,7 +3095,9 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 		safefree((void**)&forward_table);
 	}
 
+    free(table);
 	safefree((void **)&extra_info);
+
 	return forward_table;
 }
 
@@ -3250,7 +3132,7 @@ void histogram_packing(IMAGE *img, int *forward_table, int depth) {
 	// Perform the histogram packing of the image
 	for (y = 0; y < img->height; y++) {
 		for (x = 0; x < img->width; x++) {
-			img->val[y][x] = table[img->val[y][x]];
+			img->val[y][x] = (img_t) table[img->val[y][x]];
 		}
 	}
 
@@ -3261,17 +3143,17 @@ void histogram_packing(IMAGE *img, int *forward_table, int depth) {
 
 // inserts into subject[] at position pos
 char *append(char *subject, char *insert, int pos) {
-	int i = 0;
+	uint i = 0;
 
     char *buf = (char *) alloc_mem(sizeof(char) * (strlen(subject) + strlen(insert) + 1));
     buf[0] = '\0';
 
-    for (i = 0; i < (pos < strlen(subject) ? pos : strlen(subject)); i++) {
+    for (i = 0; i < ((uint) pos < strlen(subject) ? (uint) pos : strlen(subject)); i++) {
     	buf[i] = subject[i];
     }
     buf[i] = '\0';
 
-    int len = strlen(buf);
+    int len = (int) strlen(buf);
     strcpy(buf + len, insert); // copy all of insert[] at the end
 
     len += strlen(insert);  // increase the length by length of insert[]
@@ -3363,11 +3245,10 @@ int encode_lookuptable(FILE *fp, int *forward_table, int size) {
 				new_str = cat_str(new_str, cat_str("11111111", int2bin(count - 383, 16), 0), 1);
 			}
 		}
-		count = 0;
 	}
 
 	// Number of bytes to write in the file
-	int bytes = strlen(new_str) / 8;
+	int bytes = (int) (strlen(new_str) / 8.0);
 
 	// Separates the bytes in the string
 	for (y = 1; y < bytes; y++) {
@@ -3376,11 +3257,11 @@ int encode_lookuptable(FILE *fp, int *forward_table, int size) {
 
 	char* sEnd = new_str;
 
-	bits = putbits(fp, 16, bytes);
+	bits = putbits(fp, 16, (uint) bytes);
 
 	// Write to file
 	for (y = 0; y < bytes; y++) {
-		bits += putbits(fp, 8, strtol(sEnd, &sEnd, 2));
+		bits += putbits(fp, 8, (uint) strtol(sEnd, &sEnd, 2));
 	}
 
 	safefree((void **) &new_str);
@@ -3394,7 +3275,7 @@ int main(int argc, char **argv) {
 	int i, j, f, k, x, y, cl, **prd_save, **th_save, **error = NULL;
 	char **class_save;
 	IMAGE *video[3] = {NULL, NULL, NULL};
-	ENCODER *enc;
+	ENCODER *enc = NULL;
 	double elapse = 0.0;
 	int f_mmse = 0;
 	int f_optpred = 0;
@@ -3425,8 +3306,6 @@ int main(int argc, char **argv) {
 	int header = 0, *class_info, *predictors, *thresholds, *errors, *extrainfo = NULL;
 	int delta = 1;
 	int hevc = 0;
-	int diff = 0, num_pels = 0;
-	char *extra_info = NULL;
 
 	cpu_time();
 	setbuf(stdout, 0);
@@ -3455,9 +3334,6 @@ int main(int argc, char **argv) {
                     if (frames <= 0) {
                         frames = FRAMES;
                     }
-                    break;
-                case 'p':
-                    diff = 1;
                     break;
                 case 'M':
                     num_class = atoi(argv[++i]);
@@ -3608,7 +3484,7 @@ int main(int argc, char **argv) {
 
 	// Help and version
 	if (infile == NULL || outfile == NULL) {
-		printf(BANNER"\n", 0.1 * VERSION);
+		printf(BANNER"\n", MRP_VERSION);
 		printf("usage: encmrp [options] infile outfile\n");
 		printf("options:\n");
 		printf("    -H num  	Height*\n");
@@ -3624,7 +3500,6 @@ int main(int argc, char **argv) {
                "\t\t(Notice: Currently MRP is a Luma only encoder. Thus this step is used only to skip the Chromas.)\n");
 		printf("    -F num  	Frames*\n");
 		printf("    -D num  	Distance between frames [%d]*\n", delta);
-		printf("    -p      	Pixel difference prediction\n");
 		printf("    -M num  	Number of predictors [%d]\n", num_class);
 		printf("    -G num  	Number of frames between references (number of B frames) [%d]\n", bframes);
 		printf("    -B      	Choose HEVC style bidirectional prediction\n");
@@ -3655,7 +3530,7 @@ int main(int argc, char **argv) {
 	// If the number of classes was not defined it is now
 	k = width * height;
 	if (num_class < 0) {
-		num_class = 10.4E-5 * k + 13.8;
+		num_class = (int) (10.4E-5 * k + 13.8);
 
 		if (num_class > MAX_CLASS) {
 			num_class = MAX_CLASS;
@@ -3665,7 +3540,7 @@ int main(int argc, char **argv) {
 	// If the prediction order was not defined it is now
 	for (j = 0; j < 6; j++) {
 		if (prd_order[j] < 0) {
-			prd_order[j] = 12.0E-5 * k + 17.2;
+			prd_order[j] = (int) (12.0E-5 * k + 17.2);
 
 			for (i = 1; i < 8; i++) {
 				if (prd_order[j] < (i + 1) * (i + 1)) {
@@ -3678,16 +3553,16 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (do_histogram_packing == 1) forward_table = histogram_check(infile, height, width, frames, depth, endianness, chroma, diff);
+	if (do_histogram_packing == 1) forward_table = histogram_check(infile, height, width, frames, depth, endianness, chroma);
 
 	printf("\nMRP-Video Encoder\n\n");
 	// Print file characteristics to screen
 	printf("%s (%dx%dx%dx%d) -> %s\n", infile, width, height, frames, depth, outfile);
 	// Print coding parameters to screen
-	printf("M = %d, P = %d, V = %d, A = %d, D = %d, p = %s\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
+	printf("M = %d, P = %d, V = %d, A = %d, D = %d\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta);
 	// Print prediction parameters to screen
 	if (forward_table != NULL) {
-		printf("Sparseness Index, S = %3.1f%%\n\n", sparseness_index(infile, height, width, frames, depth, endianness, chroma, diff));
+		printf("Sparseness Index, S = %3.1f%%\n\n", sparseness_index(infile, height, width, frames, depth, endianness, chroma));
 	}
 	if (frames == 1) {
 		printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
@@ -3718,7 +3593,7 @@ int main(int argc, char **argv) {
 	free(aux);
 
 	res = fileopen(resfile, "w");
-	fprintf(res, "MRP-Video version %d encoding results\n", VERSION);
+	fprintf(res, "MRP-Video version %s encoding results\n", MRP_VERSION);
 	fprintf(res, "\tEncoded file: %s\n", infile);
 	fprintf(res, "\tDimensions: %dx%dx%d\n", width, height, frames);
 	fprintf(res, "---------------------------------------------\n");
@@ -3737,25 +3612,10 @@ int main(int argc, char **argv) {
 			}
 			else {
 				// Read input file
-				if (diff == 0) {
-					video[0] = video[1];
-					video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
+                video[0] = video[1];
+                video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
-					if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
-				}
-				else {
-					video[0] = video[1];
-
-					IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
-					IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
-
-					if (forward_table != NULL) {
-						histogram_packing(aux1, forward_table, depth);
-						histogram_packing(aux2, forward_table, depth);
-					}
-
-					video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-				}
+                if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 
 				enc = init_encoder(video[1], video[0], NULL, error, NULL, num_class, num_group, prd_order[1], prd_order[2], 0, coef_precision, f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta, depth);
 
@@ -3792,8 +3652,8 @@ int main(int argc, char **argv) {
 			min_cost = INT_MAX;
 
 			for (i = j = 0; i < max_iteration; i++) {
-				cost = design_predictor(enc, f_mmse);
-				cost = optimize_group(enc);
+				design_predictor(enc, f_mmse);
+				optimize_group(enc);
 				cost = optimize_class(enc);
 				if (cost < min_cost) {
 					min_cost = cost;
@@ -3848,11 +3708,11 @@ int main(int argc, char **argv) {
 
 			for (i = j = 0; i < max_iteration; i++) {
 				if (f_optpred) {
-					cost = optimize_predictor(enc);
+					optimize_predictor(enc);
 				}
 
 				side_cost = encode_predictor(NULL, enc);
-				cost = optimize_group(enc);
+				optimize_group(enc);
 				side_cost += encode_threshold(NULL, enc);
 				cost = optimize_class(enc);
 				side_cost += encode_class(NULL, enc);
@@ -3904,7 +3764,7 @@ int main(int argc, char **argv) {
 					for (k = 0; k < enc->num_group; k++) {
 						enc->th[cl][k] = th_save[cl][k];
 						for (; i < enc->th[cl][k]; i++) {
-							enc->uquant[cl][i] = k;
+							enc->uquant[cl][i] = (char) k;
 						}
 					}
 				}
@@ -3920,7 +3780,7 @@ int main(int argc, char **argv) {
 			printf(" --> M = %d\n", enc->num_class);
 
 			if (f == 0) {
-				header = write_header(enc, prd_order, frames, bframes, diff, 0, fp);
+				header = write_header(enc, prd_order, frames, bframes, 0, fp);
 
 				if (forward_table != NULL) {
 					header += encode_lookuptable(fp, forward_table, (int) pow(2, depth));
@@ -3940,10 +3800,6 @@ int main(int argc, char **argv) {
 			predictors[f] = encode_predictor(fp, enc);
 			thresholds[f] = encode_threshold(fp, enc);
 			errors[f] = encode_image(fp, enc);
-
-			if (f > 0 && diff == 1) {
-				extrainfo[f] += encode_extra_info(fp, extra_info, num_pels);
-			}
 
 			if (f > 0) {
 				free(video[0]->val);
@@ -3968,20 +3824,15 @@ int main(int argc, char **argv) {
 
 		fclose(fp);
 
-		if (diff == 1) {
-			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, extrainfo, 0, 0);
-		}
-		else {
-			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, NULL, 0, 0);
-		}
+		print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, 0, 0);
 
 		free(error);
 	}
 	else {
-		int **back_ref_error, **for_ref_error;
+		int **back_ref_error = NULL, **for_ref_error = NULL;
 		int back_reference = 0, for_reference = 0, first_frame = 0, conta = 0, final = 0;
-		int ***keep_error;
-		int (*bref)[5] = NULL;
+		int ***keep_error = NULL;
+		int **bref = NULL;
 		int prate = 0, pframes = 0;
 
 		if (hevc == 0 || bframes == 2) {
@@ -3996,7 +3847,7 @@ int main(int argc, char **argv) {
 
 			bref = select_bref(bframes);
 
-			final = ((frames - 1) % bframes != 0) ? (bframes * ((int)((frames - 1) / bframes)) + 1) : frames;
+			final = ((frames - 1) % bframes != 0) ? (bframes * ((frames - 1) / bframes) + 1) : frames;
 		}
 
 		f = 0;
@@ -4048,8 +3899,8 @@ int main(int argc, char **argv) {
 			min_cost = INT_MAX;
 
 			for (i = j = 0; i < max_iteration; i++) {
-				cost = design_predictor(enc, f_mmse);
-				cost = optimize_group(enc);
+				design_predictor(enc, f_mmse);
+				optimize_group(enc);
 				cost = optimize_class(enc);
 
 				if (cost < min_cost) {
@@ -4106,11 +3957,11 @@ int main(int argc, char **argv) {
 
 			for (i = j = 0; i < max_iteration; i++) {
 				if (f_optpred) {
-					cost = optimize_predictor(enc);
+					optimize_predictor(enc);
 				}
 
 				side_cost = encode_predictor(NULL, enc);
-				cost = optimize_group(enc);
+				optimize_group(enc);
 				side_cost += encode_threshold(NULL, enc);
 				cost = optimize_class(enc);
 				side_cost += encode_class(NULL, enc);
@@ -4162,7 +4013,7 @@ int main(int argc, char **argv) {
 					for (k = 0; k < enc->num_group; k++) {
 						enc->th[cl][k] = th_save[cl][k];
 						for (; i < enc->th[cl][k]; i++) {
-							enc->uquant[cl][i] = k;
+							enc->uquant[cl][i] = (char) k;
 						}
 					}
 				}
@@ -4178,7 +4029,7 @@ int main(int argc, char **argv) {
 			printf(" --> M = %d\n", enc->num_class);
 
 			if (f == 0) {
-				header = write_header(enc, prd_order, frames, bframes, diff, hevc, fp);
+				header = write_header(enc, prd_order, frames, bframes, hevc, fp);
 
 				if (forward_table != NULL) {
 					header += encode_lookuptable(fp, forward_table, (int) pow(2, depth));
@@ -4199,10 +4050,6 @@ int main(int argc, char **argv) {
 			thresholds[f] = encode_threshold(fp, enc);
 			errors[f] = encode_image(fp, enc);
 
-			if (f > 0 && diff == 1) {
-				extrainfo[f] += encode_extra_info(fp, extra_info, num_pels);
-			}
-
 			if ((((f - first_frame) % bframes == 0) | (f == frames - 1)) && f != 0) {
 				prate += class_info[f] + predictors[f] + thresholds[f] + errors[f];
 				pframes++;
@@ -4222,22 +4069,9 @@ int main(int argc, char **argv) {
 					video[0] = copy_yuv(video[1]);
 					safefree_yuv(&video[1]);
 
-					if (diff == 0) {
-						video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
+					video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
-						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
-					}
-					else {
-						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
-						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
-
-						if (forward_table != NULL) {
-							histogram_packing(aux1, forward_table, depth);
-							histogram_packing(aux2, forward_table, depth);
-						}
-
-						video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-					}
+                    if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 				}
 				else if (f == for_reference) {
 					if (f == back_reference + 1) {
@@ -4253,22 +4087,9 @@ int main(int argc, char **argv) {
 						video[2] = copy_yuv(video[1]);
 						safefree_yuv(&video[1]);
 
-						if (diff == 0) {
-							video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
+						video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
-							if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
-						}
-						else {
-							IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
-							IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
-
-							if (forward_table != NULL) {
-								histogram_packing(aux1, forward_table, depth);
-								histogram_packing(aux2, forward_table, depth);
-							}
-
-							video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-						}
+                        if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 					}
 				}
 				else if (back_reference < f && f < for_reference - 1) {
@@ -4276,22 +4097,9 @@ int main(int argc, char **argv) {
 
 					safefree_yuv(&video[1]);
 
-					if (diff == 0) {
-						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
+					if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 
-						video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
-					}
-					else {
-						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
-						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
-
-						if (forward_table != NULL) {
-							histogram_packing(aux1, forward_table, depth);
-							histogram_packing(aux2, forward_table, depth);
-						}
-
-						video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-					}
+                    video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 				}
 				else if (f == for_reference - 1) {
 					if (f + 1 == frames - 1) {
@@ -4319,22 +4127,9 @@ int main(int argc, char **argv) {
 
 					safefree_yuv(&video[1]);
 
-					if (diff == 0) {
-						video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
+					video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
-						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
-					}
-					else {
-						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
-						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
-
-						if (forward_table != NULL) {
-							histogram_packing(aux1, forward_table, depth);
-							histogram_packing(aux2, forward_table, depth);
-						}
-
-						video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-					}
+                    if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 				}
 			}
 			else if (hevc == 1) {
@@ -4352,22 +4147,9 @@ int main(int argc, char **argv) {
 
 					if (forward_table != NULL) histogram_packing(video[0], forward_table, depth);
 
-					if (diff == 0) {
-						video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
+					video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
-						if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
-					}
-					else {
-						IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
-						IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
-
-						if (forward_table != NULL) {
-							histogram_packing(aux1, forward_table, depth);
-							histogram_packing(aux2, forward_table, depth);
-						}
-
-						video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-					}
+                    if (forward_table != NULL) histogram_packing(video[1], forward_table, depth);
 
 					conta++;
 				}
@@ -4385,64 +4167,22 @@ int main(int argc, char **argv) {
 						safefree_yuv(&video[1]);
 						safefree_yuv(&video[0]);
 
-						if (diff == 0) {
-							video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness, chroma);
-							video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
+						video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness, chroma);
+                        video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
-							if (forward_table != NULL) {
-								histogram_packing(video[0], forward_table, depth);
-								histogram_packing(video[1], forward_table, depth);
-							}
-						}
-						else {
-							if (f + bref[conta][1] == 0) {
-								video[0] = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness, chroma);
-
-								if (forward_table != NULL) histogram_packing(video[0], forward_table, depth);
-							}
-							else {
-								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[conta][1] - 1, depth, endianness, chroma);
-								IMAGE *aux2 = read_yuv(infile, height, width, f + bref[conta][1], depth, endianness, chroma);
-
-								if (forward_table != NULL) {
-									histogram_packing(aux1, forward_table, depth);
-									histogram_packing(aux2, forward_table, depth);
-								}
-
-								video[0] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-							}
-
-							IMAGE *aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
-							IMAGE *aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
-
-							if (forward_table != NULL) {
-								histogram_packing(aux1, forward_table, depth);
-								histogram_packing(aux2, forward_table, depth);
-							}
-
-							video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-						}
+                        if (forward_table != NULL) {
+                            histogram_packing(video[0], forward_table, depth);
+                            histogram_packing(video[1], forward_table, depth);
+                        }
 
 						if (conta < bframes + 1) back_ref_error = keep_error[bref[conta][3]];
 
 						if (bref[conta][2] != -1) {
 							if (video[2] != NULL) safefree_yuv(&video[2]);
-							if (diff == 0) {
-								video[2] = read_yuv(infile, height, width, f + bref[conta][2], depth, endianness, chroma);
 
-								if (forward_table != NULL) histogram_packing(video[2], forward_table, depth);
-							}
-							else {
-								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[conta][2] - 1, depth, endianness, chroma);
-								IMAGE *aux2 = read_yuv(infile, height, width, f + bref[conta][2], depth, endianness, chroma);
+                            video[2] = read_yuv(infile, height, width, f + bref[conta][2], depth, endianness, chroma);
 
-								if (forward_table != NULL) {
-									histogram_packing(aux1, forward_table, depth);
-									histogram_packing(aux2, forward_table, depth);
-								}
-
-								video[2] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-							}
+                            if (forward_table != NULL) histogram_packing(video[2], forward_table, depth);
 
 							if (conta < bframes + 1) for_ref_error = keep_error[bref[conta][4]];
 						}
@@ -4463,36 +4203,14 @@ int main(int argc, char **argv) {
 
 								safefree_yuv(&video[0]);
 								safefree_yuv(&video[1]);
-								if (diff == 0) {
-									video[0] = read_yuv(infile, height, width, f + 1, depth, endianness, chroma);
-									video[1] = read_yuv(infile, height, width, frames - 1, depth, endianness, chroma);
 
-									if (forward_table != NULL) {
-										histogram_packing(video[0], forward_table, depth);
-										histogram_packing(video[1], forward_table, depth);
-									}
-								}
-								else {
-									IMAGE *aux1 = read_yuv(infile, height, width, f, depth, endianness, chroma);
-									IMAGE *aux2 = read_yuv(infile, height, width, f + 1, depth, endianness, chroma);
+                                video[0] = read_yuv(infile, height, width, f + 1, depth, endianness, chroma);
+                                video[1] = read_yuv(infile, height, width, frames - 1, depth, endianness, chroma);
 
-									if (forward_table != NULL) {
-										histogram_packing(aux1, forward_table, depth);
-										histogram_packing(aux2, forward_table, depth);
-									}
-
-									video[0] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-
-									aux1 = read_yuv(infile, height, width, frames - 2, depth, endianness, chroma);
-									aux2 = read_yuv(infile, height, width, frames - 1, depth, endianness, chroma);
-
-									if (forward_table != NULL) {
-										histogram_packing(aux1, forward_table, depth);
-										histogram_packing(aux2, forward_table, depth);
-									}
-
-									video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-								}
+                                if (forward_table != NULL) {
+                                    histogram_packing(video[0], forward_table, depth);
+                                    histogram_packing(video[1], forward_table, depth);
+                                }
 
 								first_frame = f + 1;
 								f = frames - 1;
@@ -4503,36 +4221,14 @@ int main(int argc, char **argv) {
 
 									safefree_yuv(&video[0]);
 									safefree_yuv(&video[1]);
-									if (diff == 0) {
-										video[0] = read_yuv(infile, height, width, frames - 2, depth, endianness, chroma);
-										video[1] = read_yuv(infile, height, width, frames - 1, depth, endianness, chroma);
 
-										if (forward_table != NULL) {
-											histogram_packing(video[0], forward_table, depth);
-											histogram_packing(video[1], forward_table, depth);
-										}
-									}
-									else {
-										IMAGE *aux1 = read_yuv(infile, height, width, frames - 3, depth, endianness, chroma);
-										IMAGE *aux2 = read_yuv(infile, height, width, frames - 2, depth, endianness, chroma);
+                                    video[0] = read_yuv(infile, height, width, frames - 2, depth, endianness, chroma);
+                                    video[1] = read_yuv(infile, height, width, frames - 1, depth, endianness, chroma);
 
-										if (forward_table != NULL) {
-											histogram_packing(aux1, forward_table, depth);
-											histogram_packing(aux2, forward_table, depth);
-										}
-
-										video[0] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-
-										aux1 = read_yuv(infile, height, width, frames - 2, depth, endianness, chroma);
-										aux2 = read_yuv(infile, height, width, frames - 1, depth, endianness, chroma);
-
-										if (forward_table != NULL) {
-											histogram_packing(aux1, forward_table, depth);
-											histogram_packing(aux2, forward_table, depth);
-										}
-
-										video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-									}
+                                    if (forward_table != NULL) {
+                                        histogram_packing(video[0], forward_table, depth);
+                                        histogram_packing(video[1], forward_table, depth);
+                                    }
 
 									first_frame = frames - 2;
 								}
@@ -4562,36 +4258,14 @@ int main(int argc, char **argv) {
 
 							safefree_yuv(&video[0]);
 							safefree_yuv(&video[1]);
-							if (diff == 0) {
-								video[0] = read_yuv(infile, height, width, f + bref[0][1], depth, endianness, chroma);
-								video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
-								if (forward_table != NULL) {
-									histogram_packing(video[0], forward_table, depth);
-									histogram_packing(video[1], forward_table, depth);
-								}
-							}
-							else {
-								IMAGE *aux1 = read_yuv(infile, height, width, f + bref[0][1] - 1, depth, endianness, chroma);
-								IMAGE *aux2 =  read_yuv(infile, height, width, f + bref[0][1], depth, endianness, chroma);
+                            video[0] = read_yuv(infile, height, width, f + bref[0][1], depth, endianness, chroma);
+                            video[1] = read_yuv(infile, height, width, f, depth, endianness, chroma);
 
-								if (forward_table != NULL) {
-									histogram_packing(aux1, forward_table, depth);
-									histogram_packing(aux2, forward_table, depth);
-								}
-
-								video[0] = calc_diff(aux1,aux2, &extra_info, &num_pels, depth);
-
-								aux1 = read_yuv(infile, height, width, f - 1, depth, endianness, chroma);
-								aux2 = read_yuv(infile, height, width, f, depth, endianness, chroma);
-
-								if (forward_table != NULL) {
-									histogram_packing(aux1, forward_table, depth);
-									histogram_packing(aux2, forward_table, depth);
-								}
-
-								video[1] = calc_diff(aux1, aux2, &extra_info, &num_pels, depth);
-							}
+                            if (forward_table != NULL) {
+                                histogram_packing(video[0], forward_table, depth);
+                                histogram_packing(video[1], forward_table, depth);
+                            }
 
 							safefree_yuv(&video[2]);
 							video[2] = NULL;
@@ -4643,14 +4317,11 @@ int main(int argc, char **argv) {
 			safefree((void **)&keep_error);
 		}
 
+        free(bref);
+
 		fclose(fp);
 
-		if (diff == 1) {
-			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, extrainfo, prate, pframes);
-		}
-		else {
-			print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, NULL, prate, pframes);
-		}
+		print_results(res, frames, height, width, header, class_info, predictors, thresholds, errors, prate, pframes);
 	}
 
 	free(class_info);

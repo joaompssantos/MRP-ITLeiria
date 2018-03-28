@@ -51,7 +51,7 @@ const POINT idyx[] = {
 //		{-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
 };
 
-int bref1[4][5] = {{2, -2, -1, 0, -1},
+int bref1[2][5] = {{2, -2, -1, 0, -1},
 				   {-1, -1, 1, 0, 2},
 };
 
@@ -271,8 +271,8 @@ unsigned short reverse_endianness (unsigned short s, int endianness) {
         return s;
     }
     else {
-        c1 = s & 255;
-        c2 = (s >> 8) & 255;
+        c1 = (unsigned char) (s & 255);
+        c2 = (unsigned char) ((s >> 8) & 255);
 
         return (c1 << 8) + c2;
     }
@@ -377,25 +377,25 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 
 	if (frame > 0) {
 		if (depth > 8) {
-			fseek(fp, img->height * img->width * 2 * chroma_pass * frame, SEEK_SET);
+			fseek(fp, (long) (img->height * img->width * 2 * chroma_pass * frame), SEEK_SET);
 		}
 		else {
-			fseek(fp, img->height * img->width * chroma_pass * frame, SEEK_SET);
+			fseek(fp, (long) (img->height * img->width * chroma_pass * frame), SEEK_SET);
 		}
 	}
 
 	for (i = 0; i < img->height; i++) {
 		for (j = 0; j < img->width; j++) {
-			first = (img_t)fgetc(fp);
+			first = (img_t) fgetc(fp);
 
 			if (depth > 8) {
-				second = (img_t)fgetc(fp);
+				second = (img_t) fgetc(fp);
 
-				img->val[i][j] = (first << shift_first) + (second << shift_second);
-				img->val[i][j] = img->val[i][j] & mask[depth - 8];
+				img->val[i][j] = (img_t) ((first << shift_first) + (second << shift_second));
+				img->val[i][j] = (img_t) (img->val[i][j] & mask[depth - 8]);
 			}
 			else {
-				img->val[i][j] = first;
+				img->val[i][j] = (img_t) first;
 			}
 		}
 	}
@@ -521,7 +521,7 @@ void gen_huffcode(VLC *vlc) {
 	for (i = vlc->size -1; i > 0; i--) {
 		for (j = 0; j < i; j++) {
 			if (len[idx[j]] > len[idx[j + 1]]) {
-				k = idx[j + 1];
+				k = (uint) (idx[j + 1]);
 				idx[j + 1] = idx[j];
 				idx[j] = k;
 			}
@@ -625,19 +625,19 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
 
 	/* Generalized Gaussian distribution */
 	beta = exp(0.5*(lngamma(3.0/shape)-lngamma(1.0/shape))) / sigma;
-	sw = 1.0 / (double)num_subpm;
+	sw = 1.0 / (double) num_subpm;
 	n = pm->size * num_subpm;
 	center *= num_subpm;
 
 	if (center == 0) {    /* one-sided distribution */
 		for (i = 0; i < n; i++) {
-			x = (double)i * sw;
+			x = (double) i * sw;
 			pdfsamp[i] = exp(-pow(beta * x, shape));
 		}
 	}
 	else {
 		for (i = center; i < n; i++) {
-			x = (double)(i - (double)center + 0.5) * sw;
+			x = (i - (double) center + 0.5) * sw;
 			pdfsamp[i + 1] = exp(-pow(beta * x, shape));
 		}
 
@@ -661,12 +661,12 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
 			norm += pdfsamp[i * num_subpm + j];
 		}
 
-		norm = (double)(MAX_TOTFREQ - pm->size * MIN_FREQ) / norm;
+		norm = (double) (MAX_TOTFREQ - pm->size * MIN_FREQ) / norm;
 		norm += 1E-8;	/* to avoid machine dependent rounding errors */
 		pm->cumfreq[0] = 0;
 
 		for (i = 0; i < pm->size; i++) {
-			pm->freq[i] = norm * pdfsamp[i * num_subpm + j] + MIN_FREQ;
+			pm->freq[i] = (uint) (norm * pdfsamp[i * num_subpm + j] + MIN_FREQ);
 			pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
 		}
 
@@ -767,7 +767,7 @@ void set_spmodel(PMODEL *pm, int size, int m) {
 		sum = 0;
 
 		for (i = 0; i < pm->size; i++) {
-			pm->freq[i] = exp(-p * i) * (1 << 10);
+			pm->freq[i] = (uint) (exp(-p * i) * (1 << 10));
 
 			if (pm->freq[i] == 0) pm->freq[i]++;
 
@@ -801,28 +801,28 @@ int *init_ctx_weight(int prd_order, int back_prd_order, int for_prd_order, int d
 		dy = dyx[k].y;
 		dx = dyx[k].x;
 
-		ctx_weight[k] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
+		ctx_weight[k] = (int) (64.0 / sqrt(dy * dy + dx * dx) + 0.5);
 	}
 
 	if (back_prd_order > 0) {
-		ctx_weight[prd_order] = 64.0 / sqrt(delta * delta) + 0.5;
+		ctx_weight[prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
 
 		for (k = 0; k < back_prd_order - 1; k++) {
 			dy = idyx[k].y;
 			dx = idyx[k].x;
 
-			ctx_weight[k + prd_order + 1] = 64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5;
+			ctx_weight[k + prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
 		}
 	}
 
 	if (for_prd_order > 0) {
-		ctx_weight[prd_order + back_prd_order] = 64.0 / sqrt(delta * delta) + 0.5;
+		ctx_weight[prd_order + back_prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
 
 		for (k = 0; k < for_prd_order - 1; k++) {
 			dy = idyx[k].y;
 			dx = idyx[k].x;
 
-			ctx_weight[k + prd_order + back_prd_order + 1] = 64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5;
+			ctx_weight[k + prd_order + back_prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
 		}
 	}
 
@@ -935,43 +935,57 @@ double cpu_time(void) {
 #endif
 }
 
+int **copy_bref(int bframes, int bref_const[][5]) {
+    int i, j;
+
+    int **bref = (int **) alloc_2d_array(bframes, 5, sizeof(int));
+
+    for (i = 0; i < bframes; i++) {
+        for (j = 0; j < 5; j++) {
+            bref[i][j] = bref_const[i][j];
+        }
+    }
+
+    return bref;
+}
+
 int **select_bref(int bframes) {
-	int (*aux)[5] = NULL;
+    int **bref = NULL;
 
 	switch(bframes) {
 		case 2:
-			aux = bref1;
+            bref = copy_bref(bframes, bref1);
 			break;
 		case 3:
-			aux = bref2;
+            bref = copy_bref(bframes, bref2);
 			break;
 		case 4:
-			aux = bref3;
+            bref = copy_bref(bframes, bref3);
 			break;
 		case 5:
-			aux = bref4;
+            bref = copy_bref(bframes, bref4);
 			break;
 		case 6:
-			aux = bref5;
+            bref = copy_bref(bframes, bref5);
 			break;
 		case 7:
-			aux = bref6;
+            bref = copy_bref(bframes, bref6);
 			break;
 		case 8:
-			aux = bref7;
+            bref = copy_bref(bframes, bref7);
 			break;
 		case 9:
-			aux = bref8;
+            bref = copy_bref(bframes, bref8);
 			break;
 		case 10:
-			aux = bref9;
+            bref = copy_bref(bframes, bref9);
 			break;
 		default:
-			aux = bref3;
+            bref = copy_bref(bframes, bref3);
 			break;
 	}
 
-	return aux;
+	return bref;
 }
 
 char* cat_str(char* str1, char* str2, int type) {
@@ -1003,7 +1017,7 @@ char *int2bin(int a, int buf_size) {
     buffer[buf_size] = '\0';
 
     for (int i = buf_size - 1; i >= 0; i--) {
-        buffer[i] = (a & 1) + '0';
+        buffer[i] = (char) ((a & 1) + '0');
 
         a >>= 1;
     }

@@ -4,6 +4,7 @@
 #include <math.h>
 #include <unistd.h>
 #include "mrp.h"
+#include "mrp_config.h"
 
 extern POINT dyx[];
 extern POINT idyx[];
@@ -20,7 +21,7 @@ uint getbits(FILE *fp, int n) {
 	while (n > bitpos) {
 		n -= bitpos;
 		x = (x << bitpos) | bitbuf;
-		bitbuf = getc(fp) & 0xff;
+		bitbuf = (uint) (getc(fp) & 0xff);
 		bitpos = 8;
 	}
 
@@ -28,7 +29,7 @@ uint getbits(FILE *fp, int n) {
 	x = (x << n) | (bitbuf >> bitpos);
 	bitbuf &= ((1 << bitpos) - 1);
 
-	return (x);
+	return (uint) x;
 }
 
 int read_class(FILE *fp) {
@@ -196,7 +197,7 @@ void free_decoder(DECODER *dec) {
 	free(dec);
 }
 
-void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *depth, int *bframes, int *num_comp, int *num_group, int *prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta, int *diff, int *hevc, int *hist_bytes) {
+void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *depth, int *bframes, int *num_comp, int *num_group, int *prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta, int *hevc, int *hist_bytes) {
 	int i = 0;
 
 	if (getbits(fp, 16) != MAGIC_NUMBER) {
@@ -204,7 +205,7 @@ void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, i
 		exit(1);
 	}
 
-	*version = getbits(fp, 8);
+	*version = getbits(fp, 16);
 	*width = getbits(fp, 16);
 	*height = getbits(fp, 16);
 	*maxval = getbits(fp, 16);
@@ -217,11 +218,10 @@ void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, i
 	for (i = 0; i < 6; i++) {
 		prd_order[i] = getbits(fp, 8);
 	}
-	*diff = getbits(fp, 1);
 	*delta = getbits(fp, 8);
 	*num_pmodel = getbits(fp, 6) + 1;
 	*coef_precision = getbits(fp, 4) + 1;
-	*pm_accuracy = getbits(fp, 3) - 1;
+	*pm_accuracy = getbits(fp, 4) - 1;
 	*f_huffman = getbits(fp, 1);
 	*quadtree_depth = (getbits(fp, 1))? QUADTREE_DEPTH : -1;
 	*hist_bytes = getbits(fp, 16);
@@ -231,7 +231,8 @@ int decode_vlc(FILE *fp, VLC *vlc) {
 	int i, k, min, off;
 	uint code;
 
-	code = min = off = k = 0;
+	code = 0;
+    min = off = 0;
 
 	for (i = 0; i < vlc->max_len; i++) {
 		code = (code << 1) | getbits(fp, 1);
@@ -341,7 +342,7 @@ void decode_threshold(FILE *fp, DECODER *dec) {
 					if (getbits(fp, 1)) k += decode_golomb(fp, m) + 1;
 				}
 
-				for (; u < k; u++) dec->uquant[cl][u] = gr;
+				for (; u < k; u++) dec->uquant[cl][u] = (char) gr;
 			}
 		}
 
@@ -379,7 +380,7 @@ void decode_threshold(FILE *fp, DECODER *dec) {
 					k += rc_decode(fp, dec->rc, pm, 0, pm->size - k);
 				}
 
-				for (; u < k; u++) dec->uquant[cl][u] = gr;
+				for (; u < k; u++) dec->uquant[cl][u] = (char) gr;
 			}
 		}
 
@@ -461,7 +462,7 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int 
 
 	for (y = tly; y < bry; y++) {
 		for (x = tlx; x < brx; x++) {
-			dec->class[y][x] = cl;
+			dec->class[y][x] = (char) cl;
 		}
 	}
 
@@ -536,9 +537,9 @@ void decode_class(FILE *fp, DECODER *dec) {
 			for (ctx = 0; ctx < QUADTREE_DEPTH << 2; ctx++) {
 				i = qtree_code[ctx];
 				p = qtree_prob[i];
-				pm->freq[(ctx << 1) + 1] = p * (1 << 10);
+				pm->freq[(ctx << 1) + 1] = (uint) (p * (1 << 10));
 				p = 1.0 - p;
-				pm->freq[(ctx << 1)] = p * (1 << 10);
+				pm->freq[(ctx << 1)] = (uint) (p * (1 << 10));
 			}
 
 			for (i = 0; i < pm->size; i++) {
@@ -553,7 +554,7 @@ void decode_class(FILE *fp, DECODER *dec) {
 
 		for (i = 0; i < dec->num_class; i++) {
 			p = exp(-log(2.0) * ((double)mtf_code[i] + 0.5) * PMCLASS_MAX/PMCLASS_LEVEL);
-			cpm->freq[i] = p * (1 << 10);
+			cpm->freq[i] = (uint) (p * (1 << 10));
 
 			if (cpm->freq[i] <= 0) cpm->freq[i] = 1;
 
@@ -955,6 +956,7 @@ void print_contexts(int modo, uint cumfreq, uint freq, uint totfreq, int max, in
 
 	fclose(fp);
 }
+
 IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 	int x, y, cl, gr, prd, u, e, E, p;
 
@@ -975,7 +977,7 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 				vlc = &dec->vlcs[gr][0];
 				dec->err[1][y][x] = E = decode_vlc(fp, vlc);
 				e = E2e(E, p, prd & 1, dec->maxval);
-				video[1]->val[y][x] = p + e;
+				video[1]->val[y][x] = (img_t) (p + e);
 			}
 		}
 	}
@@ -993,7 +995,7 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 					pm = dec->pmodels[gr][0];
 					dec->err[1][y][x] = E = rc_decode(fp, dec->rc, pm, 0, pm->size);
 					e = E2e(E, p, prd & 1, dec->maxval);
-					video[1]->val[y][x] = p + e;
+					video[1]->val[y][x] = (img_t) (p + e);
 				}
 			}
 		}
@@ -1015,7 +1017,7 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 //					print_contexts(-1, 0, 0, pm->cumfreq[base+dec->maxval+1] - pm->cumfreq[base], base+dec->maxval+1, base, prd);
 
 					p = rc_decode(fp, dec->rc, pm, base, base+dec->maxval+1) - base;
-					video[1]->val[y][x] = p;
+					video[1]->val[y][x] = (img_t) p;
 					prd >>= (dec->coef_precision - 1);
 					e = (p << 1) - prd;
 					dec->err[1][y][x] = (e > 0)? (e - 1) : (-e);
@@ -1025,50 +1027,6 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 	}
 
 	return (video[1]);
-}
-
-IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int *extra_info, int num_pels, int frame, int depth) {
-	int x, y, conta = 0;
-	// Image allocation
-	IMAGE *cur = alloc_image(ref->width, ref->height, (int) (pow(2, depth) - 1));
-
-	for (y = 0; y < ref->height; y++) {
-		for (x = 0; x < ref->width; x++) {
-			cur->val[y][x] = diff->val[y][x] + ref->val[y][x] - (int) (pow(2, depth) / 2 - 1);
-
-			if ((diff->val[y][x] == 0 || diff->val[y][x] == (int) (pow(2, depth) - 1)) && conta < num_pels) {
-				cur->val[y][x] += extra_info[conta + 1];
-				conta++;
-			}
-		}
-	}
-
-	if (frame > 1) {
-		safefree_yuv(&ref);
-	}
-
-	safefree((void **)&extra_info);
-
-	return cur;
-}
-
-int *decode_extra_info(FILE *fp) {
-	int i, num_pels = 0;
-	int *extra_info = NULL;
-
-	num_pels = getbits(fp, 16);
-
-	if (num_pels != 0) {
-		extra_info = (int *) alloc_mem((num_pels + 1) * sizeof(int));
-
-		extra_info[0] = num_pels;
-
-		for (i = 0; i < num_pels; i++) {
-			extra_info[i + 1] = getbits(fp, 8) - 128;
-		}
-	}
-
-	return extra_info;
 }
 
 /*------------------------- decode_lookuptable -------------------------*
@@ -1100,7 +1058,7 @@ int *decode_lookuptable(FILE *fp, int hist_bytes, int depth) {
 		new_str = cat_str(new_str, int2bin(getbits(fp, 8), 8), 1);
 	}
 
-	size = strlen(new_str);
+	size = (int) strlen(new_str);
 
 	for (i = 0; i < size; i++) {
 		phrase[0] = '\0';
@@ -1245,7 +1203,7 @@ IMAGE *histogram_unpacking(IMAGE *img, int *backward_table) {
 	// Perform the histogram packing of the image
 	for (y = 0; y < img->height; y++) {
 		for (x = 0; x < img->width; x++) {
-			u_img->val[y][x] = backward_table[img->val[y][x]];
+			u_img->val[y][x] = (img_t) backward_table[img->val[y][x]];
 		}
 	}
 
@@ -1255,21 +1213,18 @@ IMAGE *histogram_unpacking(IMAGE *img, int *backward_table) {
 int main(int argc, char **argv) {
 	int i, f, **error = NULL;
 	int version, width, height, maxval, frames, depth, bframes, num_comp, num_group, endianness = LITTLE_ENDIANNESS;
-	int num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, diff, hevc, hist_bytes;
+	int num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, hevc, hist_bytes;
 	int *backward_table = NULL;
 	int prd_order[6] = {0, 0, 0, 0, 0, 0};
 
 	IMAGE *video[3] = {NULL, NULL, NULL};
-	DECODER *dec;
+	DECODER *dec = NULL;
 	char *infile, *outfile;
 	FILE *fp;
 
 	cpu_time();
 	setbuf(stdout, 0);
 	infile = outfile = NULL;
-
-	IMAGE *img_diff = NULL;
-	int **extra_info = NULL;
 
 	for (i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
@@ -1296,7 +1251,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (infile == NULL || outfile == NULL) {
-		printf(BANNER"\n", 0.1 * VERSION);
+		printf(BANNER"\n", MRP_VERSION);
 		printf("usage: decmrp [options] infile outfile\n");
 		printf("-E num		Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
 		printf("infile:     Input file\n");
@@ -1312,7 +1267,7 @@ int main(int argc, char **argv) {
 	}
 
 	fp = fileopen(infile, "rb");
-	read_header(fp, &version, &width, &height, &maxval, &frames, &depth, &bframes, &num_comp, &num_group, prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &diff, &hevc, &hist_bytes);
+	read_header(fp, &version, &width, &height, &maxval, &frames, &depth, &bframes, &num_comp, &num_group, prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &hevc, &hist_bytes);
 
 	if (hist_bytes != 0) {
 		backward_table = decode_lookuptable(fp, hist_bytes, (int) pow(2, depth));
@@ -1322,7 +1277,7 @@ int main(int argc, char **argv) {
 	// Print file characteristics to screen
 	printf("%s (%dx%dx%dx%d) -> %s\n", infile, width, height, frames, depth, outfile);
 	// Print coding parameters to screen
-	printf("P = %d, V = %d, A = %d, D = %d, p = %s\n\n", coef_precision, num_pmodel, pm_accuracy, delta, (diff == 1) ? "on": "off");
+	printf("P = %d, V = %d, A = %d, D = %d\n\n", coef_precision, num_pmodel, pm_accuracy, delta);
 	if (backward_table != NULL) {
 		printf("Histogram packing on\n\n");
 	}
@@ -1336,8 +1291,6 @@ int main(int argc, char **argv) {
 	else {
 		printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
 	}
-
-	extra_info = (int **) alloc_mem(sizeof(int *) * (frames - 1));
 
 	if (bframes == 0) {
 		for (f = 0; f < frames; f++) {
@@ -1366,41 +1319,16 @@ int main(int argc, char **argv) {
 
 			video[1] = decode_image(fp, video, dec);
 
-			if (f > 0 && diff != 0) {
-				extra_info[f - 1] = decode_extra_info(fp);
+            if (backward_table != NULL) {
+                IMAGE *unpacked = histogram_unpacking(video[1], backward_table);
 
-				if (extra_info[f - 1] == NULL) {
-					img_diff = sum_diff(img_diff, video[1], NULL, 0, f, dec->depth);
-				}
-				else {
-					img_diff = sum_diff(img_diff, video[1], extra_info[f - 1], extra_info[f - 1][0], f, dec->depth);
-				}
+                write_yuv(unpacked, outfile, dec->depth, endianness);
 
-				if (backward_table != NULL) {
-					IMAGE *unpacked = histogram_unpacking(img_diff, backward_table);
-
-					write_yuv(unpacked, outfile, dec->depth, endianness);
-
-					safefree_yuv(&unpacked);
-				}
-				else {
-					write_yuv(img_diff, outfile, dec->depth, endianness);
-				}
-			}
-			else {
-				if (backward_table != NULL) {
-					IMAGE *unpacked = histogram_unpacking(video[1], backward_table);
-
-					write_yuv(unpacked, outfile, dec->depth, endianness);
-
-					safefree_yuv(&unpacked);
-				}
-				else {
-					write_yuv(video[1], outfile, dec->depth, endianness);
-				}
-			}
-
-			if (diff != 0 && f == 0) img_diff = video[1];
+                safefree_yuv(&unpacked);
+            }
+            else {
+                write_yuv(video[1], outfile, dec->depth, endianness);
+            }
 
 			error = get_dec_err(dec, 1);
 			free_decoder(dec);
@@ -1413,10 +1341,6 @@ int main(int argc, char **argv) {
 			printf(" --> Process completed\n");
 		}
 
-		if (diff == 1) {
-			free(img_diff->val);
-			free(img_diff);
-		}
 		free(video[1]->val);
 		free(video[1]);
 
@@ -1426,9 +1350,9 @@ int main(int argc, char **argv) {
 		int back_reference = 0, for_reference = 0;
 		int **back_ref_error = NULL, **for_ref_error = NULL;
 		IMAGE **seq = (IMAGE **) alloc_mem(frames * sizeof(IMAGE));
-		int ***keep_error;
+		int ***keep_error = NULL;
 		int first_frame = 0, conta = 0, final = 0;
-		int (*bref)[5] = NULL;
+		int **bref = NULL;
 
 		if (hevc == 0) {
 			back_reference = 0;
@@ -1441,7 +1365,7 @@ int main(int argc, char **argv) {
 
 			bref = select_bref(bframes);
 
-			final = ((frames - 1) % bframes != 0) ? bframes * ((int)((frames - 1) / bframes)) + 1 : frames;
+			final = ((frames - 1) % bframes != 0) ? bframes * ((frames - 1) / bframes) + 1 : frames;
 		}
 
 		f = 0;
@@ -1471,10 +1395,6 @@ int main(int argc, char **argv) {
 			dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
 
 			video[1] = decode_image(fp, video, dec);
-
-			if (f > 0 && diff != 0) {
-				extra_info[f - 1] = decode_extra_info(fp);
-			}
 
 			seq[f] = copy_yuv(video[1]);
 
@@ -1512,7 +1432,6 @@ int main(int argc, char **argv) {
 						f = f + bframes + 1;
 
 						safefree((void **)&back_ref_error);
-						back_ref_error = NULL;
 						back_ref_error = for_ref_error;
 						back_reference = for_reference;
 						for_reference = f;
@@ -1521,7 +1440,6 @@ int main(int argc, char **argv) {
 						f = frames - 1;
 
 						safefree((void **)&back_ref_error);
-						back_ref_error = NULL;
 						back_ref_error = for_ref_error;
 						back_reference = for_reference;
 						for_reference = f;
@@ -1645,63 +1563,20 @@ int main(int argc, char **argv) {
 
 		if (dec != NULL) free_decoder(dec);
 
-		if (diff == 0) {
-			for (f = 0; f < frames; f++) {
-				if (backward_table != NULL) {
-					IMAGE *unpacked = histogram_unpacking(seq[f], backward_table);
+        for (f = 0; f < frames; f++) {
+            if (backward_table != NULL) {
+                IMAGE *unpacked = histogram_unpacking(seq[f], backward_table);
 
-					write_yuv(unpacked, outfile, depth, endianness);
+                write_yuv(unpacked, outfile, depth, endianness);
 
-					safefree_yuv(&unpacked);
-				}
-				else {
-					write_yuv(seq[f], outfile, depth, endianness);
-				}
+                safefree_yuv(&unpacked);
+            } else {
+                write_yuv(seq[f], outfile, depth, endianness);
+            }
 
-				free(seq[f]->val);
-				free(seq[f]);
-			}
-		}
-		else {
-			if (backward_table != NULL) {
-				IMAGE *unpacked = histogram_unpacking(seq[0], backward_table);
-
-				write_yuv(unpacked, outfile, depth, endianness);
-
-				safefree_yuv(&unpacked);
-			}
-			else {
-				write_yuv(seq[0], outfile, depth, endianness);
-			}
-
-			img_diff = seq[0];
-
-			for (f = 1; f < frames; f++) {
-				if (extra_info[f - 1] == NULL) {
-					img_diff = sum_diff(img_diff, seq[f], NULL, 0, f, depth);
-				}
-				else {
-					img_diff = sum_diff(img_diff, seq[f], extra_info[f - 1], extra_info[f - 1][0], f, depth);
-				}
-
-				if (backward_table != NULL) {
-					IMAGE *unpacked = histogram_unpacking(img_diff, backward_table);
-
-					write_yuv(unpacked, outfile, depth, endianness);
-
-					safefree_yuv(&unpacked);
-				}
-				else {
-					write_yuv(img_diff, outfile, depth, endianness);
-				}
-
-				safefree_yuv(&seq[f - 1]);
-			}
-
-			safefree_yuv(&seq[frames - 1]);
-
-			safefree_yuv(&img_diff);
-		}
+            free(seq[f]->val);
+            free(seq[f]);
+        }
 
 		if (hevc == 0) {
 			if (video[1] != video[0] && video[1] != video[2]) {
@@ -1724,10 +1599,10 @@ int main(int argc, char **argv) {
 			safefree((void **)&keep_error);
 		}
 
+        free(bref);
 		free(seq);
 	}
 
-	free(extra_info);
 	safefree((void **) &backward_table);
 
 	fclose(fp);

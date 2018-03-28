@@ -14,8 +14,6 @@
 #define COEF_PRECISION  6
 #define MAX_COEF	(2 << COEF_PRECISION)
 #define MAX_UPARA       512
-#define UPEL_DIST       3
-#define NUM_UPELS       (UPEL_DIST * (UPEL_DIST + 1))
 #define MAX_ITERATION   100
 #define EXTRA_ITERATION 10
 #define NUM_PMODEL      16
@@ -27,8 +25,7 @@
 #define OPT_SIDEINFO
 #define VLC_MAXLEN      32
 #define MAGIC_NUMBER    ('M' << 8) + 'R'
-#define BANNER          "\nIT - Leiria: Minimum Rate Predictors\nencmrp/decmrp version %.1f (July 2016)"
-#define VERSION         9
+#define BANNER          "\nIT - Leiria: Minimum Rate Predictors\nencmrp/decmrp version %s (March 2018)"
 #define uint            unsigned int
 #define img_t           unsigned short
 #define cost_t          double
