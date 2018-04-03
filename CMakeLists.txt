@@ -5,7 +5,7 @@
 ######################################################################################
 # CMake  functions
 ######################################################################################
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.5.1)
 
 include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_BINARY_DIR})
 
@@ -59,7 +59,7 @@ set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 # Configure a header file to pass some of the CMake settings to the source code
-#configure_file("${PROJECT_SOURCE_DIR}/mrp_config.h.in" "${PROJECT_BINARY_DIR}/mrp_config.h")
+configure_file("${PROJECT_SOURCE_DIR}/mrp_config.h.in" "${PROJECT_BINARY_DIR}/mrp_config.h")
 configure_file("${PROJECT_SOURCE_DIR}/mrp_config.h.in" "${PROJECT_SOURCE_DIR}/mrp_config.h")
 
 set(COMMON_SRC

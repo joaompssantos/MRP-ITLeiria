@@ -321,8 +321,6 @@ void decode_predictor(FILE *fp, DECODER *dec) {
 			}
 		}
 	}
-
-	return;
 }
 
 void decode_threshold(FILE *fp, DECODER *dec) {
@@ -398,8 +396,6 @@ void decode_threshold(FILE *fp, DECODER *dec) {
 			}
 		}
 	}
-
-	return;
 }
 
 void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int tlx, int blksize, int width, int level) {
@@ -465,8 +461,6 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int 
 			dec->class[y][x] = (char) cl;
 		}
 	}
-
-	return;
 }
 
 void decode_class(FILE *fp, DECODER *dec) {
@@ -580,8 +574,6 @@ void decode_class(FILE *fp, DECODER *dec) {
 	else {
 		free(cpm->freq);
 	}
-
-	return;
 }
 
 int calc_udec(DECODER *dec, int y, int x) {
@@ -1196,7 +1188,7 @@ int *decode_lookuptable(FILE *fp, int hist_bytes, int depth) {
  |
  |  Returns:  IMGAE		--> Returns the reconstructed image
  *----------------------------------------------------------------------*/
-IMAGE *histogram_unpacking(IMAGE *img, int *backward_table) {
+IMAGE *histogram_unpacking(IMAGE *img, const int *backward_table) {
 	int x, y;
 	IMAGE *u_img = alloc_image(img->width, img->height, img->maxval);
 
@@ -1230,10 +1222,12 @@ int main(int argc, char **argv) {
 		if (argv[i][0] == '-') {
 			switch(argv[i][1]) {
 			case 'E':
-				endianness = atoi(argv[++i]);
+				endianness = (int) strtol(argv[++i], NULL, 10);
+
 				if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
 					endianness = LITTLE_ENDIANNESS;
 				}
+
 				break;
 			default:
 				fprintf(stderr, "Unknown option: %s!\n", argv[i]);
