@@ -105,6 +105,8 @@ typedef struct {
     int prd_order; // Order of the predictors (number of pixels to use)
     int back_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
     int for_prd_order; // Order of the predictors (number of pixels to use) in the next frame
+    int mi_prd_order; // Order of the predictors (number of pixels to use) in neighbouring micro images
+    int mi_size; // Size of micro images in lenslet images
     int coef_precision; // Precision of the coefficients
     int num_pmodel; // Number of probability models
     int pm_accuracy; // Probability model accuracy
@@ -120,7 +122,15 @@ typedef struct {
     int ***err; // Matrix that keeps residue values after the prediction.
     int ***org; // Original video/image
     int *ctx_weight; // Keeps the weights used for the residue encoding context.
-    int ***roff; // Auxiliary structure used to scan the image for neighboring pixels.
+
+
+//    int ***roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int ***mi_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int ***back_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int ***for_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+
+
     int qtctx[QUADTREE_DEPTH << 3]; // Frequency counter of the segmentation flag context for the whole image.
     char **qtmap[QUADTREE_DEPTH]; // Segmentation flags for the quadtree partitioning of the image's prediction.
     char **class; // Keeps the class of each pixel
@@ -159,6 +169,8 @@ typedef struct {
     int prd_order;
     int back_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
     int for_prd_order; // Order of the predictors (number of pixels to use) in the next frame
+    int mi_prd_order; // Order of the predictors (number of pixels to use) in neighbouring micro images
+    int mi_size; // Size of micro images in lenslet images
     int num_pmodel;
     int pm_accuracy;
     int maxprd;
@@ -200,7 +212,7 @@ void free_vlc(VLC *);
 VLC **init_vlcs(PMODEL ***, int, int);
 PMODEL ***init_pmodels(int, int, int, int *, double *, int);
 void set_spmodel(PMODEL *, int, int);
-int *init_ctx_weight(int, int, int, int);
+int *init_ctx_weight(int, int, int, int, int);
 int e2E(int, int, int, int);
 int E2e(int, int, int, int);
 void mtf_classlabel(char **, int *, int, int, int, int, int);

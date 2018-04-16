@@ -791,11 +791,11 @@ void set_spmodel(PMODEL *pm, int size, int m) {
 	return;
 }
 
-int *init_ctx_weight(int prd_order, int back_prd_order, int for_prd_order, int delta) {
+int *init_ctx_weight(int prd_order, int back_prd_order, int for_prd_order, int mi_prd_order, int delta) {
 	int *ctx_weight, k;
 	double dy, dx;
 
-	ctx_weight = (int *)alloc_mem((prd_order + back_prd_order + for_prd_order) * sizeof(int));
+	ctx_weight = (int *)alloc_mem((prd_order + back_prd_order + for_prd_order + mi_prd_order) * sizeof(int));
 
 	for (k = 0; k < prd_order; k++) {
 		dy = dyx[k].y;
@@ -804,25 +804,36 @@ int *init_ctx_weight(int prd_order, int back_prd_order, int for_prd_order, int d
 		ctx_weight[k] = (int) (64.0 / sqrt(dy * dy + dx * dx) + 0.5);
 	}
 
+    if (mi_prd_order > 0) {
+        ctx_weight[prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
+
+        for (k = 0; k < mi_prd_order - 1; k++) {
+            dy = idyx[k].y;
+            dx = idyx[k].x;
+
+            ctx_weight[k + prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
+        }
+    }
+
 	if (back_prd_order > 0) {
-		ctx_weight[prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
+		ctx_weight[prd_order + mi_prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
 
 		for (k = 0; k < back_prd_order - 1; k++) {
 			dy = idyx[k].y;
 			dx = idyx[k].x;
 
-			ctx_weight[k + prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
+			ctx_weight[k + prd_order + mi_prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
 		}
 	}
 
 	if (for_prd_order > 0) {
-		ctx_weight[prd_order + back_prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
+		ctx_weight[prd_order + mi_prd_order + back_prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
 
 		for (k = 0; k < for_prd_order - 1; k++) {
 			dy = idyx[k].y;
 			dx = idyx[k].x;
 
-			ctx_weight[k + prd_order + back_prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
+			ctx_weight[k + prd_order + mi_prd_order + back_prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
 		}
 	}
 
