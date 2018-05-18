@@ -11,6 +11,601 @@ extern POINT idyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
 
+/*--------------------------- init_ref_offset -----------------------*
+ |  Function init_ref_offset
+ |
+ |  Purpose:  Calculates the offset of a reference to a given pixel
+ |
+ |  Parameters:
+ |		img				--> Image structure (IN)
+ |		prd_order		--> Number of intra reference pixels (IN)
+ |		back_prd_order	--> Number of back reference pixels (IN)
+ |		for_prd_order	--> Number of forward reference pixels (IN)
+ |		mi_prd_order	--> Number of neighbour micro images reference pixels (IN)
+ |		mi_size     	--> Micro image size (IN)
+ |
+ |  Returns:  int*** --> Array with the references offset
+ *-------------------------------------------------------------------*/
+int ***init_ref_offset(DECODER *dec, int type, int prd_order, int mi_size) {
+	int ***roff, *ptr;
+	int x, y, dx, dy, k;
+
+	int min_dx, max_dx, min_dy, max_dy;
+
+	min_dx = max_dx = min_dy = max_dy = 0;
+
+	roff = (int ***) alloc_2d_array(dec->height, dec->width, sizeof(int *));
+
+	// TODO: simplify this
+	switch (type) {
+		case 0: // Intra
+			//Values to check for special cases
+			for (k = 0; k < prd_order; k++) {
+				dy = dyx[k].y;
+				dx = dyx[k].x;
+
+				if (dy < min_dy) min_dy = dy;
+				if (dx < min_dx) min_dx = dx;
+				if (dy > max_dy) max_dy = dy;
+				if (dx > max_dx) max_dx = dx;
+			}
+
+			//Cycle that runs for all the pixels
+			for (y = 0; y < dec->height; y++) {
+				for (x = 0; x < dec->width; x++) {
+					ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+					//Conditions to check which references are available for each pixel
+					if (y == 0) {
+						if (x == 0) {
+							roff[y][x] = ptr;
+							dx = 0;
+							dy = dec->height;
+
+							for (k = 0; k < prd_order; k++) {
+								*ptr++ = dy * dec->width + dx; //Points to a line filled with 128 (if max_val = 256)
+							}
+						}
+						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+							dy = 0;
+
+							for (k = 0; k < prd_order; k++) {
+								dx = dyx[k].x;
+
+								if (x + dx < 0) dx = -x;
+								else if (dx >= 0) dx = -1;
+
+								*ptr++ = dy * dec->width + dx;
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+					else if (y + min_dy <= 0) {
+						if (x == 0) {
+							roff[y][x] = ptr;
+
+							for (k = 0; k < prd_order; k++) {
+								dy = dyx[k].y;
+
+								if (y + dy < 0) dy = -y;
+								else if (dy >= 0) dy = -1;
+
+								dx = dyx[k].x;
+
+								if (x + dx < 0) dx = -x;
+
+								*ptr++ = dy * dec->width + dx;
+							}
+						}
+						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+
+							for (k = 0; k < prd_order; k++) {
+								dy = dyx[k].y;
+
+								if (y + dy < 0) dy = -y;
+								dx = dyx[k].x;
+
+								if (x + dx < 0) dx = -x;
+								else if (x + dx >= dec->width) {
+									dx = dec->width - x - 1;
+								}
+
+								*ptr++ = dy * dec->width + dx;
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+					else {
+						roff[y][x] = roff[y - 1][x];
+						free(ptr);
+					}
+				}
+			}
+
+			break;
+
+		case 1: // Lenslet
+			// Check if mi_size should be also used
+			// TODO: isto ta mal!!
+
+//            if (prd_order > 0) {
+			if (1) {
+				for (k = 0; k < prd_order; k++) {
+					dy = dyx[k].y;
+					dx = dyx[k].x;
+
+					if (dy < min_dy) min_dy = dy;
+					if (dx < min_dx) min_dx = dx;
+					if (dx > max_dx) max_dx = dx;
+				}
+			}
+			else {
+				for (k = 0; k < prd_order - 1; k++) {
+					dy = idyx[k].y;
+					dx = idyx[k].x;
+
+					if (dy < min_dy) min_dy = dy;
+					if (dy > max_dy) max_dy = dy;
+					if (dx < min_dx) min_dx = dx;
+					if (dx > max_dx) max_dx = dx;
+				}
+			}
+
+			//Cycle that runs for all the pixels
+			for (y = 0; y < dec->height; y++) {
+				for (x = 0; x < dec->width; x++) {
+					ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+
+					int base = -dec->width * mi_size;
+
+					//Micro image reference offset TODO: confirmar
+                    if (y < mi_size) {
+						if (y == 0) {
+							if (x == 0) {
+								roff[y][x] = ptr;
+								dx = 0;
+								dy = dec->height;
+
+								for (k = 0; k < prd_order; k++) {
+									*ptr++ = dy * dec->width + dx; //Points to a line filled with 128 (if max_val = 256)
+								}
+							}
+							else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
+								roff[y][x] = ptr;
+								dy = 0;
+
+								for (k = 0; k < prd_order; k++) {
+									dx = dyx[k].x;
+
+									if (x + dx < 0) dx = -x;
+									else if (dx >= 0) dx = -1;
+
+									*ptr++ = dy * dec->width + dx;
+								}
+							}
+							else {
+								roff[y][x] = roff[y][x - 1];
+								free(ptr);
+							}
+						}
+						else if (y + min_dy <= 0) {
+							if (x == 0) {
+								roff[y][x] = ptr;
+
+								for (k = 0; k < prd_order; k++) {
+									dy = dyx[k].y;
+
+									if (y + dy < 0) dy = -y;
+									else if (dy >= 0) dy = -1;
+
+									dx = dyx[k].x;
+
+									if (x + dx < 0) dx = -x;
+
+									*ptr++ = dy * dec->width + dx;
+								}
+							}
+							else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
+								roff[y][x] = ptr;
+
+								for (k = 0; k < prd_order; k++) {
+									dy = dyx[k].y;
+
+									if (y + dy < 0) dy = -y;
+									dx = dyx[k].x;
+
+									if (x + dx < 0) dx = -x;
+									else if (x + dx >= dec->width) {
+										dx = dec->width - x - 1;
+									}
+
+									*ptr++ = dy * dec->width + dx;
+								}
+							}
+							else {
+								roff[y][x] = roff[y][x - 1];
+								free(ptr);
+							}
+						}
+						else {
+							roff[y][x] = roff[y - 1][x];
+							free(ptr);
+						}
+					}
+                    else if (y == mi_size) {
+						if (x == 0) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < mi_size || x + dx < 0) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < mi_size || x + dx < 0 || x + dx >= dec->width) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+                    else if (y + min_dy <= mi_size) {
+						if (x == 0) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < mi_size || x + dx < 0) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < 0 || x + dx < 0 || x + dx >= dec->width) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+                    else if (y + max_dy >= dec->height) {
+						if (x == 0 || x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy >= dec->height || x + dx < 0 || x + dx >= dec->width) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+                    else {
+						roff[y][x] = roff[y - 1][x];
+						free(ptr);
+					}
+				}
+			}
+
+			break;
+
+		case 2: // Inter Backwards
+			for (k = 0; k < prd_order - 1; k++) {
+				dy = idyx[k].y;
+				dx = idyx[k].x;
+
+				if (dy < min_dy) min_dy = dy;
+				if (dy > max_dy) max_dy = dy;
+				if (dx < min_dx) min_dx = dx;
+				if (dx > max_dx) max_dx = dx;
+			}
+
+			//Cycle that runs for all the pixels
+			for (y = 0; y < dec->height; y++) {
+				for (x = 0; x < dec->width; x++) {
+					ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+
+					//Back reference offset
+					int base = -dec->width * (dec->height + 1);
+
+					if (y == 0) {
+						if (x == 0) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < 0 || x + dx < 0) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < 0 || x + dx < 0 || x + dx >= dec->width) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+					else if (y + min_dy <= 0) {
+						if (x == 0) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < 0 || x + dx < 0) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < 0 || x + dx < 0 || x + dx >= dec->width) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+					else if (y + max_dy >= dec->height) {
+						if (x == 0 || x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy >= dec->height || x + dx < 0 || x + dx >= dec->width) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+					else {
+						roff[y][x] = roff[y - 1][x];
+						free(ptr);
+					}
+				}
+			}
+
+			break;
+
+		case 3: // Inter Forward
+			for (k = 0; k < prd_order - 1; k++) {
+				dy = idyx[k].y;
+				dx = idyx[k].x;
+
+				if (dy < min_dy) min_dy = dy;
+				if (dy > max_dy) max_dy = dy;
+				if (dx < min_dx) min_dx = dx;
+				if (dx > max_dx) max_dx = dx;
+			}
+
+			//Cycle that runs for all the pixels
+			for (y = 0; y < dec->height; y++) {
+				for (x = 0; x < dec->width; x++) {
+					ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+
+					//Inter reference offset
+					int base = dec->width * (dec->height + 1);
+
+					if (y == 0) {
+						if (x == 0) {
+							roff[y][x] = ptr;
+
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < 0 || x + dx < 0) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < 0 || x + dx < 0 || x + dx >= dec->width) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+					else if (y + min_dy <= 0) {
+						if (x == 0) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < 0 || x + dx < 0) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy < 0 || x + dx < 0 || x + dx >= dec->width) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+					else if (y + max_dy >= dec->height) {
+						if (x == 0 || x + min_dx <= 0 || x + max_dx >= dec->width) {
+							roff[y][x] = ptr;
+							*ptr++ = base;
+
+							for (k = 0; k < prd_order - 1; k++) {
+								dy = idyx[k].y;
+								dx = idyx[k].x;
+
+								if (y + dy >= dec->height || x + dx < 0 || x + dx >= dec->width) {
+									*ptr++ = base;
+								}
+								else {
+									*ptr++ = dy * dec->width + dx + base;
+								}
+							}
+						}
+						else {
+							roff[y][x] = roff[y][x - 1];
+							free(ptr);
+						}
+					}
+					else {
+						roff[y][x] = roff[y - 1][x];
+						free(ptr);
+					}
+				}
+			}
+
+			break;
+		default:
+			fprintf(stderr, "Wrong usage of init_ref_offset function!\n");
+			exit(-10);
+	}
+
+	return (roff);
+}
+
 uint getbits(FILE *fp, int n) {
 	static int bitpos = 0;
 	static uint bitbuf = 0;
@@ -583,6 +1178,34 @@ void decode_class(FILE *fp, DECODER *dec) {
 }
 
 int calc_udec(DECODER *dec, int y, int x) {
+//	int u, k, *err_p, *wt_p;
+//	int *intra_roff_p = NULL, *mi_roff_p = NULL, *back_roff_p = NULL, *for_roff_p = NULL;
+//
+//	intra_roff_p = dec->intra_roff[y][x];
+//	if (dec->mi_prd_order > 0) mi_roff_p = dec->mi_roff[y][x];
+//	if (dec->back_prd_order > 0) back_roff_p = dec->back_roff[y][x];
+//	if (dec->for_prd_order > 0) for_roff_p = dec->for_roff[y][x];
+//
+//	err_p = &dec->err[1][y][x];
+//	wt_p = dec->ctx_weight;
+//	u = 0;
+//
+//	for (k = 0; k < dec->prd_order; k++) {
+//		u += err_p[*intra_roff_p++] * (*wt_p++);
+//	}
+//
+//	for (k = 0; k < dec->mi_prd_order; k++) {
+//		u += err_p[*mi_roff_p++] * (*wt_p++);
+//	}
+//
+//	for (k = 0; k < dec->back_prd_order; k++) {
+//		u += err_p[*back_roff_p++] * (*wt_p++);
+//	}
+//
+//	for (k = 0; k < dec->for_prd_order; k++) {
+//		u += err_p[*for_roff_p++] * (*wt_p++);
+//	}
+
 	int ry, rx, u, k;
 	u = 0;
 
@@ -606,39 +1229,57 @@ int calc_udec(DECODER *dec, int y, int x) {
 		if (rx > max_dx) max_dx = rx;
 	}
 
-	for (k = 0; k < dec->back_prd_order - 1; k++) {
-		ry = idyx[k].y;
-		rx = idyx[k].x;
+	if (y < dec->mi_size) {
+		//Values to check for special cases
+		for (k = 0; k < dec->mi_prd_order; k++) {
+			ry = dyx[k].y;
+			rx = dyx[k].x;
 
-		if (ry < bmin_dy) bmin_dy = ry;
-		if (ry > bmax_dy) bmax_dy = ry;
-		if (rx < bmin_dx) bmin_dx = rx;
-		if (rx > bmax_dx) bmax_dx = rx;
+			if (ry < mmin_dy) mmin_dy = ry;
+			if (rx < mmin_dx) mmin_dx = rx;
+			if (rx > mmax_dx) mmax_dx = rx;
+		}
+	}
+	else {
+		for (k = 0; k < dec->mi_prd_order - 1; k++) {
+			ry = idyx[k].y;
+			rx = idyx[k].x;
+
+			if (ry < mmin_dy) mmin_dy = ry;
+			if (ry > mmax_dy) mmax_dy = ry;
+			if (rx < mmin_dx) mmin_dx = rx;
+			if (rx > mmax_dx) mmax_dx = rx;
+		}
 	}
 
-	for (k = 0; k < dec->for_prd_order - 1; k++) {
-		ry = idyx[k].y;
-		rx = idyx[k].x;
+    for (k = 0; k < dec->back_prd_order - 1; k++) {
+        ry = idyx[k].y;
+        rx = idyx[k].x;
 
-		if (ry < fmin_dy) fmin_dy = ry;
-		if (ry > fmax_dy) fmax_dy = ry;
-		if (rx < fmin_dx) fmin_dx = rx;
-		if (rx > fmax_dx) fmax_dx = rx;
-	}
+        if (ry < bmin_dy) bmin_dy = ry;
+        if (ry > bmax_dy) bmax_dy = ry;
+        if (rx < bmin_dx) bmin_dx = rx;
+        if (rx > bmax_dx) bmax_dx = rx;
+    }
 
-	for (k = 0; k < dec->mi_prd_order - 1; k++) {
-		ry = idyx[k].y;
-		rx = idyx[k].x;
+    for (k = 0; k < dec->for_prd_order - 1; k++) {
+        ry = idyx[k].y;
+        rx = idyx[k].x;
 
-		if (ry < mmin_dy) mmin_dy = ry;
-		if (ry > mmax_dy) mmax_dy = ry;
-		if (rx < mmin_dx) mmin_dx = rx;
-		if (rx > mmax_dx) mmax_dx = rx;
-	}
+        if (ry < fmin_dy) fmin_dy = ry;
+        if (ry > fmax_dy) fmax_dy = ry;
+        if (rx < fmin_dx) fmin_dx = rx;
+        if (rx > fmax_dx) fmax_dx = rx;
+    }
 
 	min_dy = -min_dy;
 	min_dx = -min_dx;
 	max_dx = dec->width - max_dx;
+
+	mmin_dy = -mmin_dy;
+	mmin_dx = -mmin_dx;
+	mmax_dx = dec->width - mmax_dx;
+	mmax_dy = dec->height - mmax_dy;
 
 	bmin_dy = -bmin_dy;
 	bmin_dx = -bmin_dx;
@@ -649,11 +1290,6 @@ int calc_udec(DECODER *dec, int y, int x) {
 	fmin_dx = -fmin_dx;
 	fmax_dx = dec->width - fmax_dx;
 	fmax_dy = dec->height - fmax_dy;
-
-	mmin_dy = -mmin_dy;
-	mmin_dx = -mmin_dx;
-	mmax_dx = dec->width - mmax_dx;
-	mmax_dy = dec->height - mmax_dy;
 
 	if (y >= min_dy && x >= min_dx && x < max_dx) {
 		for (k = 0; k < dec->prd_order; k++) {
@@ -712,17 +1348,94 @@ int calc_udec(DECODER *dec, int y, int x) {
 		}
 	}
 
+//	FILE *fp2;
+//	if (y == 0 && x == 0) {
+//		fp2 = fileopen("udec_calculations.txt", "w");
+//	}
+//	else {
+//		fp2 = fileopen("udec_calculations.txt", "a");
+//	}
+//
+//	fprintf(fp2, "Pixel: %d %d\n\n", y, x);
+//	fprintf(fp2, "u = %d\n", u);
+
 	// TODO: improve this
 	if (dec->mi_prd_order > 0) {
-		if (y > dec->mi_size) {
-			u += dec->err[1][y - dec->mi_size][x] * dec->ctx_weight[dec->prd_order];
+        if (y < dec->mi_size) {
+            if (y >= mmin_dy && x >= mmin_dx && x < mmax_dx) {
+                for (k = 0; k < dec->mi_prd_order; k++) {
+                    ry = y + dyx[k].y;
+                    rx = x + dyx[k].x;
 
-            if (y >= mmin_dy && x >= mmin_dx && x < mmax_dx && y < mmax_dy) {
+                    u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
+//					fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order]);
+                }
+            }
+            else if (y == 0) {
+                if (x == 0) {
+                    for (k = 0; k < dec->mi_prd_order; k++) {
+                        u += ((dec->maxval + 1) >> 2) * dec->ctx_weight[k + dec->prd_order];
+//						fprintf(fp2, "u = %d --> %d %d %d\n", u, dec->height * dec->width, ((dec->maxval + 1) >> 2), dec->ctx_weight[k + dec->prd_order]);
+                    }
+                }
+                else {
+                    ry = 0;
+
+                    for (k =0; k < dec->mi_prd_order; k++) {
+                        rx = x + dyx[k].x;
+
+                        if (rx < 0) rx = 0;
+                        else if (rx >= x) rx = x - 1;
+
+                        u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
+//						fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order]);
+                    }
+                }
+            }
+            else {
+                if (x == 0) {
+                    for (k = 0; k < dec->mi_prd_order; k++) {
+                        ry = y + dyx[k].y;
+
+                        if (ry < 0) ry = 0;
+                        else if (ry >= y) ry = y - 1;
+
+                        rx = x + dyx[k].x;
+
+                        if (rx < 0) rx = 0;
+
+                        u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
+//						fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order]);
+                    }
+                }
+                else {
+                    for (k = 0; k < dec->mi_prd_order; k++) {
+                        ry = y + dyx[k].y;
+
+                        if (ry < 0) ry = 0;
+
+                        rx = x + dyx[k].x;
+
+                        if (rx < 0) rx = 0;
+                        else if (rx >= dec->width) rx = dec->width - 1;
+
+                        u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
+//						fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order]);
+                    }
+                }
+            }
+	    }
+        else {
+			u += dec->err[1][y - dec->mi_size][x] * dec->ctx_weight[dec->prd_order];
+//			fprintf(fp2, "u = %d --> %d %d %d\n", u, (y - dec->mi_size - y) * dec->width, dec->err[1][y - dec->mi_size][x], dec->ctx_weight[dec->prd_order]);
+
+            if (y - dec->mi_size >= mmin_dy && x >= mmin_dx && x < mmax_dx && y < mmax_dy) {
                 for (k = 0; k < dec->mi_prd_order - 1; k++) {
                     ry = y + idyx[k].y - dec->mi_size;
                     rx = x + idyx[k].x;
 
                     u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order + 1];
+//					fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order + 1]);
                 }
             }
             else {
@@ -732,76 +1445,22 @@ int calc_udec(DECODER *dec, int y, int x) {
 
                     if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
                         u += dec->err[1][y - dec->mi_size][x] * dec->ctx_weight[k + dec->prd_order + 1];
+//						fprintf(fp2, "u = %d --> %d %d %d\n", u, (y - dec->mi_size - y) * dec->width, dec->err[1][y - dec->mi_size][x], dec->ctx_weight[k + dec->prd_order + 1]);
                     }
                     else {
                         u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order + 1];
+//						fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order + 1]);
                     }
                 }
             }
 		}
-		else {
-			if (y >= min_dy && x >= min_dx && x < max_dx) {
-				for (k = 0; k < dec->mi_prd_order; k++) {
-					ry = y + dyx[k].y;
-					rx = x + dyx[k].x;
-					u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
-				}
-			}
-			else if (y == 0) {
-				if (x == 0) {
-					for (k = 0; k < dec->mi_prd_order; k++) {
-						u += ((dec->maxval + 1) >> 2) * dec->ctx_weight[k + dec->prd_order];
-					}
-				}
-				else {
-					ry = 0;
-
-					for (k =0; k < dec->mi_prd_order; k++) {
-						rx = x + dyx[k].x;
-
-						if (rx < 0) rx = 0;
-						else if (rx >= x) rx = x - 1;
-
-						u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
-					}
-				}
-			}
-			else {
-				if (x == 0) {
-					for (k = 0; k < dec->mi_prd_order; k++) {
-						ry = y + dyx[k].y;
-
-						if (ry < 0) ry = 0;
-						else if (ry >= y) ry = y - 1;
-
-						rx = x + dyx[k].x;
-
-						if (rx < 0) rx = 0;
-
-						u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
-					}
-				}
-				else {
-					for (k = 0; k < dec->mi_prd_order; k++) {
-						ry = y + dyx[k].y;
-
-						if (ry < 0) ry = 0;
-
-						rx = x + dyx[k].x;
-
-						if (rx < 0) rx = 0;
-						else if (rx >= dec->width) rx = dec->width - 1;
-
-						u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
-					}
-				}
-			}
-		}
 	}
+//	fprintf(fp2, "\n\n");
+//	fclose(fp2);
 
 	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
 	if (dec->back_prd_order > 0) {
-		u += dec->err[0][y][x] * dec->ctx_weight[dec->prd_order];
+		u += dec->err[0][y][x] * dec->ctx_weight[dec->prd_order + dec->mi_prd_order];
 
 		if (y >= bmin_dy && x >= bmin_dx && x < bmax_dx && y < bmax_dy) {
 			for (k = 0; k < dec->back_prd_order - 1; k++) {
@@ -828,7 +1487,7 @@ int calc_udec(DECODER *dec, int y, int x) {
 
 	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
 	if (dec->for_prd_order > 0) {
-		u += dec->err[2][y][x] * dec->ctx_weight[dec->prd_order + dec->back_prd_order];
+		u += dec->err[2][y][x] * dec->ctx_weight[dec->prd_order + dec->mi_prd_order + dec->back_prd_order];
 
 		if (y >= fmin_dy && x >= fmin_dx && x < fmax_dx && y < fmax_dy) {
 			for (k = 0; k < dec->for_prd_order - 1; k++) {
@@ -861,13 +1520,41 @@ int calc_udec(DECODER *dec, int y, int x) {
 }
 
 int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
+//	int prd, k;
+//	img_t *org_p;
+//	int *intra_roff_p = NULL, *mi_roff_p = NULL, *back_roff_p = NULL, *for_roff_p = NULL;
+//
+//	intra_roff_p = dec->intra_roff[y][x];
+//	if (dec->mi_prd_order > 0) mi_roff_p = dec->mi_roff[y][x];
+//	if (dec->back_prd_order > 0) back_roff_p = dec->back_roff[y][x];
+//	if (dec->for_prd_order > 0) for_roff_p = dec->for_roff[y][x];
+//
+//	org_p = &video[1]->val[y][x];
+//
+//	prd = 0;
+//
+//	for (k = 0; k < dec->prd_order; k++) {
+//		prd += org_p[*intra_roff_p++] * dec->predictor[cl][k];
+//	}
+//
+//	for (k = 0; k < dec->mi_prd_order; k++) {
+//		prd += org_p[*mi_roff_p++] * dec->predictor[cl][k];
+//	}
+//
+//	for (k = 0; k < dec->back_prd_order; k++) {
+//		prd += org_p[*back_roff_p++] * dec->predictor[cl][k];
+//	}
+//
+//	for (k = 0; k < dec->for_prd_order; k++) {
+//		prd += org_p[*for_roff_p++] * dec->predictor[cl][k];
+//	}
+
 	int k, prd, rx, ry;
 
 	int dy, dx, min_dx, max_dx, min_dy;
 	int bmin_dx, bmax_dx, bmin_dy, bmax_dy;
 	int fmin_dx, fmax_dx, fmin_dy, fmax_dy;
 	int mmin_dx, mmax_dx, mmin_dy, mmax_dy;
-	int min_abs_dx, max_abs_dx, min_abs_dy, max_abs_dy;
 
 	min_dx = max_dx = min_dy = 0;
 	bmin_dx = bmax_dx = bmin_dy = bmax_dy = 0;
@@ -883,6 +1570,29 @@ int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
 		if (dx < min_dx) min_dx = dx;
 		if (dx > max_dx) max_dx = dx;
 	}
+
+    if (y < dec->mi_size) {
+        //Values to check for special cases
+        for (k = 0; k < dec->mi_prd_order; k++) {
+            dy = dyx[k].y;
+            dx = dyx[k].x;
+
+            if (dy < mmin_dy) mmin_dy = dy;
+            if (dx < mmin_dx) mmin_dx = dx;
+            if (dx > mmax_dx) mmax_dx = dx;
+        }
+    }
+    else {
+        for (k = 0; k < dec->mi_prd_order - 1; k++) {
+            dy = idyx[k].y;
+            dx = idyx[k].x;
+
+            if (dy < mmin_dy) mmin_dy = dy;
+            if (dy > mmax_dy) mmax_dy = dy;
+            if (dx < mmin_dx) mmin_dx = dx;
+            if (dx > mmax_dx) mmax_dx = dx;
+        }
+    }
 
 	for (k = 0; k < dec->back_prd_order - 1; k++) {
 		dy = idyx[k].y;
@@ -904,31 +1614,28 @@ int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
 		if (dx > fmax_dx) fmax_dx = dx;
 	}
 
-	for (k = 0; k < dec->mi_prd_order - 1; k++) {
-		dy = idyx[k].y;
-		dx = idyx[k].x;
+	min_dy = -min_dy;
+    min_dx = -min_dx;
+    max_dx = dec->width - max_dx;
 
-		if (dy < mmin_dy) mmin_dy = dy;
-		if (dy > mmax_dy) mmax_dy = dy;
-		if (dx < mmin_dx) mmin_dx = dx;
-		if (dx > mmax_dx) mmax_dx = dx;
-	}
+	mmin_dy = -mmin_dy;
+	mmin_dx = -mmin_dx;
+	mmax_dx = dec->width - mmax_dx;
+	mmax_dy = dec->height - mmax_dy;
 
-	min_abs_dy = (min_dy < bmin_dy && min_dy < fmin_dy && min_dy < mmin_dy ? -min_dy : bmin_dy < fmin_dy && bmin_dy < mmin_dy ? -bmin_dy : fmin_dy < mmin_dy ? -fmin_dy : -mmin_dy);
-	min_abs_dx = (min_dx < bmin_dx && min_dx < fmin_dx && min_dx < mmin_dx ? -min_dx : bmin_dx < fmin_dx && bmin_dx < mmin_dx ? -bmin_dx : fmin_dx < mmin_dx ? -fmin_dx : -mmin_dx);
+    bmin_dy = -bmin_dy;
+    bmin_dx = -bmin_dx;
+    bmax_dx = dec->width - bmax_dx;
+    bmax_dy = dec->height - bmax_dy;
 
-	if (dec->back_prd_order <= 1 && dec->for_prd_order <= 1 && dec->mi_prd_order <= 0) {
-		max_abs_dy = 0;
-	}
-	else {
-		max_abs_dy = (fmax_dy > bmax_dy && fmax_dy > mmax_dx ? dec->height - fmax_dy : bmax_dy > mmax_dy ? dec->height - bmax_dy : dec->height - mmax_dy);
-	}
-
-	max_abs_dx = (max_dx > bmax_dx && max_dx > fmax_dx && max_dx > mmax_dx ? dec->width - max_dx : bmax_dx > fmax_dx && bmax_dx > mmax_dx ? dec->width - bmax_dx : fmax_dx > mmax_dx ? dec->width - fmax_dx : dec->width - mmax_dx);
+    fmin_dy = -fmin_dy;
+    fmin_dx = -fmin_dx;
+    fmax_dx = dec->width - fmax_dx;
+    fmax_dy = dec->height - fmax_dy;
 
 	prd = 0;
 
-	if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy) {
+	if (y >= min_dy && x >= min_dx && x < max_dx) {
 		for (k = 0; k < dec->prd_order; k++) {
 			ry = y + dyx[k].y;
 			rx = x + dyx[k].x;
@@ -990,31 +1697,8 @@ int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
 
 	//Micro image prediction calculation
 	if (dec->mi_prd_order > 0) {
-		if (y > dec->mi_size) {
-			prd += dec->predictor[cl][dec->prd_order] * video[1]->val[y - dec->mi_size][x];
-
-			if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy) {
-				for (k = 0; k < dec->mi_prd_order - 1; k++) {
-					ry = y + idyx[k].y - dec->mi_size;
-					rx = x + idyx[k].x;
-
-					prd += dec->predictor[cl][k + dec->prd_order + 1] * video[1]->val[ry][rx];
-				}
-			} else {
-				for (k = 0; k < dec->mi_prd_order - 1; k++) {
-					ry = y + idyx[k].y - dec->mi_size;
-					rx = x + idyx[k].x;
-
-					if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
-						prd += dec->predictor[cl][k + dec->prd_order + 1] * video[1]->val[y - dec->mi_size][x];
-					} else {
-						prd += dec->predictor[cl][k + dec->prd_order + 1] * video[1]->val[ry][rx];
-					}
-				}
-			}
-		}
-		else {
-			if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy) {
+        if (y < dec->mi_size) {
+			if (y >= mmin_dy && x >= mmin_dx && x < mmax_dx) {
 				for (k = 0; k < dec->mi_prd_order; k++) {
 					ry = y + dyx[k].y;
 					rx = x + dyx[k].x;
@@ -1025,10 +1709,8 @@ int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
 			else if (y == 0) {
 				if (x == 0) {
 					for (k = 0; k < dec->mi_prd_order; k++) {
-						prd += dec->predictor[cl][k + dec->prd_order];
+						prd += dec->predictor[cl][k + dec->prd_order] * ((video[1]->maxval + 1) >> 1);
 					}
-
-					prd *= ((video[1]->maxval + 1) >> 1);
 				}
 				else {
 					ry = 0;
@@ -1073,12 +1755,33 @@ int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
 					}
 				}
 			}
+	    }
+        else {
+			prd += dec->predictor[cl][dec->prd_order] * video[1]->val[y - dec->mi_size][x];
+
+			if (y - dec->mi_size >= mmin_dy && x >= mmin_dx && x < mmax_dx && y < mmax_dy) {
+				for (k = 0; k < dec->mi_prd_order - 1; k++) {
+					ry = y + idyx[k].y - dec->mi_size;
+					rx = x + idyx[k].x;
+
+					prd += dec->predictor[cl][k + dec->prd_order + 1] * video[1]->val[ry][rx];
+				}
+			}
+			else {
+				for (k = 0; k < dec->mi_prd_order - 1; k++) {
+					ry = y + idyx[k].y - dec->mi_size;
+					rx = x + idyx[k].x;
+
+					if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
+						prd += dec->predictor[cl][k + dec->prd_order + 1] * video[1]->val[y - dec->mi_size][x];
+					}
+					else {
+						prd += dec->predictor[cl][k + dec->prd_order + 1] * video[1]->val[ry][rx];
+					}
+				}
+			}
 		}
 	}
-
-
-
-
 
 	//Back Inter prediction calculation
 	if (dec->back_prd_order == 1) {
@@ -1087,7 +1790,7 @@ int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
 	if (dec->back_prd_order > 1) {
 		prd += dec->predictor[cl][dec->prd_order + dec->mi_prd_order] * video[0]->val[y][x];
 
-		if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy) {
+		if (y >= bmin_dy && x >= bmin_dx && x < bmax_dx && y < bmax_dy) {
 			for (k = 0; k < dec->back_prd_order + dec->mi_prd_order - 1; k++) {
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
@@ -1117,7 +1820,7 @@ int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
 	if (dec->for_prd_order > 1) {
 		prd += dec->predictor[cl][dec->prd_order + dec->mi_prd_order + dec->back_prd_order] * video[2]->val[y][x];
 
-		if (y >= min_abs_dy && x >= min_abs_dx && x < max_abs_dx && y < max_abs_dy) {
+		if (y >= fmin_dy && x >= fmin_dx && x < fmax_dx && y < fmax_dy) {
 			for (k = 0; k < dec->for_prd_order - 1; k++) {
 				ry = y + idyx[k].y;
 				rx = x + idyx[k].x;
@@ -1172,12 +1875,24 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 		VLC *vlc;
 		dec->vlcs = init_vlcs(dec->pmodels, dec->num_group, 1);
 
+//		system("rm udec.txt");
+//        FILE *fp2;
+//        fp2 = fileopen("udec.txt", "w"); // TODO: check why gr is not correct with arithmetic coding
+
+//        system("rm prddec.txt");
+//        FILE *fp3;
+//        fp3 = fileopen("prddec.txt", "w");
+
 		for (y = 0; y < dec->height; y++) {
 			for (x = 0; x < dec->width; x++) {
 				cl = dec->class[y][x];
+
 				u = calc_udec(dec, y, x);
+
 				gr = dec->uquant[cl][u];
+//				fprintf(fp2, "%d %d %d %d %d\n", y, x, u, cl, gr);
 				prd = calc_prd(video, dec, cl, y, x);
+//                fprintf(fp3, "%d %d %d\n", y, x, prd);
 				prd >>= (dec->coef_precision - 1);
 				p = (prd + 1) >> 1;
 				vlc = &dec->vlcs[gr][0];
@@ -1186,6 +1901,9 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 				video[1]->val[y][x] = (img_t) (p + e);
 			}
 		}
+
+//        fclose(fp2);
+//		fclose(fp3);
 	}
 	else {
 		PMODEL *pm;
@@ -1210,16 +1928,15 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 			mask = (1 << dec->pm_accuracy) - 1;
 			shift = dec->coef_precision - dec->pm_accuracy;
 
-			system("rm udec.txt");
-			FILE *fp2;
-			fp2 = fileopen("udec.txt", "w");
+//			FILE *fp2;
+//			fp2 = fileopen("udec.txt", "a");
 
 			for (y = 0; y < dec->height; y++) {
 				for (x = 0; x < dec->width; x++) {
 					cl = dec->class[y][x];
 					u = calc_udec(dec, y, x);
-                    fprintf(fp2, "%d %d %d\n", y, x, u);
 					gr = dec->uquant[cl][u];
+//                    fprintf(fp2, "%d %d %d %d %d %d\n", ff, y, x, u, cl, gr);
 					prd = calc_prd(video, dec, cl, y, x);
 					base = (dec->maxprd - prd + (1 << shift) / 2) >> shift;
 					pm = dec->pmodels[gr][0] + (base & mask);
@@ -1235,7 +1952,7 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 				}
 			}
 
-			fclose(fp2);
+//			fclose(fp2);
 		}
 	}
 
@@ -1527,6 +2244,21 @@ int main(int argc, char **argv) {
 				dec->rc = rc_init();
 				rc_startdec(fp, dec->rc);
 			}
+
+//			//Initiation of the reference offset
+//			dec->intra_roff = init_ref_offset(dec, 0, dec->prd_order, 0);
+//
+//			if (dec->mi_prd_order > 0) {
+//				dec->mi_roff = init_ref_offset(dec, 1, dec->mi_prd_order, dec->mi_size);
+//			}
+//
+//			if (dec->back_prd_order > 0) {
+//				dec->back_roff = init_ref_offset(dec, 2, dec->back_prd_order, 0);
+//			}
+//
+//			if (dec->for_prd_order > 0) {
+//				dec->for_roff = init_ref_offset(dec, 3, dec->for_prd_order, 0);
+//			}
 
 			decode_class(fp, dec);
 			decode_predictor(fp, dec);

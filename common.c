@@ -5,7 +5,7 @@
 #include <math.h>
 #include "mrp.h"
 
-//Reference pixel position separated by their distances
+//Reference pixel position separated by their distances {y, x}
 const POINT dyx[] = {
 		/* 1 */
 		{ 0,-1}, {-1, 0},
@@ -24,8 +24,8 @@ const POINT dyx[] = {
 		/* 8 */
 		{ 0,-8}, {-1,-7}, {-2,-6}, {-3,-5}, {-4,-4}, {-5,-3}, {-6,-2}, {-7,-1}, {-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
 };
+
 //Reference pixel position separated by their distances
-// {y, x}
 const POINT idyx[] = {
 		/* 0 --> 1 */
 		//{ 0, 0},
@@ -795,7 +795,7 @@ int *init_ctx_weight(int prd_order, int back_prd_order, int for_prd_order, int m
 	int *ctx_weight, k;
 	double dy, dx;
 
-	ctx_weight = (int *)alloc_mem((prd_order + back_prd_order + for_prd_order + mi_prd_order) * sizeof(int));
+	ctx_weight = (int *) alloc_mem((prd_order + back_prd_order + for_prd_order + mi_prd_order) * sizeof(int));
 
 	for (k = 0; k < prd_order; k++) {
 		dy = dyx[k].y;
@@ -804,7 +804,7 @@ int *init_ctx_weight(int prd_order, int back_prd_order, int for_prd_order, int m
 		ctx_weight[k] = (int) (64.0 / sqrt(dy * dy + dx * dx) + 0.5);
 	}
 
-    if (mi_prd_order > 0) {
+    if (mi_prd_order > 0) { // TODO: review this (it only works for y > mi_size)
         ctx_weight[prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
 
         for (k = 0; k < mi_prd_order - 1; k++) {

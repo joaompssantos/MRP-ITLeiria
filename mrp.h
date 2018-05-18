@@ -94,7 +94,7 @@ typedef struct {
 } POINT;
 
 // Encoder
-typedef struct {
+typedef struct { // TODO: Organize this
     int height; // Image height
     int width; // Image width
     int delta; // Distance between the reference frame and the current one
@@ -122,15 +122,10 @@ typedef struct {
     int ***err; // Matrix that keeps residue values after the prediction.
     int ***org; // Original video/image
     int *ctx_weight; // Keeps the weights used for the residue encoding context.
-
-
-//    int ***roff; // Auxiliary structure used to scan the image for neighboring pixels.
     int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
     int ***mi_roff; // Auxiliary structure used to scan the image for neighboring pixels.
     int ***back_roff; // Auxiliary structure used to scan the image for neighboring pixels.
     int ***for_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-
-
     int qtctx[QUADTREE_DEPTH << 3]; // Frequency counter of the segmentation flag context for the whole image.
     char **qtmap[QUADTREE_DEPTH]; // Segmentation flags for the quadtree partitioning of the image's prediction.
     char **class; // Keeps the class of each pixel
@@ -171,6 +166,12 @@ typedef struct {
     int for_prd_order; // Order of the predictors (number of pixels to use) in the next frame
     int mi_prd_order; // Order of the predictors (number of pixels to use) in neighbouring micro images
     int mi_size; // Size of micro images in lenslet images
+
+//    int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+//    int ***mi_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+//    int ***back_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+//    int ***for_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+
     int num_pmodel;
     int pm_accuracy;
     int maxprd;

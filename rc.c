@@ -29,8 +29,9 @@ void rc_encode(FILE *fp, RANGECODER *rc, uint cumfreq, uint freq, uint totfreq){
 	while((rc->low ^ (rc->low + rc->range)) < RANGE_TOP){
 		putc(rc->low >> (RANGE_SIZE - 8), fp);
 		rc->code += 8;
-		if (rc->code > 1E8) {
-			fprintf(stderr, "Too large!\n");
+//        if (rc->code > 1E8) {
+		if (rc->code > 1E12) {
+			fprintf(stderr, "Too large: 1!\n");
 			exit(1);
 		}
 		rc->range <<= 8;
@@ -40,8 +41,9 @@ void rc_encode(FILE *fp, RANGECODER *rc, uint cumfreq, uint freq, uint totfreq){
 	while(rc->range < RANGE_BOT){
 		putc(rc->low >> (RANGE_SIZE - 8), fp);
 		rc->code += 8;
-		if (rc->code > 1E8) {
-			fprintf(stderr, "Too large!\n");
+//        if (rc->code > 1E8) {
+		if (rc->code > 1E12) {
+			fprintf(stderr, "Too large: 2!\n");
 			exit(1);
 		}
 		rc->range = ((-rc->low) & (RANGE_BOT - 1)) << 8;
