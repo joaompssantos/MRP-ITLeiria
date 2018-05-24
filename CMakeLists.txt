@@ -66,10 +66,10 @@ set(COMMON_SRC
         mrp_config.h
         mrp.h
         common.c
-        rc.c
-        )
+        entropy_coding.c
+        rc.c)
 
-# Prevents the windows consolo from showing
+# Prevents the windows console from showing
 if (WIN32)
     SET(USE_STATIC ON)
     set(GUI_TYPE WIN32)

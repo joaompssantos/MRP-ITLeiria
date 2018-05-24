@@ -37,18 +37,22 @@ const POINT idyx[] = {
 		{ 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3}, { 1, 2}, { 2, 1}, { 3, 0}, { 2,-1}, { 1,-2},
 		/* 4 --> 41 */
 		{ 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4}, { 1, 3}, { 2, 2}, { 3, 1}, { 4, 0}, { 3,-1}, { 2,-2}, { 1,-3},
-//		/* 5 */
-//		{ 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2},
-//		{-2, 3}, {-1, 4},
-//		/* 6 */
-//		{ 0,-6}, {-1,-5}, {-2,-4}, {-3,-3}, {-4,-2}, {-5,-1}, {-6, 0}, {-5, 1},
-//		{-4, 2}, {-3, 3}, {-2, 4}, {-1, 5},
-//		/* 7 */
-//		{ 0,-7}, {-1,-6}, {-2,-5}, {-3,-4}, {-4,-3}, {-5,-2}, {-6,-1}, {-7, 0},
-//		{-6, 1}, {-5, 2}, {-4, 3}, {-3, 4}, {-2, 5}, {-1, 6},
-//		/* 8 */
-//		{ 0,-8}, {-1,-7}, {-2,-6}, {-3,-5}, {-4,-4}, {-5,-3}, {-6,-2}, {-7,-1},
-//		{-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
+};
+
+//Reference pixel position separated by their distances
+const POINT tridyx[] = {
+        /* 0 --> 1 */
+        //{ 0, 0},
+        /* 1 --> 4 */
+        { 0,-1}, {-1, 0}, { 0, 1},
+        /* 2 --> 9 */
+        { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2},
+        /* 3 --> 16 */
+        { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3},
+        /* 4 --> 25 */
+        { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4},
+        /* 5 --> 36 */
+        { 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4}, { 0, 5}
 };
 
 int bref1[2][5] = {{2, -2, -1, 0, -1},
@@ -424,420 +428,1323 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 	return (img);
 }
 
-
-int *gen_hufflen(uint *hist, int size, int max_len) {
-	int i, j, k, l, *len, *index, *bits, *link;
-
-	len = (int *)alloc_mem(size * sizeof(int));
-	index = (int *)alloc_mem(size * sizeof(int));
-	bits = (int *)alloc_mem(size * sizeof(int));
-	link = (int *)alloc_mem(size * sizeof(int));
-	for (i = 0; i < size; i++) {
-		len[i] = 0;
-		index[i] = i;
-		link[i] = -1;
-	}
-	/* sort in decreasing order of frequency */
-	for (i = size -1; i > 0; i--) {
-		for (j = 0; j < i; j++) {
-			if (hist[index[j]] < hist[index[j + 1]]) {
-				k = index[j + 1];
-				index[j + 1] = index[j];
-				index[j] = k;
-			}
-		}
-	}
-	for (i = 0; i < size; i++) {
-		bits[i] = index[i];	/* reserv a sorted index table */
-	}
-	for (i = size - 1; i > 0; i--) {
-		k = index[i - 1];
-		l = index[i];
-		hist[k] += hist[l];
-		len[k]++;
-		while (link[k] >= 0) {
-			k = link[k];
-			len[k]++;
-		}
-		link[k] = l;
-		len[l]++;
-		while (link[l] >= 0) {
-			l = link[l];
-			len[l]++;
-		}
-		for (j = i - 1; j > 0; j--) {
-			if (hist[index[j - 1]] < hist[index[j]]) {
-				k = index[j];
-				index[j] = index[j - 1];
-				index[j - 1] = k;
-			} else {
-				break;
-			}
-		}
-	}
-	/* limit the maximum code length to max_len */
-	for (i = 0; i < size; i++) {
-		index[i] = bits[i];	/* restore the index table */
-		bits[i] = 0;
-	}
-	for (i = 0; i < size; i++) {
-		bits[len[i]]++;
-	}
-	for (i = size - 1; i > max_len; i--) {
-		while (bits[i] > 0) {
-			j = i - 2;
-			while(bits[j] == 0) j--;
-			bits[i] -= 2;
-			bits[i - 1]++;
-			bits[j + 1] += 2;
-			bits[j]--;
-		}
-	}
-	for (i = k = 0; i < size; i++) {
-		for (j = 0; j < bits[i]; j++) {
-			len[index[k++]] = i;
-		}
-	}
-	free(link);
-	free(bits);
-	free(index);
-	return (len);
-}
-
-void gen_huffcode(VLC *vlc) {
-	int i, j, *idx, *len;
-	uint k;
-
-	vlc->index = idx = (int *)alloc_mem(vlc->size * sizeof(int));
-	vlc->off = (int *)alloc_mem(vlc->max_len * sizeof(int));
-	vlc->code = (uint *)alloc_mem(vlc->size * sizeof(int));
-	len = vlc->len;
-
-	/* sort in increasing order of code length */
-	for (i = 0; i < vlc->size; i++) {
-		idx[i] = i;
-	}
-
-	for (i = vlc->size -1; i > 0; i--) {
-		for (j = 0; j < i; j++) {
-			if (len[idx[j]] > len[idx[j + 1]]) {
-				k = (uint) (idx[j + 1]);
-				idx[j + 1] = idx[j];
-				idx[j] = k;
-			}
-		}
-	}
-
-	k = 0;
-
-	for (j = 0; j < vlc->max_len; j++) {
-		vlc->off[j] = -1;
-	}
-
-	j = len[idx[0]];
-
-	for (i = 0; i < vlc->size; i++) {
-		if (j < len[idx[i]]) {
-			k <<= (len[idx[i]] - j);
-			j = len[idx[i]];
-		}
-
-		vlc->code[idx[i]] = k++;
-		vlc->off[j - 1] = i;
-	}
-
-	return;
-}
-
-VLC *make_vlc(uint *hist, int size, int max_len) {
-	VLC *vlc;
-
-	vlc = (VLC *)alloc_mem(sizeof(VLC));
-	vlc->size = size;
-	vlc->max_len = max_len;
-	vlc->len = gen_hufflen(hist, size, max_len);
-	gen_huffcode(vlc);
-	return (vlc);
-}
-
-void free_vlc(VLC *vlc) {
-	free(vlc->code);
-	free(vlc->off);
-	free(vlc->index);
-	free(vlc->len);
-	free(vlc);
-	return;
-}
-
-VLC **init_vlcs(PMODEL ***pmodels, int num_group, int num_pmodel) {
-	VLC **vlcs, *vlc;
-	PMODEL *pm;
-	int gr, k;
-
-	vlcs = (VLC **)alloc_2d_array(num_group, num_pmodel, sizeof(VLC));
-	for (gr = 0; gr < num_group; gr++) {
-		for (k = 0; k < num_pmodel; k++) {
-			vlc = &vlcs[gr][k];
-			pm = pmodels[gr][k];
-			vlc->size = pm->size;
-			vlc->max_len = VLC_MAXLEN;
-			vlc->len = gen_hufflen(pm->freq, pm->size, VLC_MAXLEN);
-			gen_huffcode(vlc);
-		}
-	}
-	return (vlcs);
-}
-
-/*
-  Natural logarithm of the gamma function
-  cf. "Numerical Recipes in C", 6.1
-  http://www.ulib.org/webRoot/Books/Numerical_Recipes/bookcpdf.html
- */
-double lngamma(double xx) {
-	int j;
-	double x,y,tmp,ser;
-	double cof[6] = {
-			76.18009172947146,	-86.50532032941677,
-			24.01409824083091,	-1.231739572450155,
-			0.1208650973866179e-2,	-0.5395239384953e-5
-	};
-
-	y = x = xx;
-	tmp = x + 5.5 - (x + 0.5) * log(x + 5.5);
-	ser = 1.000000000190015;
-	for (j=0;j<=5;j++)
-		ser += (cof[j] / ++y);
-	return (log(2.5066282746310005 * ser / x) - tmp);
-}
-
-void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, int center, int idx, double sigma) {
-	double shape, beta, norm, sw, x;
-	int i, j, n;
-
-	if (center == 0) sigma *= 2.0;
-
-	if (idx < 0) {
-		shape = 2.0;
-	}
-	else {
-		shape = 3.2 * (idx + 1) / (double)num_pmodel;
-	}
-
-	/* Generalized Gaussian distribution */
-	beta = exp(0.5*(lngamma(3.0/shape)-lngamma(1.0/shape))) / sigma;
-	sw = 1.0 / (double) num_subpm;
-	n = pm->size * num_subpm;
-	center *= num_subpm;
-
-	if (center == 0) {    /* one-sided distribution */
-		for (i = 0; i < n; i++) {
-			x = (double) i * sw;
-			pdfsamp[i] = exp(-pow(beta * x, shape));
-		}
-	}
-	else {
-		for (i = center; i < n; i++) {
-			x = (i - (double) center + 0.5) * sw;
-			pdfsamp[i + 1] = exp(-pow(beta * x, shape));
-		}
-
-		for (i = 0; i <= center; i++) {
-			pdfsamp[center - i] =  pdfsamp[center + i + 1];
-		}
-
-		for (i = 0; i < n; i++) {
-			if (i == center) {
-				pdfsamp[i] = (2.0 + pdfsamp[i] + pdfsamp[i + 1]) / 2.0;
-			}
-			else {
-				pdfsamp[i] = pdfsamp[i] + pdfsamp[i + 1];
-			}
-		}
-	}
-
-	for (j = 0; j < num_subpm; j++) {
-		norm = 0.0;
-		for (i = 0; i < pm->size; i++) {
-			norm += pdfsamp[i * num_subpm + j];
-		}
-
-		norm = (double) (MAX_TOTFREQ - pm->size * MIN_FREQ) / norm;
-		norm += 1E-8;	/* to avoid machine dependent rounding errors */
-		pm->cumfreq[0] = 0;
-
-		for (i = 0; i < pm->size; i++) {
-			pm->freq[i] = (uint) (norm * pdfsamp[i * num_subpm + j] + MIN_FREQ);
-			pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
-		}
-
-		pm++;
-	}
-	return;
-}
-
-/*---------------------------- init_pmodels ------------------------*
- |  Function init_pmodels
+// TODO: fix functions headers
+/*--------------------------- init_ref_offset -----------------------*
+ |  Function init_ref_offset
  |
- |  Purpose:  Initializes the probability models
+ |  Purpose:  Calculates the offset of a reference to a given pixel
  |
  |  Parameters:
- |		num_group		--> Number of groups ???? (IN)
- |		num_pmodel		--> Number of probability models (IN)
- |		pm_accuracy		--> Probability model accuracy (IN)
- |		pm_idx			--> ?? --> NULL (IN)
- |		sigma			--> Predefined vectors (IN)
- |		size			--> Image maximum value + 1 (IN)
+ |		img				--> Image structure (IN)
+ |		prd_order		--> Number of intra reference pixels (IN)
+ |		back_prd_order	--> Number of back reference pixels (IN)
+ |		for_prd_order	--> Number of forward reference pixels (IN)
+ |		mi_prd_order	--> Number of neighbour micro images reference pixels (IN)
+ |		mi_size     	--> Micro image size (IN)
  |
- |  Returns:  PMODEL*** --> returns a PMODEL type structure
+ |  Returns:  int*** --> Array with the references offset
  *-------------------------------------------------------------------*/
-PMODEL ***init_pmodels(int num_group, int num_pmodel, int pm_accuracy, int *pm_idx, double *sigma, int size) {
-	PMODEL ***pmodels, *pmbuf, *pm;
-	int gr, i, j, num_subpm, num_pm, ssize, idx;
-	double *pdfsamp;
+int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_size) {
+    int ***roff, *ptr;
+    int x, y, dx, dy, k, base = 0;
 
-	//??
-	if (pm_accuracy < 0) {
-		num_subpm = 1;
-		ssize = 1;
-	}
-	else {
-		num_subpm = 1 << pm_accuracy;
-		ssize = size;
-		size = size + ssize - 1;
-	}
+    int min_dx, max_dx, min_dy, max_dy;
+    int mmin_dx, mmax_dx, mmin_dy, mmax_dy;
 
-	//Defines the number of probability models
-	num_pm = (pm_idx != NULL)? 1 : num_pmodel;
+    min_dx = max_dx = min_dy = max_dy = 0;
+    mmin_dx = mmax_dx = mmin_dy = mmax_dy = 0;
 
-	pmodels = (PMODEL ***)alloc_2d_array(num_group, num_pm, sizeof(PMODEL *));
-	pmbuf = (PMODEL *)alloc_mem(num_group * num_pm * num_subpm * sizeof(PMODEL));
+    roff = (int ***) alloc_2d_array(height, width, sizeof(int *));
 
-	//Vector initializations
-	for (gr = 0; gr < num_group; gr++) {
-		for (i = 0; i < num_pm; i++) {
-			pmodels[gr][i] = pmbuf;
+    switch (type) {
+        case INTRA_PRED: // Intra
+        case MI_BORDERS_PRED:
+            base = 0;
+            break;
 
-			for (j = 0; j < num_subpm; j++) {
-				pm = pmbuf++;
-				pm->id = i;
-				pm->size = size;
-				pm->freq = (uint *)alloc_mem((size * 2 + 1) * sizeof(uint));
-				pm->cumfreq = &pm->freq[size];
+        case BACK_PRED: // Inter backwards
+            base = -width * (height + 1);
+            break;
 
-				if (pm_idx == NULL) {
-					pm->cost = (float *)alloc_mem((size + ssize) * sizeof(float));
-					pm->subcost = &pm->cost[size];
-				}
-			}
-		}
-	}
+        case FOR_PRED: // Inter forward
+            base = width * (height + 1);
+            break;
+        case MI_UP_PRED:
+            base = -width * mi_size;
+            break;
 
-	pdfsamp = alloc_mem((size * num_subpm + 1) * sizeof(double));
+        case MI_LEFT_PRED:
+            base = -mi_size;
+            break;
 
-	for (gr = 0; gr < num_group; gr++) {
-		for (i = 0; i < num_pm; i++) {
-			if (pm_idx != NULL) {
-				idx = pm_idx[gr];
-			}
-			else if (num_pm > 1) {
-				idx = i;
-			}
-			else {
-				idx = -1;
-			}
+        case MI_LDIAG_PRED:
+            base = (-width - 1) * mi_size;
+            break;
 
-			set_freqtable(pmodels[gr][i], pdfsamp, num_subpm, num_pmodel, ssize - 1, idx, sigma[gr]);
-		}
-	}
+        case MI_RDIAG_PRED:
+            base = (-width + 1) * mi_size;
+            break;
 
-	free(pdfsamp);
-
-	return (pmodels);
-}
-
-/* probability model for coefficients and thresholds */
-void set_spmodel(PMODEL *pm, int size, int m) {
-	int i, sum;
-	double p;
-
-	pm->size = size;
-
-	if (m >= 0) {
-		p = 1.0 / (double)(1 << (m % 8));
-		sum = 0;
-
-		for (i = 0; i < pm->size; i++) {
-			pm->freq[i] = (uint) (exp(-p * i) * (1 << 10));
-
-			if (pm->freq[i] == 0) pm->freq[i]++;
-
-			sum += pm->freq[i];
-		}
-
-		if (m & 8) pm->freq[0] = (sum - pm->freq[0]);	/* weight for zero */
-	}
-	else {
-		for (i = 0; i < pm->size; i++) {
-			pm->freq[i] = 1;
-		}
-	}
-
-	pm->cumfreq[0] = 0;
-
-	for (i = 0; i < pm->size; i++) {
-		pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
-	}
-
-	return;
-}
-
-int *init_ctx_weight(int prd_order, int back_prd_order, int for_prd_order, int mi_prd_order, int delta) {
-	int *ctx_weight, k;
-	double dy, dx;
-
-	ctx_weight = (int *) alloc_mem((prd_order + back_prd_order + for_prd_order + mi_prd_order) * sizeof(int));
-
-	for (k = 0; k < prd_order; k++) {
-		dy = dyx[k].y;
-		dx = dyx[k].x;
-
-		ctx_weight[k] = (int) (64.0 / sqrt(dy * dy + dx * dx) + 0.5);
-	}
-
-    if (mi_prd_order > 0) { // TODO: review this (it only works for y > mi_size)
-        ctx_weight[prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
-
-        for (k = 0; k < mi_prd_order - 1; k++) {
-            dy = idyx[k].y;
-            dx = idyx[k].x;
-
-            ctx_weight[k + prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
-        }
+        default:
+            fprintf(stderr, "Wrong usage of init_ref_offset function!\n");
+            exit(-10);
     }
 
-	if (back_prd_order > 0) {
-		ctx_weight[prd_order + mi_prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
+    switch (type) {
+        case INTRA_PRED: // Intra
+            //Values to check for special cases
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
 
-		for (k = 0; k < back_prd_order - 1; k++) {
-			dy = idyx[k].y;
-			dx = idyx[k].x;
+                if (dy < min_dy) min_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dy > max_dy) max_dy = dy;
+                if (dx > max_dx) max_dx = dx;
+            }
 
-			ctx_weight[k + prd_order + mi_prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
-		}
-	}
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+                    //Conditions to check which references are available for each pixel
+                    if (y == 0) {
+                        if (x == 0) {
+                            roff[y][x] = ptr;
+                            dx = 0;
+                            dy = height;
 
-	if (for_prd_order > 0) {
-		ctx_weight[prd_order + mi_prd_order + back_prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
+                            for (k = 0; k < prd_order; k++) {
+                                *ptr++ = dy * width + dx; //Points to a line filled with 128 (if max_val = 256)
+                            }
+                        }
+                        else if (x + min_dx <= 0 || x + max_dx >= width) {
+                            roff[y][x] = ptr;
+                            dy = 0;
 
-		for (k = 0; k < for_prd_order - 1; k++) {
-			dy = idyx[k].y;
-			dx = idyx[k].x;
+                            for (k = 0; k < prd_order; k++) {
+                                dx = dyx[k].x;
 
-			ctx_weight[k + prd_order + mi_prd_order + back_prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
-		}
-	}
+                                if (x + dx < 0) dx = -x;
+                                else if (dx >= 0) dx = -1;
 
-	return (ctx_weight);
+                                *ptr++ = dy * width + dx;
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else if (y + min_dy <= 0) {
+                        if (x == 0) {
+                            roff[y][x] = ptr;
+
+                            for (k = 0; k < prd_order; k++) {
+                                dy = dyx[k].y;
+
+                                if (y + dy < 0) dy = -y;
+                                else if (dy >= 0) dy = -1;
+
+                                dx = dyx[k].x;
+
+                                if (x + dx < 0) dx = -x;
+
+                                *ptr++ = dy * width + dx;
+                            }
+                        }
+                        else if (x + min_dx <= 0 || x + max_dx >= width) {
+                            roff[y][x] = ptr;
+
+                            for (k = 0; k < prd_order; k++) {
+                                dy = dyx[k].y;
+
+                                if (y + dy < 0) dy = -y;
+                                dx = dyx[k].x;
+
+                                if (x + dx < 0) dx = -x;
+                                else if (x + dx >= width) {
+                                    dx = width - x - 1;
+                                }
+
+                                *ptr++ = dy * width + dx;
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else {
+                        roff[y][x] = roff[y - 1][x];
+                        free(ptr);
+                    }
+                }
+            }
+
+            break;
+
+        case BACK_PRED: // Inter Backwards
+        case FOR_PRED: // Inter Forward
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = idyx[k].y;
+                dx = idyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dy > max_dy) max_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+
+                    if (y == 0) {
+                        if (x == 0) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < 0 || x + dx < 0) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else if (x + min_dx <= 0 || x + max_dx >= width) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < 0 || x + dx < 0 || x + dx >= width) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else if (y + min_dy <= 0) {
+                        if (x == 0) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < 0 || x + dx < 0) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else if (x + min_dx <= 0 || x + max_dx >= width) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < 0 || x + dx < 0 || x + dx >= width) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else if (y + max_dy >= height) {
+                        if (x == 0 || x + min_dx <= 0 || x + max_dx >= width) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy >= height || x + dx < 0 || x + dx >= width) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else {
+                        roff[y][x] = roff[y - 1][x];
+                        free(ptr);
+                    }
+                }
+            }
+
+            break;
+
+        case MI_UP_PRED: // Lenslet up
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = idyx[k].y;
+                dx = idyx[k].x;
+
+                if (dy < mmin_dy) mmin_dy = dy;
+                if (dy > mmax_dy) mmax_dy = dy;
+                if (dx < mmin_dx) mmin_dx = dx;
+                if (dx > mmax_dx) mmax_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+
+                    //Micro image reference offset
+                    if (y < mi_size) {
+                        if (y == 0) {
+                            if (x == 0) {
+                                roff[y][x] = ptr;
+                                dx = 0;
+                                dy = height;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    *ptr++ = dy * width + dx; //Points to a line filled with 128 (if max_val = 256)
+                                }
+                            }
+                            else if (x + min_dx <= 0 || x + max_dx >= width) {
+                                roff[y][x] = ptr;
+                                dy = 0;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+                                    else if (dx >= 0) dx = -1;
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else {
+                                roff[y][x] = roff[y][x - 1];
+                                free(ptr);
+                            }
+                        }
+                        else if (y + min_dy <= 0) {
+                            if (x == 0) {
+                                roff[y][x] = ptr;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dy = dyx[k].y;
+
+                                    if (y + dy < 0) dy = -y;
+                                    else if (dy >= 0) dy = -1;
+
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else if (x + min_dx <= 0 || x + max_dx >= width) {
+                                roff[y][x] = ptr;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dy = dyx[k].y;
+
+                                    if (y + dy < 0) dy = -y;
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+                                    else if (x + dx >= width) {
+                                        dx = width - x - 1;
+                                    }
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else {
+                                roff[y][x] = roff[y][x - 1];
+                                free(ptr);
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y - 1][x];
+                            free(ptr);
+                        }
+                    }
+                    else if (y == mi_size) {
+                        if (x == 0) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < 0) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < 0 || x + dx >= width) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else if (y + mmin_dy <= mi_size) {
+                        if (x == 0) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < 0) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < 0 || x + dx >= width) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else {
+                        roff[y][x] = roff[y - 1][x];
+                        free(ptr);
+                    }
+                }
+            }
+
+            break;
+
+        case MI_LEFT_PRED: // Lenslet left
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = tridyx[k].y;
+                dx = tridyx[k].x;
+
+                if (dy < mmin_dy) mmin_dy = dy;
+                if (dy > mmax_dy) mmax_dy = dy;
+                if (dx < mmin_dx) mmin_dx = dx;
+                if (dx > mmax_dx) mmax_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+
+                    //Micro image reference offset
+                    if (x < mi_size) {
+                        if (y == 0) {
+                            if (x == 0) {
+                                roff[y][x] = ptr;
+                                dx = 0;
+                                dy = height;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    *ptr++ = dy * width + dx; //Points to a line filled with 128 (if max_val = 256)
+                                }
+                            }
+                            else if (x + min_dx <= 0 || x + max_dx >= width) {
+                                roff[y][x] = ptr;
+                                dy = 0;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+                                    else if (dx >= 0) dx = -1;
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else {
+                                roff[y][x] = roff[y][x - 1];
+                                free(ptr);
+                            }
+                        }
+                        else if (y + min_dy <= 0) {
+                            if (x == 0) {
+                                roff[y][x] = ptr;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dy = dyx[k].y;
+
+                                    if (y + dy < 0) dy = -y;
+                                    else if (dy >= 0) dy = -1;
+
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else if (x + min_dx <= 0 || x + max_dx >= width) {
+                                roff[y][x] = ptr;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dy = dyx[k].y;
+
+                                    if (y + dy < 0) dy = -y;
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+                                    else if (x + dx >= width) {
+                                        dx = width - x - 1;
+                                    }
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else {
+                                roff[y][x] = roff[y][x - 1];
+                                free(ptr);
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y - 1][x];
+                            free(ptr);
+                        }
+                    }
+                    else if (y == 0) {
+                        if (x == mi_size) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = tridyx[k].y;
+                                dx = tridyx[k].x;
+
+                                if (y + dy < 0 || x + dx < mi_size) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else if (x + mmin_dx <= mi_size || x + mmax_dx >= width) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = tridyx[k].y;
+                                dx = tridyx[k].x;
+
+                                if (y + dy < 0 || x + dx < mi_size || x + dx >= width) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else if (y + mmin_dy <= 0) {
+                        if (x == mi_size) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = tridyx[k].y;
+                                dx = tridyx[k].x;
+
+                                if (y + dy < 0 || x + dx < mi_size) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else if (x + mmin_dx <= mi_size || x + mmax_dx >= width) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = tridyx[k].y;
+                                dx = tridyx[k].x;
+
+                                if (y + dy < 0 || x + dx < mi_size || x + dx >= width) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else {
+                        roff[y][x] = roff[y - 1][x];
+                        free(ptr);
+                    }
+                }
+            }
+
+            break;
+
+        case MI_LDIAG_PRED: // Lenslet left diagonal
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = idyx[k].y;
+                dx = idyx[k].x;
+
+                if (dy < mmin_dy) mmin_dy = dy;
+                if (dy > mmax_dy) mmax_dy = dy;
+                if (dx < mmin_dx) mmin_dx = dx;
+                if (dx > mmax_dx) mmax_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+
+                    //Micro image reference offset
+                    if (x < mi_size || y < mi_size) {
+                        if (y == 0) {
+                            if (x == 0) {
+                                roff[y][x] = ptr;
+                                dx = 0;
+                                dy = height;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    *ptr++ = dy * width + dx; //Points to a line filled with 128 (if max_val = 256)
+                                }
+                            }
+                            else if (x + min_dx <= 0 || x + max_dx >= width) {
+                                roff[y][x] = ptr;
+                                dy = 0;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+                                    else if (dx >= 0) dx = -1;
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else {
+                                roff[y][x] = roff[y][x - 1];
+                                free(ptr);
+                            }
+                        }
+                        else if (y + min_dy <= 0) {
+                            if (x == 0) {
+                                roff[y][x] = ptr;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dy = dyx[k].y;
+
+                                    if (y + dy < 0) dy = -y;
+                                    else if (dy >= 0) dy = -1;
+
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else if (x + min_dx <= 0 || x + max_dx >= width) {
+                                roff[y][x] = ptr;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dy = dyx[k].y;
+
+                                    if (y + dy < 0) dy = -y;
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+                                    else if (x + dx >= width) {
+                                        dx = width - x - 1;
+                                    }
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else {
+                                roff[y][x] = roff[y][x - 1];
+                                free(ptr);
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y - 1][x];
+                            free(ptr);
+                        }
+                    }
+                    else if (y == mi_size) {
+                        if (x == mi_size) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < mi_size) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else if (x + mmin_dx <= mi_size || x + mmax_dx >= width) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < mi_size || x + dx >= width) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else if (y + mmin_dy <= mi_size) {
+                        if (x == mi_size) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < mi_size) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else if (x + mmin_dx <= mi_size || x + mmax_dx >= width) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < mi_size || x + dx >= width) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else {
+                        roff[y][x] = roff[y - 1][x];
+                        free(ptr);
+                    }
+                }
+            }
+
+            break;
+
+        case MI_RDIAG_PRED: // Lenslet right diagonal
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = idyx[k].y;
+                dx = idyx[k].x;
+
+                if (dy < mmin_dy) mmin_dy = dy;
+                if (dy > mmax_dy) mmax_dy = dy;
+                if (dx < mmin_dx) mmin_dx = dx;
+                if (dx > mmax_dx) mmax_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+
+                    //Micro image reference offset
+                    if (y < mi_size || x > width - mi_size) {
+                        if (y == 0) {
+                            if (x == 0) {
+                                roff[y][x] = ptr;
+                                dx = 0;
+                                dy = height;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    *ptr++ = dy * width + dx; //Points to a line filled with 128 (if max_val = 256)
+                                }
+                            }
+                            else if (x + min_dx <= 0 || x + max_dx >= width) {
+                                roff[y][x] = ptr;
+                                dy = 0;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+                                    else if (dx >= 0) dx = -1;
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else {
+                                roff[y][x] = roff[y][x - 1];
+                                free(ptr);
+                            }
+                        }
+                        else if (y + min_dy <= 0) {
+                            if (x == 0) {
+                                roff[y][x] = ptr;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dy = dyx[k].y;
+
+                                    if (y + dy < 0) dy = -y;
+                                    else if (dy >= 0) dy = -1;
+
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else if (x + min_dx <= 0 || x + max_dx >= width) {
+                                roff[y][x] = ptr;
+
+                                for (k = 0; k < prd_order; k++) {
+                                    dy = dyx[k].y;
+
+                                    if (y + dy < 0) dy = -y;
+                                    dx = dyx[k].x;
+
+                                    if (x + dx < 0) dx = -x;
+                                    else if (x + dx >= width) {
+                                        dx = width - x - 1;
+                                    }
+
+                                    *ptr++ = dy * width + dx;
+                                }
+                            }
+                            else {
+                                roff[y][x] = roff[y][x - 1];
+                                free(ptr);
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y - 1][x];
+                            free(ptr);
+                        }
+                    }
+                    else if (y == mi_size) {
+                        if (x == 0) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < 0) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < 0 || x + dx >= width - mi_size) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else if (y + mmin_dy <= mi_size) {
+                        if (x == 0) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < 0) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size) {
+                            roff[y][x] = ptr;
+                            *ptr++ = base;
+
+                            for (k = 0; k < prd_order - 1; k++) {
+                                dy = idyx[k].y;
+                                dx = idyx[k].x;
+
+                                if (y + dy < mi_size || x + dx < 0 || x + dx >= width - mi_size) {
+                                    *ptr++ = base;
+                                }
+                                else {
+                                    *ptr++ = dy * width + dx + base;
+                                }
+                            }
+                        }
+                        else {
+                            roff[y][x] = roff[y][x - 1];
+                            free(ptr);
+                        }
+                    }
+                    else {
+                        roff[y][x] = roff[y - 1][x];
+                        free(ptr);
+                    }
+                }
+            }
+
+            break;
+        default:
+            fprintf(stderr, "Wrong usage of init_ref_offset function!\n");
+            exit(-10);
+    }
+
+    return (roff);
+}
+
+void free_ref_offset(int height, int width, int type, int prd_order, int mi_size, int ***roff) {
+    int dy, dx, x, y, k;
+
+    int min_dx, max_dx, min_dy, max_dy;
+    int mmin_dx, mmax_dx, mmin_dy, mmax_dy;
+
+    min_dx = max_dx = min_dy = max_dy = 0;
+    mmin_dx = mmax_dx = mmin_dy = mmax_dy = 0;
+
+    switch (type) {
+        case INTRA_PRED: // Intra
+            // Check if mi_size should be also used
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dy > max_dy) max_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    //Conditions to check which references are available for each pixel
+                    if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
+                        (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
+                        free(roff[y][x]);
+                    }
+                }
+            }
+
+            safefree((void **) &(roff));
+
+            break;
+
+        case BACK_PRED: // Inter Backwards
+        case FOR_PRED: // Inter Forward
+            // Check if mi_size should be also used
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = idyx[k].y;
+                dx = idyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dy > max_dy) max_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    //Conditions to check which references are available for each pixel
+                    if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
+                        (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
+                        (y + max_dy >= height && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
+                        free(roff[y][x]);
+                    }
+                }
+            }
+
+            safefree((void **) &(roff));
+
+            break;
+
+        case MI_UP_PRED:
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = idyx[k].y;
+                dx = idyx[k].x;
+
+                if (dy < mmin_dy) mmin_dy = dy;
+                if (dy > mmax_dy) mmax_dy = dy;
+                if (dx < mmin_dx) mmin_dx = dx;
+                if (dx > mmax_dx) mmax_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    if (y < mi_size) {
+                        if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
+                            (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
+                            free(roff[y][x]);
+                        }
+                    }
+                    else {
+                        //Conditions to check which references are available for each pixel
+                        if ((y == mi_size && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width)) ||
+                            (y + mmin_dy <= mi_size && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width))) {
+                            free(roff[y][x]);
+                        }
+                    }
+                }
+            }
+
+            safefree((void **) &(roff));
+
+            break;
+
+        case MI_LEFT_PRED:
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = tridyx[k].y;
+                dx = tridyx[k].x;
+
+                if (dy < mmin_dy) mmin_dy = dy;
+                if (dy > mmax_dy) mmax_dy = dy;
+                if (dx < mmin_dx) mmin_dx = dx;
+                if (dx > mmax_dx) mmax_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    if (x < mi_size) {
+                        if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
+                            (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
+                            free(roff[y][x]);
+                        }
+                    }
+                    else {
+                        //Conditions to check which references are available for each pixel
+                        if ((y == 0 && (x == mi_size || x + mmin_dx <= mi_size || x + mmax_dx >= width)) ||
+                            (y + mmin_dy <= 0 && (x == mi_size || x + mmin_dx <= mi_size || x + mmax_dx >= width))) {
+                            free(roff[y][x]);
+                        }
+                    }
+                }
+            }
+
+            safefree((void **) &(roff));
+
+            break;
+
+        case MI_LDIAG_PRED:
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = idyx[k].y;
+                dx = idyx[k].x;
+
+                if (dy < mmin_dy) mmin_dy = dy;
+                if (dy > mmax_dy) mmax_dy = dy;
+                if (dx < mmin_dx) mmin_dx = dx;
+                if (dx > mmax_dx) mmax_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    if (y < mi_size || x < mi_size) {
+                        if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
+                            (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
+                            free(roff[y][x]);
+                        }
+                    }
+                    else {
+                        //Conditions to check which references are available for each pixel
+                        if ((y == mi_size && (x == mi_size || x + mmin_dx <= mi_size || x + mmax_dx >= width)) ||
+                            (y + mmin_dy <= mi_size && (x == mi_size || x + mmin_dx <= mi_size || x + mmax_dx >= width))) {
+                            free(roff[y][x]);
+                        }
+                    }
+                }
+            }
+            safefree((void **) &(roff));
+
+            break;
+
+        case MI_RDIAG_PRED:
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
+
+                if (dy < min_dy) min_dy = dy;
+                if (dx < min_dx) min_dx = dx;
+                if (dx > max_dx) max_dx = dx;
+            }
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = idyx[k].y;
+                dx = idyx[k].x;
+
+                if (dy < mmin_dy) mmin_dy = dy;
+                if (dy > mmax_dy) mmax_dy = dy;
+                if (dx < mmin_dx) mmin_dx = dx;
+                if (dx > mmax_dx) mmax_dx = dx;
+            }
+
+            //Cycle that runs for all the pixels
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    if (y < mi_size || x > width - mi_size) {
+                        if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
+                            (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
+                            free(roff[y][x]);
+                        }
+                    }
+                    else {
+                        //Conditions to check which references are available for each pixel
+                        if ((y == mi_size && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size)) ||
+                            (y + mmin_dy <= mi_size && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size))) {
+                            free(roff[y][x]);
+                        }
+                    }
+                }
+            }
+            safefree((void **) &(roff));
+
+            break;
+
+        default:
+            fprintf(stderr, "Wrong usage of free_ref_offset function!\n");
+            exit(-11);
+    }
+}
+
+int *init_ctx_weight(int type, int prd_order, int delta) {
+    int *ctx_weight, k;
+    double dy, dx;
+
+    ctx_weight = (int *) alloc_mem((prd_order) * sizeof(int));
+
+    switch (type) {
+        case INTRA_PRED: // Intra
+        case MI_BORDERS_PRED:
+            for (k = 0; k < prd_order; k++) {
+                dy = dyx[k].y;
+                dx = dyx[k].x;
+
+                ctx_weight[k] = (int) (64.0 / sqrt(dy * dy + dx * dx) + 0.5);
+            }
+
+            break;
+
+        case BACK_PRED: // Inter backwards
+        case FOR_PRED: // Inter forward
+        case MI_UP_PRED:
+        case MI_LDIAG_PRED:
+        case MI_RDIAG_PRED:
+            ctx_weight[0] = (int) (64.0 / sqrt(delta * delta) + 0.5);
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = idyx[k].y;
+                dx = idyx[k].x;
+
+                ctx_weight[k + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
+            }
+
+            break;
+
+        case MI_LEFT_PRED:
+            ctx_weight[0] = (int) (64.0 / sqrt(delta * delta) + 0.5);
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dy = tridyx[k].y;
+                dx = tridyx[k].x;
+
+                ctx_weight[k + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
+            }
+
+            break;
+
+        default:
+            fprintf(stderr, "Wrong usage of init_ctx_weight function!\n");
+            exit(-12);
+    }
+
+    return (ctx_weight);
 }
 
 int e2E(int e, int prd, int flag, int maxval) {

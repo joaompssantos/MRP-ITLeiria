@@ -8,603 +8,9 @@
 
 extern POINT dyx[];
 extern POINT idyx[];
+extern POINT tridyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
-
-/*--------------------------- init_ref_offset -----------------------*
- |  Function init_ref_offset
- |
- |  Purpose:  Calculates the offset of a reference to a given pixel
- |
- |  Parameters:
- |		img				--> Image structure (IN)
- |		prd_order		--> Number of intra reference pixels (IN)
- |		back_prd_order	--> Number of back reference pixels (IN)
- |		for_prd_order	--> Number of forward reference pixels (IN)
- |		mi_prd_order	--> Number of neighbour micro images reference pixels (IN)
- |		mi_size     	--> Micro image size (IN)
- |
- |  Returns:  int*** --> Array with the references offset
- *-------------------------------------------------------------------*/
-int ***init_ref_offset(DECODER *dec, int type, int prd_order, int mi_size) {
-	int ***roff, *ptr;
-	int x, y, dx, dy, k;
-
-	int min_dx, max_dx, min_dy, max_dy;
-
-	min_dx = max_dx = min_dy = max_dy = 0;
-
-	roff = (int ***) alloc_2d_array(dec->height, dec->width, sizeof(int *));
-
-	// TODO: simplify this
-	switch (type) {
-		case 0: // Intra
-			//Values to check for special cases
-			for (k = 0; k < prd_order; k++) {
-				dy = dyx[k].y;
-				dx = dyx[k].x;
-
-				if (dy < min_dy) min_dy = dy;
-				if (dx < min_dx) min_dx = dx;
-				if (dy > max_dy) max_dy = dy;
-				if (dx > max_dx) max_dx = dx;
-			}
-
-			//Cycle that runs for all the pixels
-			for (y = 0; y < dec->height; y++) {
-				for (x = 0; x < dec->width; x++) {
-					ptr = (int *) alloc_mem((prd_order) * sizeof(int));
-					//Conditions to check which references are available for each pixel
-					if (y == 0) {
-						if (x == 0) {
-							roff[y][x] = ptr;
-							dx = 0;
-							dy = dec->height;
-
-							for (k = 0; k < prd_order; k++) {
-								*ptr++ = dy * dec->width + dx; //Points to a line filled with 128 (if max_val = 256)
-							}
-						}
-						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-							dy = 0;
-
-							for (k = 0; k < prd_order; k++) {
-								dx = dyx[k].x;
-
-								if (x + dx < 0) dx = -x;
-								else if (dx >= 0) dx = -1;
-
-								*ptr++ = dy * dec->width + dx;
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-					else if (y + min_dy <= 0) {
-						if (x == 0) {
-							roff[y][x] = ptr;
-
-							for (k = 0; k < prd_order; k++) {
-								dy = dyx[k].y;
-
-								if (y + dy < 0) dy = -y;
-								else if (dy >= 0) dy = -1;
-
-								dx = dyx[k].x;
-
-								if (x + dx < 0) dx = -x;
-
-								*ptr++ = dy * dec->width + dx;
-							}
-						}
-						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-
-							for (k = 0; k < prd_order; k++) {
-								dy = dyx[k].y;
-
-								if (y + dy < 0) dy = -y;
-								dx = dyx[k].x;
-
-								if (x + dx < 0) dx = -x;
-								else if (x + dx >= dec->width) {
-									dx = dec->width - x - 1;
-								}
-
-								*ptr++ = dy * dec->width + dx;
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-					else {
-						roff[y][x] = roff[y - 1][x];
-						free(ptr);
-					}
-				}
-			}
-
-			break;
-
-		case 1: // Lenslet
-			// Check if mi_size should be also used
-			// TODO: isto ta mal!!
-
-//            if (prd_order > 0) {
-			if (1) {
-				for (k = 0; k < prd_order; k++) {
-					dy = dyx[k].y;
-					dx = dyx[k].x;
-
-					if (dy < min_dy) min_dy = dy;
-					if (dx < min_dx) min_dx = dx;
-					if (dx > max_dx) max_dx = dx;
-				}
-			}
-			else {
-				for (k = 0; k < prd_order - 1; k++) {
-					dy = idyx[k].y;
-					dx = idyx[k].x;
-
-					if (dy < min_dy) min_dy = dy;
-					if (dy > max_dy) max_dy = dy;
-					if (dx < min_dx) min_dx = dx;
-					if (dx > max_dx) max_dx = dx;
-				}
-			}
-
-			//Cycle that runs for all the pixels
-			for (y = 0; y < dec->height; y++) {
-				for (x = 0; x < dec->width; x++) {
-					ptr = (int *) alloc_mem((prd_order) * sizeof(int));
-
-					int base = -dec->width * mi_size;
-
-					//Micro image reference offset TODO: confirmar
-                    if (y < mi_size) {
-						if (y == 0) {
-							if (x == 0) {
-								roff[y][x] = ptr;
-								dx = 0;
-								dy = dec->height;
-
-								for (k = 0; k < prd_order; k++) {
-									*ptr++ = dy * dec->width + dx; //Points to a line filled with 128 (if max_val = 256)
-								}
-							}
-							else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
-								roff[y][x] = ptr;
-								dy = 0;
-
-								for (k = 0; k < prd_order; k++) {
-									dx = dyx[k].x;
-
-									if (x + dx < 0) dx = -x;
-									else if (dx >= 0) dx = -1;
-
-									*ptr++ = dy * dec->width + dx;
-								}
-							}
-							else {
-								roff[y][x] = roff[y][x - 1];
-								free(ptr);
-							}
-						}
-						else if (y + min_dy <= 0) {
-							if (x == 0) {
-								roff[y][x] = ptr;
-
-								for (k = 0; k < prd_order; k++) {
-									dy = dyx[k].y;
-
-									if (y + dy < 0) dy = -y;
-									else if (dy >= 0) dy = -1;
-
-									dx = dyx[k].x;
-
-									if (x + dx < 0) dx = -x;
-
-									*ptr++ = dy * dec->width + dx;
-								}
-							}
-							else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
-								roff[y][x] = ptr;
-
-								for (k = 0; k < prd_order; k++) {
-									dy = dyx[k].y;
-
-									if (y + dy < 0) dy = -y;
-									dx = dyx[k].x;
-
-									if (x + dx < 0) dx = -x;
-									else if (x + dx >= dec->width) {
-										dx = dec->width - x - 1;
-									}
-
-									*ptr++ = dy * dec->width + dx;
-								}
-							}
-							else {
-								roff[y][x] = roff[y][x - 1];
-								free(ptr);
-							}
-						}
-						else {
-							roff[y][x] = roff[y - 1][x];
-							free(ptr);
-						}
-					}
-                    else if (y == mi_size) {
-						if (x == 0) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < mi_size || x + dx < 0) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < mi_size || x + dx < 0 || x + dx >= dec->width) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-                    else if (y + min_dy <= mi_size) {
-						if (x == 0) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < mi_size || x + dx < 0) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < 0 || x + dx < 0 || x + dx >= dec->width) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-                    else if (y + max_dy >= dec->height) {
-						if (x == 0 || x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy >= dec->height || x + dx < 0 || x + dx >= dec->width) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-                    else {
-						roff[y][x] = roff[y - 1][x];
-						free(ptr);
-					}
-				}
-			}
-
-			break;
-
-		case 2: // Inter Backwards
-			for (k = 0; k < prd_order - 1; k++) {
-				dy = idyx[k].y;
-				dx = idyx[k].x;
-
-				if (dy < min_dy) min_dy = dy;
-				if (dy > max_dy) max_dy = dy;
-				if (dx < min_dx) min_dx = dx;
-				if (dx > max_dx) max_dx = dx;
-			}
-
-			//Cycle that runs for all the pixels
-			for (y = 0; y < dec->height; y++) {
-				for (x = 0; x < dec->width; x++) {
-					ptr = (int *) alloc_mem((prd_order) * sizeof(int));
-
-					//Back reference offset
-					int base = -dec->width * (dec->height + 1);
-
-					if (y == 0) {
-						if (x == 0) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < 0 || x + dx < 0) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < 0 || x + dx < 0 || x + dx >= dec->width) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-					else if (y + min_dy <= 0) {
-						if (x == 0) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < 0 || x + dx < 0) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < 0 || x + dx < 0 || x + dx >= dec->width) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-					else if (y + max_dy >= dec->height) {
-						if (x == 0 || x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy >= dec->height || x + dx < 0 || x + dx >= dec->width) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-					else {
-						roff[y][x] = roff[y - 1][x];
-						free(ptr);
-					}
-				}
-			}
-
-			break;
-
-		case 3: // Inter Forward
-			for (k = 0; k < prd_order - 1; k++) {
-				dy = idyx[k].y;
-				dx = idyx[k].x;
-
-				if (dy < min_dy) min_dy = dy;
-				if (dy > max_dy) max_dy = dy;
-				if (dx < min_dx) min_dx = dx;
-				if (dx > max_dx) max_dx = dx;
-			}
-
-			//Cycle that runs for all the pixels
-			for (y = 0; y < dec->height; y++) {
-				for (x = 0; x < dec->width; x++) {
-					ptr = (int *) alloc_mem((prd_order) * sizeof(int));
-
-					//Inter reference offset
-					int base = dec->width * (dec->height + 1);
-
-					if (y == 0) {
-						if (x == 0) {
-							roff[y][x] = ptr;
-
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < 0 || x + dx < 0) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < 0 || x + dx < 0 || x + dx >= dec->width) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-					else if (y + min_dy <= 0) {
-						if (x == 0) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < 0 || x + dx < 0) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else if (x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy < 0 || x + dx < 0 || x + dx >= dec->width) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-					else if (y + max_dy >= dec->height) {
-						if (x == 0 || x + min_dx <= 0 || x + max_dx >= dec->width) {
-							roff[y][x] = ptr;
-							*ptr++ = base;
-
-							for (k = 0; k < prd_order - 1; k++) {
-								dy = idyx[k].y;
-								dx = idyx[k].x;
-
-								if (y + dy >= dec->height || x + dx < 0 || x + dx >= dec->width) {
-									*ptr++ = base;
-								}
-								else {
-									*ptr++ = dy * dec->width + dx + base;
-								}
-							}
-						}
-						else {
-							roff[y][x] = roff[y][x - 1];
-							free(ptr);
-						}
-					}
-					else {
-						roff[y][x] = roff[y - 1][x];
-						free(ptr);
-					}
-				}
-			}
-
-			break;
-		default:
-			fprintf(stderr, "Wrong usage of init_ref_offset function!\n");
-			exit(-10);
-	}
-
-	return (roff);
-}
 
 uint getbits(FILE *fp, int n) {
 	static int bitpos = 0;
@@ -631,22 +37,30 @@ int read_class(FILE *fp) {
 	return(getbits(fp, 8));
 }
 
-DECODER *init_decoder(FILE *fp, int **back_ref_error, int **for_ref_error, int version, int width, int height, int maxval, int num_comp, int num_group, int prd_order, int back_prd_order, int for_prd_order, int mi_prd_order, int mi_size, int num_pmodel, int coef_precision, int pm_accuracy, int f_huffman, int quadtree_depth, int delta, int depth) {
+DECODER *init_decoder(FILE *fp, int **back_ref_error, int **for_ref_error, int width, int height, int maxval, int num_comp, int num_group, int prd_order, int back_prd_order, int for_prd_order, int mi_size, int *mi_prd_order, int num_pmodel, int coef_precision, int pm_accuracy, int f_huffman, int quadtree_depth, int delta, int depth) {
 	DECODER *dec;
 	int i;
 
 	dec = (DECODER *)alloc_mem(sizeof(DECODER));
 
-	dec->version = version;
 	dec->width = width;
 	dec->height = height;
 	dec->maxval = maxval;
 	dec->num_comp = num_comp;
 	dec->num_group = num_group;
+
 	dec->prd_order = prd_order;
 	dec->back_prd_order = back_prd_order;
 	dec->for_prd_order = for_prd_order;
-	dec->mi_prd_order = mi_prd_order;
+
+	dec->mi_prd_order[UP] = mi_prd_order[UP];
+	dec->mi_prd_order[LEFT] = mi_prd_order[LEFT];
+	dec->mi_prd_order[RDIAG] = mi_prd_order[RDIAG];
+	dec->mi_prd_order[LDIAG] = mi_prd_order[LDIAG];
+
+	dec->full_prd_order = dec->prd_order + dec->back_prd_order + dec->for_prd_order + dec->mi_prd_order[UP] +
+						  dec->mi_prd_order[LEFT] + dec->mi_prd_order[RDIAG] + dec->mi_prd_order[LDIAG];
+
 	dec->mi_size = mi_size;
 	dec->num_pmodel = num_pmodel;
 	dec->coef_precision = coef_precision;
@@ -659,7 +73,7 @@ DECODER *init_decoder(FILE *fp, int **back_ref_error, int **for_ref_error, int v
 
 	dec->num_class = read_class(fp);
 
-	dec->predictor = (int **)alloc_2d_array(dec->num_class, dec->prd_order + dec->mi_prd_order + dec->back_prd_order + dec->for_prd_order, sizeof(int));
+	dec->predictor = (int **)alloc_2d_array(dec->num_class, dec->full_prd_order, sizeof(int));
 
 	dec->err = (int ***)alloc_3d_array(dec->height, dec->width, 3, sizeof(int));
 
@@ -683,7 +97,60 @@ DECODER *init_decoder(FILE *fp, int **back_ref_error, int **for_ref_error, int v
 		}
 	}
 
-	dec->ctx_weight = init_ctx_weight(dec->prd_order, dec->back_prd_order, dec->for_prd_order, dec->mi_prd_order, dec->delta);
+	//Initiation of the reference offset
+	dec->intra_roff = init_ref_offset(dec->height, dec->width, INTRA_PRED, dec->prd_order, 0);
+	// Keeps the weights used for the residue encoding context
+	dec->intra_ctx_weight = init_ctx_weight(INTRA_PRED, dec->prd_order, dec->delta);
+
+	if (dec->back_prd_order > 0) {
+		dec->back_roff = init_ref_offset(dec->height, dec->width, BACK_PRED, dec->back_prd_order, 0);
+		dec->back_ctx_weight = init_ctx_weight(BACK_PRED, dec->back_prd_order, dec->delta);
+	}
+
+	if (dec->for_prd_order > 0) {
+		dec->for_roff = init_ref_offset(dec->height, dec->width, FOR_PRED, dec->for_prd_order, 0);
+		dec->for_ctx_weight = init_ctx_weight(FOR_PRED, dec->prd_order, dec->delta);
+	}
+
+	if (dec->mi_prd_order[UP] > 0) {
+		dec->mi_up_roff = init_ref_offset(dec->height, dec->width, MI_UP_PRED, dec->mi_prd_order[UP], dec->mi_size);
+		dec->mi_up_ctx_weight = init_ctx_weight(MI_UP_PRED, dec->mi_prd_order[UP], dec->delta);
+
+		dec->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, dec->mi_prd_order[UP], dec->delta);
+	}
+
+	if (dec->mi_prd_order[LEFT] > 0) {
+		dec->mi_left_roff = init_ref_offset(dec->height, dec->width, MI_LEFT_PRED, dec->mi_prd_order[LEFT], dec->mi_size);
+		dec->mi_left_ctx_weight = init_ctx_weight(MI_LEFT_PRED, dec->mi_prd_order[LEFT], dec->delta);
+
+		if (dec->mi_prd_order[LEFT] > dec->mi_prd_order[UP]) {
+			dec->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, dec->mi_prd_order[LEFT], dec->delta);
+		}
+	}
+
+	if (dec->mi_prd_order[LDIAG] > 0) {
+		dec->mi_ldiag_roff = init_ref_offset(dec->height, dec->width, MI_LDIAG_PRED, dec->mi_prd_order[LDIAG], dec->mi_size);
+		dec->mi_ldiag_ctx_weight = init_ctx_weight(MI_LDIAG_PRED, dec->mi_prd_order[LDIAG], dec->delta);
+
+		if (dec->mi_prd_order[LDIAG] > dec->mi_prd_order[UP] && dec->mi_prd_order[LDIAG] > dec->mi_prd_order[LEFT]) {
+			dec->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, dec->mi_prd_order[LDIAG], dec->delta);
+		}
+	}
+
+	if (dec->mi_prd_order[RDIAG] > 0) {
+		dec->mi_rdiag_roff = init_ref_offset(dec->height, dec->width, MI_RDIAG_PRED, dec->mi_prd_order[RDIAG], dec->mi_size);
+		dec->mi_rdiag_ctx_weight = init_ctx_weight(MI_RDIAG_PRED, dec->mi_prd_order[RDIAG], dec->delta);
+
+		if (dec->mi_prd_order[RDIAG] > dec->mi_prd_order[UP] && dec->mi_prd_order[RDIAG] > dec->mi_prd_order[LEFT] &&
+			dec->mi_prd_order[RDIAG] > dec->mi_prd_order[LDIAG]) {
+			dec->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, dec->mi_prd_order[RDIAG], dec->delta);
+		}
+	}
+
+	if (dec->f_huffman == 0) {
+		dec->rc = rc_init();
+		rc_startdec(fp, dec->rc);
+	}
 
 	// Quadtree map
 	if (dec->quadtree_depth > 0) {
@@ -753,9 +220,45 @@ void free_decoder(DECODER *dec) {
 
 	free(dec->predictor);
 	free(dec->err);
-	free(dec->ctx_weight);
 
-	if (dec->quadtree_depth > 0) {
+	free(dec->intra_ctx_weight);
+    free_ref_offset(dec->height, dec->width, INTRA_PRED, dec->prd_order, 0, dec->intra_roff);
+
+	if(dec->back_prd_order > 0) {
+	    free(dec->back_ctx_weight);
+        free_ref_offset(dec->height, dec->width, BACK_PRED, dec->back_prd_order, 0, dec->back_roff);
+	}
+
+	if(dec->for_prd_order > 0) {
+	    free(dec->for_ctx_weight);
+        free_ref_offset(dec->height, dec->width, FOR_PRED, dec->for_prd_order, 0, dec->for_roff);
+
+    }
+
+	if(dec->mi_prd_order[UP] > 0) {
+	    free(dec->mi_up_ctx_weight);
+        free_ref_offset(dec->height, dec->width, MI_UP_PRED, dec->mi_prd_order[UP], dec->mi_size, dec->mi_up_roff);
+	}
+
+	if(dec->mi_prd_order[LEFT] > 0) {
+	    free(dec->mi_left_ctx_weight);
+        free_ref_offset(dec->height, dec->width, MI_LEFT_PRED, dec->mi_prd_order[LEFT], dec->mi_size, dec->mi_left_roff);
+	}
+
+	if(dec->mi_prd_order[LDIAG] > 0) {
+	    free(dec->mi_ldiag_ctx_weight);
+        free_ref_offset(dec->height, dec->width, MI_LDIAG_PRED, dec->mi_prd_order[LDIAG], dec->mi_size, dec->mi_ldiag_roff);
+	}
+
+	if(dec->mi_prd_order[RDIAG] > 0) {
+	    free(dec->mi_rdiag_ctx_weight);
+        free_ref_offset(dec->height, dec->width, MI_RDIAG_PRED, dec->mi_prd_order[RDIAG], dec->mi_size, dec->mi_rdiag_roff);
+	}
+
+	if(dec->mi_prd_order[UP] > 0 || dec->mi_prd_order[LEFT] > 0 || dec->mi_prd_order[LDIAG] > 0 || dec->mi_prd_order[RDIAG] > 0) free(dec->mi_borders_ctx_weight);
+
+
+    if (dec->quadtree_depth > 0) {
 		for (i = dec->quadtree_depth - 1; i >= 0; i--) {
 			free(dec->qtmap[i]);
 		}
@@ -794,7 +297,10 @@ void free_decoder(DECODER *dec) {
 	free(dec);
 }
 
-void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, int *frames, int *depth, int *bframes, int *num_comp, int *num_group, int *prd_order, int *mi_prd_order, int *mi_size, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta, int *hevc, int *hist_bytes) {
+void read_header(FILE *fp, int *width, int *height, int *maxval, int *frames, int *depth, int *bframes, int *num_comp,
+				 int *num_group, int prd_order[6], int *mi_size, int mi_prd_order[4], int *num_pmodel,
+				 int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta, int *hevc,
+				 int *hist_bytes) {
 	int i = 0;
 
 	if (getbits(fp, 16) != MAGIC_NUMBER) {
@@ -802,7 +308,6 @@ void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, i
 		exit(1);
 	}
 
-	*version = getbits(fp, 16);
 	*width = getbits(fp, 16);
 	*height = getbits(fp, 16);
 	*maxval = getbits(fp, 16);
@@ -812,12 +317,15 @@ void read_header(FILE *fp, int *version, int *width, int *height, int *maxval, i
 	*hevc = getbits(fp, 1);
 	*num_comp = getbits(fp, 4);
 	*num_group = getbits(fp, 6);
+
 	for (i = 0; i < 6; i++) {
 		prd_order[i] = getbits(fp, 8);
 	}
 
-	*mi_prd_order = getbits(fp, 8);
 	*mi_size = getbits(fp, 8);
+	for (i = 0; i < 4; i++) {
+		mi_prd_order[i] = getbits(fp, 8);
+	}
 
 	*delta = getbits(fp, 8);
 	*num_pmodel = getbits(fp, 6) + 1;
@@ -870,10 +378,8 @@ int decode_golomb(FILE *fp, int m) {
 void decode_predictor(FILE *fp, DECODER *dec) {
 	int k, m, cl, coef, sgn;
 
-	int prd_order = dec->prd_order + dec->mi_prd_order + dec->back_prd_order + dec->for_prd_order;
-
 	if (dec->f_huffman == 1) {
-		for (k = 0; k < prd_order; k++) {
+		for (k = 0; k < dec->full_prd_order; k++) {
 			m = getbits(fp, 4);
 
 			for (cl = 0; cl < dec->num_class; cl++) {
@@ -903,7 +409,7 @@ void decode_predictor(FILE *fp, DECODER *dec) {
 			pm->cumfreq[k + 1] = pm->cumfreq[k] + pm->freq[k];
 		}
 
-		for (k = 0; k < prd_order; k++) {
+		for (k = 0; k < dec->full_prd_order; k++) {
 			m = rc_decode(fp, dec->rc, pm, MAX_COEF + 2, MAX_COEF + 18) - (MAX_COEF + 2);
 			set_spmodel(pm, MAX_COEF + 1, m);
 
@@ -1178,337 +684,114 @@ void decode_class(FILE *fp, DECODER *dec) {
 }
 
 int calc_udec(DECODER *dec, int y, int x) {
-//	int u, k, *err_p, *wt_p;
-//	int *intra_roff_p = NULL, *mi_roff_p = NULL, *back_roff_p = NULL, *for_roff_p = NULL;
-//
-//	intra_roff_p = dec->intra_roff[y][x];
-//	if (dec->mi_prd_order > 0) mi_roff_p = dec->mi_roff[y][x];
-//	if (dec->back_prd_order > 0) back_roff_p = dec->back_roff[y][x];
-//	if (dec->for_prd_order > 0) for_roff_p = dec->for_roff[y][x];
-//
-//	err_p = &dec->err[1][y][x];
-//	wt_p = dec->ctx_weight;
-//	u = 0;
-//
-//	for (k = 0; k < dec->prd_order; k++) {
-//		u += err_p[*intra_roff_p++] * (*wt_p++);
-//	}
-//
-//	for (k = 0; k < dec->mi_prd_order; k++) {
-//		u += err_p[*mi_roff_p++] * (*wt_p++);
-//	}
-//
-//	for (k = 0; k < dec->back_prd_order; k++) {
-//		u += err_p[*back_roff_p++] * (*wt_p++);
-//	}
-//
-//	for (k = 0; k < dec->for_prd_order; k++) {
-//		u += err_p[*for_roff_p++] * (*wt_p++);
-//	}
+	int u, k, *err_p;
+	int *intra_wt_p, *back_wt_p = NULL, *for_wt_p = NULL;
+	int *mi_up_wt_p = NULL, *mi_left_wt_p = NULL, *mi_ldiag_wt_p = NULL, *mi_rdiag_wt_p = NULL;
+	int *intra_roff_p = NULL, *back_roff_p = NULL, *for_roff_p = NULL;
+	int *mi_up_roff_p = NULL, *mi_left_roff_p = NULL, *mi_ldiag_roff_p = NULL, *mi_rdiag_roff_p = NULL;
 
-	int ry, rx, u, k;
+	err_p = &dec->err[1][y][x];
+
+	intra_roff_p = dec->intra_roff[y][x];
+	intra_wt_p = dec->intra_ctx_weight;
+
+	if (dec->back_prd_order > 0) {
+		back_roff_p = dec->back_roff[y][x];
+		back_wt_p = dec->back_ctx_weight;
+	}
+
+	if (dec->for_prd_order > 0) {
+		for_roff_p = dec->for_roff[y][x];
+		for_wt_p = dec->for_ctx_weight;
+	}
+
+	if (dec->mi_prd_order[UP] > 0) {
+		mi_up_roff_p = dec->mi_up_roff[y][x];
+
+		mi_up_wt_p = (y < dec->mi_size) ? dec->mi_borders_ctx_weight : dec->mi_up_ctx_weight;
+	}
+
+	if (dec->mi_prd_order[LEFT] > 0) {
+		mi_left_roff_p = dec->mi_left_roff[y][x];
+
+		mi_left_wt_p = (x < dec->mi_size) ? dec->mi_borders_ctx_weight : dec->mi_left_ctx_weight;
+	}
+
+	if (dec->mi_prd_order[LDIAG] > 0) {
+		mi_ldiag_roff_p = dec->mi_ldiag_roff[y][x];
+
+		mi_ldiag_wt_p = (y < dec->mi_size || x < dec->mi_size) ? dec->mi_borders_ctx_weight : dec->mi_ldiag_ctx_weight;
+	}
+
+	if (dec->mi_prd_order[RDIAG] > 0) {
+		mi_rdiag_roff_p = dec->mi_rdiag_roff[y][x];
+		mi_rdiag_wt_p = (y < dec->mi_size || x > dec->width - dec->mi_size) ? dec->mi_borders_ctx_weight : dec->mi_rdiag_ctx_weight;
+	}
+
 	u = 0;
 
-	int min_dx, max_dx, min_dy;
-	int bmin_dx, bmax_dx, bmin_dy, bmax_dy;
-	int fmin_dx, fmax_dx, fmin_dy, fmax_dy;
-	int mmin_dx, mmax_dx, mmin_dy, mmax_dy;
-
-	min_dx = max_dx = min_dy = 0;
-	bmin_dx = bmax_dx = bmin_dy = bmax_dy = 0;
-	fmin_dx = fmax_dx = fmin_dy = fmax_dy = 0;
-	mmin_dx = mmax_dx = mmin_dy = mmax_dy = 0;
-
-	//Values to check for special cases
-	for (k = 0; k < dec->prd_order; k++) {
-		ry = dyx[k].y;
-		rx = dyx[k].x;
-
-		if (ry < min_dy) min_dy = ry;
-		if (rx < min_dx) min_dx = rx;
-		if (rx > max_dx) max_dx = rx;
-	}
-
-	if (y < dec->mi_size) {
-		//Values to check for special cases
-		for (k = 0; k < dec->mi_prd_order; k++) {
-			ry = dyx[k].y;
-			rx = dyx[k].x;
-
-			if (ry < mmin_dy) mmin_dy = ry;
-			if (rx < mmin_dx) mmin_dx = rx;
-			if (rx > mmax_dx) mmax_dx = rx;
-		}
-	}
-	else {
-		for (k = 0; k < dec->mi_prd_order - 1; k++) {
-			ry = idyx[k].y;
-			rx = idyx[k].x;
-
-			if (ry < mmin_dy) mmin_dy = ry;
-			if (ry > mmax_dy) mmax_dy = ry;
-			if (rx < mmin_dx) mmin_dx = rx;
-			if (rx > mmax_dx) mmax_dx = rx;
-		}
-	}
-
-    for (k = 0; k < dec->back_prd_order - 1; k++) {
-        ry = idyx[k].y;
-        rx = idyx[k].x;
-
-        if (ry < bmin_dy) bmin_dy = ry;
-        if (ry > bmax_dy) bmax_dy = ry;
-        if (rx < bmin_dx) bmin_dx = rx;
-        if (rx > bmax_dx) bmax_dx = rx;
-    }
-
-    for (k = 0; k < dec->for_prd_order - 1; k++) {
-        ry = idyx[k].y;
-        rx = idyx[k].x;
-
-        if (ry < fmin_dy) fmin_dy = ry;
-        if (ry > fmax_dy) fmax_dy = ry;
-        if (rx < fmin_dx) fmin_dx = rx;
-        if (rx > fmax_dx) fmax_dx = rx;
-    }
-
-	min_dy = -min_dy;
-	min_dx = -min_dx;
-	max_dx = dec->width - max_dx;
-
-	mmin_dy = -mmin_dy;
-	mmin_dx = -mmin_dx;
-	mmax_dx = dec->width - mmax_dx;
-	mmax_dy = dec->height - mmax_dy;
-
-	bmin_dy = -bmin_dy;
-	bmin_dx = -bmin_dx;
-	bmax_dx = dec->width - bmax_dx;
-	bmax_dy = dec->height - bmax_dy;
-
-	fmin_dy = -fmin_dy;
-	fmin_dx = -fmin_dx;
-	fmax_dx = dec->width - fmax_dx;
-	fmax_dy = dec->height - fmax_dy;
-
-	if (y >= min_dy && x >= min_dx && x < max_dx) {
+	if (y == 0 && x == 0) {
 		for (k = 0; k < dec->prd_order; k++) {
-			ry = y + dyx[k].y;
-			rx = x + dyx[k].x;
-			u += dec->err[1][ry][rx] * dec->ctx_weight[k];
-		}
-	}
-	else if (y == 0) {
-		if (x == 0) {
-			for (k = 0; k < dec->prd_order; k++) {
-				u += ((dec->maxval + 1) >> 2) * dec->ctx_weight[k];
-			}
-		}
-		else {
-			ry = 0;
-
-			for (k =0; k < dec->prd_order; k++) {
-				rx = x + dyx[k].x;
-
-				if (rx < 0) rx = 0;
-				else if (rx >= x) rx = x - 1;
-
-				u += dec->err[1][ry][rx] * dec->ctx_weight[k];
-			}
+			u += ((dec->maxval + 1) >> 2) * (*intra_wt_p++);
 		}
 	}
 	else {
-		if (x == 0) {
-			for (k = 0; k < dec->prd_order; k++) {
-				ry = y + dyx[k].y;
-
-				if (ry < 0) ry = 0;
-				else if (ry >= y) ry = y - 1;
-
-				rx = x + dyx[k].x;
-
-				if (rx < 0) rx = 0;
-
-				u += dec->err[1][ry][rx] * dec->ctx_weight[k];
-			}
-		}
-		else {
-			for (k = 0; k < dec->prd_order; k++) {
-				ry = y + dyx[k].y;
-
-				if (ry < 0) ry = 0;
-
-				rx = x + dyx[k].x;
-
-				if (rx < 0) rx = 0;
-				else if (rx >= dec->width) rx = dec->width - 1;
-
-				u += dec->err[1][ry][rx] * dec->ctx_weight[k];
-			}
+		for (k = 0; k < dec->prd_order; k++) {
+			u += err_p[*intra_roff_p++] * (*intra_wt_p++);
 		}
 	}
 
-//	FILE *fp2;
-//	if (y == 0 && x == 0) {
-//		fp2 = fileopen("udec_calculations.txt", "w");
-//	}
-//	else {
-//		fp2 = fileopen("udec_calculations.txt", "a");
-//	}
-//
-//	fprintf(fp2, "Pixel: %d %d\n\n", y, x);
-//	fprintf(fp2, "u = %d\n", u);
+	// + dec->width needed due to extra line in the encoder
+	for (k = 0; k < dec->back_prd_order; k++) {
+		u += err_p[*back_roff_p++ + dec->width] * (*back_wt_p++);
+	}
 
-	// TODO: improve this
-	if (dec->mi_prd_order > 0) {
-        if (y < dec->mi_size) {
-            if (y >= mmin_dy && x >= mmin_dx && x < mmax_dx) {
-                for (k = 0; k < dec->mi_prd_order; k++) {
-                    ry = y + dyx[k].y;
-                    rx = x + dyx[k].x;
+	// - dec->width needed due to extra line in the encoder
+	for (k = 0; k < dec->for_prd_order; k++) {
+		u += err_p[*for_roff_p++ - dec->width] * (*for_wt_p++);
+	}
 
-                    u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
-//					fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order]);
-                }
-            }
-            else if (y == 0) {
-                if (x == 0) {
-                    for (k = 0; k < dec->mi_prd_order; k++) {
-                        u += ((dec->maxval + 1) >> 2) * dec->ctx_weight[k + dec->prd_order];
-//						fprintf(fp2, "u = %d --> %d %d %d\n", u, dec->height * dec->width, ((dec->maxval + 1) >> 2), dec->ctx_weight[k + dec->prd_order]);
-                    }
-                }
-                else {
-                    ry = 0;
-
-                    for (k =0; k < dec->mi_prd_order; k++) {
-                        rx = x + dyx[k].x;
-
-                        if (rx < 0) rx = 0;
-                        else if (rx >= x) rx = x - 1;
-
-                        u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
-//						fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order]);
-                    }
-                }
-            }
-            else {
-                if (x == 0) {
-                    for (k = 0; k < dec->mi_prd_order; k++) {
-                        ry = y + dyx[k].y;
-
-                        if (ry < 0) ry = 0;
-                        else if (ry >= y) ry = y - 1;
-
-                        rx = x + dyx[k].x;
-
-                        if (rx < 0) rx = 0;
-
-                        u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
-//						fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order]);
-                    }
-                }
-                else {
-                    for (k = 0; k < dec->mi_prd_order; k++) {
-                        ry = y + dyx[k].y;
-
-                        if (ry < 0) ry = 0;
-
-                        rx = x + dyx[k].x;
-
-                        if (rx < 0) rx = 0;
-                        else if (rx >= dec->width) rx = dec->width - 1;
-
-                        u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order];
-//						fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order]);
-                    }
-                }
-            }
-	    }
-        else {
-			u += dec->err[1][y - dec->mi_size][x] * dec->ctx_weight[dec->prd_order];
-//			fprintf(fp2, "u = %d --> %d %d %d\n", u, (y - dec->mi_size - y) * dec->width, dec->err[1][y - dec->mi_size][x], dec->ctx_weight[dec->prd_order]);
-
-            if (y - dec->mi_size >= mmin_dy && x >= mmin_dx && x < mmax_dx && y < mmax_dy) {
-                for (k = 0; k < dec->mi_prd_order - 1; k++) {
-                    ry = y + idyx[k].y - dec->mi_size;
-                    rx = x + idyx[k].x;
-
-                    u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order + 1];
-//					fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order + 1]);
-                }
-            }
-            else {
-                for (k = 0; k < dec->mi_prd_order - 1; k++) {
-                    ry = y + idyx[k].y - dec->mi_size;
-                    rx = x + idyx[k].x;
-
-                    if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
-                        u += dec->err[1][y - dec->mi_size][x] * dec->ctx_weight[k + dec->prd_order + 1];
-//						fprintf(fp2, "u = %d --> %d %d %d\n", u, (y - dec->mi_size - y) * dec->width, dec->err[1][y - dec->mi_size][x], dec->ctx_weight[k + dec->prd_order + 1]);
-                    }
-                    else {
-                        u += dec->err[1][ry][rx] * dec->ctx_weight[k + dec->prd_order + 1];
-//						fprintf(fp2, "u = %d --> %d %d %d\n", u, (ry - y) * dec->width + (rx - x), dec->err[1][ry][rx], dec->ctx_weight[k + dec->prd_order + 1]);
-                    }
-                }
-            }
+	if (y == 0 && x == 0) {
+		for (k = 0; k < dec->mi_prd_order[UP]; k++) {
+			u += ((dec->maxval + 1) >> 2) * (*mi_up_wt_p++);
 		}
 	}
-//	fprintf(fp2, "\n\n");
-//	fclose(fp2);
-
-	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
-	if (dec->back_prd_order > 0) {
-		u += dec->err[0][y][x] * dec->ctx_weight[dec->prd_order + dec->mi_prd_order];
-
-		if (y >= bmin_dy && x >= bmin_dx && x < bmax_dx && y < bmax_dy) {
-			for (k = 0; k < dec->back_prd_order - 1; k++) {
-				ry = y + idyx[k].y;
-				rx = x + idyx[k].x;
-
-				u += dec->err[0][ry][rx] * dec->ctx_weight[k + dec->prd_order + dec->mi_prd_order + 1];
-			}
-		}
-		else {
-			for (k = 0; k < dec->back_prd_order - 1; k++) {
-				ry = y + idyx[k].y;
-				rx = x + idyx[k].x;
-
-				if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
-					u += dec->err[0][y][x] * dec->ctx_weight[k + dec->prd_order + dec->mi_prd_order + 1];
-				}
-				else {
-					u += dec->err[0][ry][rx] * dec->ctx_weight[k + dec->prd_order + dec->mi_prd_order + 1];
-				}
-			}
+	else {
+		for (k = 0; k < dec->mi_prd_order[UP]; k++) {
+			u += err_p[*mi_up_roff_p++] * (*mi_up_wt_p++);
 		}
 	}
 
-	//If inter prd order is different from zero and prd_order is less that NUM_UPELS
-	if (dec->for_prd_order > 0) {
-		u += dec->err[2][y][x] * dec->ctx_weight[dec->prd_order + dec->mi_prd_order + dec->back_prd_order];
-
-		if (y >= fmin_dy && x >= fmin_dx && x < fmax_dx && y < fmax_dy) {
-			for (k = 0; k < dec->for_prd_order - 1; k++) {
-				ry = y + idyx[k].y;
-				rx = x + idyx[k].x;
-
-				u += dec->err[2][ry][rx] * dec->ctx_weight[k + dec->prd_order + dec->mi_prd_order + dec->back_prd_order + 1];
-			}
+	if (y == 0 && x == 0) {
+		for (k = 0; k < dec->mi_prd_order[LEFT]; k++) {
+			u += ((dec->maxval + 1) >> 2) * (*mi_left_wt_p++);
 		}
-		else {
-			for (k = 0; k < dec->for_prd_order - 1; k++) {
-				ry = y + idyx[k].y;
-				rx = x + idyx[k].x;
+	}
+	else {
+		for (k = 0; k < dec->mi_prd_order[LEFT]; k++) {
+			u += err_p[*mi_left_roff_p++] * (*mi_left_wt_p++);
+		}
+	}
 
-				if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
-					u += dec->err[2][y][x] * dec->ctx_weight[k + dec->prd_order + dec->mi_prd_order + dec->back_prd_order + 1];
-				}
-				else {
-					u += dec->err[2][ry][rx] * dec->ctx_weight[k + dec->prd_order + dec->mi_prd_order + dec->back_prd_order + 1];
-				}
-			}
+	if (y == 0 && x == 0) {
+		for (k = 0; k < dec->mi_prd_order[LDIAG]; k++) {
+			u += ((dec->maxval + 1) >> 2) * (*mi_ldiag_wt_p++);
+		}
+	}
+	else {
+		for (k = 0; k < dec->mi_prd_order[LDIAG]; k++) {
+			u += err_p[*mi_ldiag_roff_p++] * (*mi_ldiag_wt_p++);
+		}
+	}
+
+	if (y == 0 && x == 0) {
+		for (k = 0; k < dec->mi_prd_order[RDIAG]; k++) {
+			u += ((dec->maxval + 1) >> 2) * (*mi_rdiag_wt_p++);
+		}
+	}
+	else {
+		for (k = 0; k < dec->mi_prd_order[RDIAG]; k++) {
+			u += err_p[*mi_rdiag_roff_p++] * (*mi_rdiag_wt_p++);
 		}
 	}
 
@@ -1519,327 +802,87 @@ int calc_udec(DECODER *dec, int y, int x) {
 	return (u);
 }
 
-int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
-//	int prd, k;
-//	img_t *org_p;
-//	int *intra_roff_p = NULL, *mi_roff_p = NULL, *back_roff_p = NULL, *for_roff_p = NULL;
-//
-//	intra_roff_p = dec->intra_roff[y][x];
-//	if (dec->mi_prd_order > 0) mi_roff_p = dec->mi_roff[y][x];
-//	if (dec->back_prd_order > 0) back_roff_p = dec->back_roff[y][x];
-//	if (dec->for_prd_order > 0) for_roff_p = dec->for_roff[y][x];
-//
-//	org_p = &video[1]->val[y][x];
-//
-//	prd = 0;
-//
-//	for (k = 0; k < dec->prd_order; k++) {
-//		prd += org_p[*intra_roff_p++] * dec->predictor[cl][k];
-//	}
-//
-//	for (k = 0; k < dec->mi_prd_order; k++) {
-//		prd += org_p[*mi_roff_p++] * dec->predictor[cl][k];
-//	}
-//
-//	for (k = 0; k < dec->back_prd_order; k++) {
-//		prd += org_p[*back_roff_p++] * dec->predictor[cl][k];
-//	}
-//
-//	for (k = 0; k < dec->for_prd_order; k++) {
-//		prd += org_p[*for_roff_p++] * dec->predictor[cl][k];
-//	}
+int calc_prd(img_t ***org, DECODER *dec, int cl, int y, int x) {
+	int k, prd, *coef_p;
+	img_t *org_p;
+	int *intra_roff_p = NULL, *back_roff_p = NULL, *for_roff_p = NULL;
+	int *mi_up_roff_p = NULL, *mi_left_roff_p = NULL, *mi_ldiag_roff_p = NULL, *mi_rdiag_roff_p = NULL;
 
-	int k, prd, rx, ry;
+	intra_roff_p = dec->intra_roff[y][x];
+	if (dec->back_prd_order > 0) back_roff_p = dec->back_roff[y][x];
+	if (dec->for_prd_order > 0) for_roff_p = dec->for_roff[y][x];
+	if (dec->mi_prd_order[UP] > 0) mi_up_roff_p = dec->mi_up_roff[y][x];
+	if (dec->mi_prd_order[LEFT] > 0) mi_left_roff_p = dec->mi_left_roff[y][x];
+	if (dec->mi_prd_order[LDIAG] > 0) mi_ldiag_roff_p = dec->mi_ldiag_roff[y][x];
+	if (dec->mi_prd_order[RDIAG] > 0) mi_rdiag_roff_p = dec->mi_rdiag_roff[y][x];
 
-	int dy, dx, min_dx, max_dx, min_dy;
-	int bmin_dx, bmax_dx, bmin_dy, bmax_dy;
-	int fmin_dx, fmax_dx, fmin_dy, fmax_dy;
-	int mmin_dx, mmax_dx, mmin_dy, mmax_dy;
-
-	min_dx = max_dx = min_dy = 0;
-	bmin_dx = bmax_dx = bmin_dy = bmax_dy = 0;
-	fmin_dx = fmax_dx = fmin_dy = fmax_dy = 0;
-	mmin_dx = mmax_dx = mmin_dy = mmax_dy = 0;
-
-	//Values to check for special cases
-	for (k = 0; k < dec->prd_order; k++) {
-		dy = dyx[k].y;
-		dx = dyx[k].x;
-
-		if (dy < min_dy) min_dy = dy;
-		if (dx < min_dx) min_dx = dx;
-		if (dx > max_dx) max_dx = dx;
-	}
-
-    if (y < dec->mi_size) {
-        //Values to check for special cases
-        for (k = 0; k < dec->mi_prd_order; k++) {
-            dy = dyx[k].y;
-            dx = dyx[k].x;
-
-            if (dy < mmin_dy) mmin_dy = dy;
-            if (dx < mmin_dx) mmin_dx = dx;
-            if (dx > mmax_dx) mmax_dx = dx;
-        }
-    }
-    else {
-        for (k = 0; k < dec->mi_prd_order - 1; k++) {
-            dy = idyx[k].y;
-            dx = idyx[k].x;
-
-            if (dy < mmin_dy) mmin_dy = dy;
-            if (dy > mmax_dy) mmax_dy = dy;
-            if (dx < mmin_dx) mmin_dx = dx;
-            if (dx > mmax_dx) mmax_dx = dx;
-        }
-    }
-
-	for (k = 0; k < dec->back_prd_order - 1; k++) {
-		dy = idyx[k].y;
-		dx = idyx[k].x;
-
-		if (dy < bmin_dy) bmin_dy = dy;
-		if (dy > bmax_dy) bmax_dy = dy;
-		if (dx < bmin_dx) bmin_dx = dx;
-		if (dx > bmax_dx) bmax_dx = dx;
-	}
-
-	for (k = 0; k < dec->for_prd_order - 1; k++) {
-		dy = idyx[k].y;
-		dx = idyx[k].x;
-
-		if (dy < fmin_dy) fmin_dy = dy;
-		if (dy > fmax_dy) fmax_dy = dy;
-		if (dx < fmin_dx) fmin_dx = dx;
-		if (dx > fmax_dx) fmax_dx = dx;
-	}
-
-	min_dy = -min_dy;
-    min_dx = -min_dx;
-    max_dx = dec->width - max_dx;
-
-	mmin_dy = -mmin_dy;
-	mmin_dx = -mmin_dx;
-	mmax_dx = dec->width - mmax_dx;
-	mmax_dy = dec->height - mmax_dy;
-
-    bmin_dy = -bmin_dy;
-    bmin_dx = -bmin_dx;
-    bmax_dx = dec->width - bmax_dx;
-    bmax_dy = dec->height - bmax_dy;
-
-    fmin_dy = -fmin_dy;
-    fmin_dx = -fmin_dx;
-    fmax_dx = dec->width - fmax_dx;
-    fmax_dy = dec->height - fmax_dy;
+	org_p = &org[1][y][x];
+	coef_p = dec->predictor[cl];
 
 	prd = 0;
 
-	if (y >= min_dy && x >= min_dx && x < max_dx) {
+	if (y == 0 && x == 0) {
 		for (k = 0; k < dec->prd_order; k++) {
-			ry = y + dyx[k].y;
-			rx = x + dyx[k].x;
-
-			prd += dec->predictor[cl][k] * video[1]->val[ry][rx];
-		}
-	}
-	else if (y == 0) {
-		if (x == 0) {
-			for (k = 0; k < dec->prd_order; k++) {
-				prd += dec->predictor[cl][k];
-			}
-
-			prd *= ((video[1]->maxval + 1) >> 1);
-		}
-		else {
-			ry = 0;
-
-			for (k = 0; k < dec->prd_order; k++) {
-				rx = x + dyx[k].x;
-
-				if (rx < 0) rx = 0;
-				else if (rx >= x) rx = x - 1;
-
-				prd += dec->predictor[cl][k] * video[1]->val[ry][rx];
-			}
+			prd += ((dec->maxval + 1) >> 1) * (*coef_p++);
 		}
 	}
 	else {
-		if (x == 0) {
-			for (k = 0; k < dec->prd_order; k++) {
-				ry = y + dyx[k].y;
-
-				if (ry < 0) ry = 0;
-				else if (ry >= y) ry = y - 1;
-
-				rx = x + dyx[k].x;
-
-				if (rx < 0) rx = 0;
-
-				prd += dec->predictor[cl][k] * video[1]->val[ry][rx];
-			}
-		}
-		else {
-			for (k = 0; k < dec->prd_order; k++) {
-				ry = y + dyx[k].y;
-
-				if (ry < 0) ry = 0;
-
-				rx = x + dyx[k].x;
-
-				if (rx < 0) rx = 0;
-				else if (rx >= video[1]->width) rx = video[1]->width - 1;
-
-				prd += dec->predictor[cl][k] * video[1]->val[ry][rx];
-			}
+		for (k = 0; k < dec->prd_order; k++) {
+			prd += org_p[*intra_roff_p++] * (*coef_p++);
 		}
 	}
 
-	//Micro image prediction calculation
-	if (dec->mi_prd_order > 0) {
-        if (y < dec->mi_size) {
-			if (y >= mmin_dy && x >= mmin_dx && x < mmax_dx) {
-				for (k = 0; k < dec->mi_prd_order; k++) {
-					ry = y + dyx[k].y;
-					rx = x + dyx[k].x;
+	// + dec->width needed due to extra line in the encoder
+	for (k = 0; k < dec->back_prd_order; k++) {
+		prd += org_p[*back_roff_p++ + dec->width] * (*coef_p++);
+	}
 
-					prd += dec->predictor[cl][k + dec->prd_order] * video[1]->val[ry][rx];
-				}
-			}
-			else if (y == 0) {
-				if (x == 0) {
-					for (k = 0; k < dec->mi_prd_order; k++) {
-						prd += dec->predictor[cl][k + dec->prd_order] * ((video[1]->maxval + 1) >> 1);
-					}
-				}
-				else {
-					ry = 0;
+	// - dec->width needed due to extra line in the encoder
+	for (k = 0; k < dec->for_prd_order; k++) {
+		prd += org_p[*for_roff_p++ - dec->width] * (*coef_p++);
+	}
 
-					for (k = 0; k < dec->mi_prd_order; k++) {
-						rx = x + dyx[k].x;
-
-						if (rx < 0) rx = 0;
-						else if (rx >= x) rx = x - 1;
-
-						prd += dec->predictor[cl][k + dec->prd_order] * video[1]->val[ry][rx];
-					}
-				}
-			}
-			else {
-				if (x == 0) {
-					for (k = 0; k < dec->mi_prd_order; k++) {
-						ry = y + dyx[k].y;
-
-						if (ry < 0) ry = 0;
-						else if (ry >= y) ry = y - 1;
-
-						rx = x + dyx[k].x;
-
-						if (rx < 0) rx = 0;
-
-						prd += dec->predictor[cl][k + dec->prd_order] * video[1]->val[ry][rx];
-					}
-				}
-				else {
-					for (k = 0; k < dec->mi_prd_order; k++) {
-						ry = y + dyx[k].y;
-
-						if (ry < 0) ry = 0;
-
-						rx = x + dyx[k].x;
-
-						if (rx < 0) rx = 0;
-						else if (rx >= video[1]->width) rx = video[1]->width - 1;
-
-						prd += dec->predictor[cl][k + dec->prd_order] * video[1]->val[ry][rx];
-					}
-				}
-			}
-	    }
-        else {
-			prd += dec->predictor[cl][dec->prd_order] * video[1]->val[y - dec->mi_size][x];
-
-			if (y - dec->mi_size >= mmin_dy && x >= mmin_dx && x < mmax_dx && y < mmax_dy) {
-				for (k = 0; k < dec->mi_prd_order - 1; k++) {
-					ry = y + idyx[k].y - dec->mi_size;
-					rx = x + idyx[k].x;
-
-					prd += dec->predictor[cl][k + dec->prd_order + 1] * video[1]->val[ry][rx];
-				}
-			}
-			else {
-				for (k = 0; k < dec->mi_prd_order - 1; k++) {
-					ry = y + idyx[k].y - dec->mi_size;
-					rx = x + idyx[k].x;
-
-					if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
-						prd += dec->predictor[cl][k + dec->prd_order + 1] * video[1]->val[y - dec->mi_size][x];
-					}
-					else {
-						prd += dec->predictor[cl][k + dec->prd_order + 1] * video[1]->val[ry][rx];
-					}
-				}
-			}
+	if (y == 0 && x == 0) {
+		for (k = 0; k < dec->mi_prd_order[UP]; k++) {
+			prd += ((dec->maxval + 1) >> 1) * (*coef_p++);
+		}
+	}
+	else {
+		for (k = 0; k < dec->mi_prd_order[UP]; k++) {
+			prd += org_p[*mi_up_roff_p++] * (*coef_p++);
 		}
 	}
 
-	//Back Inter prediction calculation
-	if (dec->back_prd_order == 1) {
-		prd += dec->predictor[cl][dec->prd_order + dec->mi_prd_order] * video[0]->val[y][x];
-	}
-	if (dec->back_prd_order > 1) {
-		prd += dec->predictor[cl][dec->prd_order + dec->mi_prd_order] * video[0]->val[y][x];
-
-		if (y >= bmin_dy && x >= bmin_dx && x < bmax_dx && y < bmax_dy) {
-			for (k = 0; k < dec->back_prd_order + dec->mi_prd_order - 1; k++) {
-				ry = y + idyx[k].y;
-				rx = x + idyx[k].x;
-
-				prd += dec->predictor[cl][k + dec->prd_order + dec->mi_prd_order + 1] * video[0]->val[ry][rx];
-			}
+	if (y == 0 && x == 0) {
+		for (k = 0; k < dec->mi_prd_order[LEFT]; k++) {
+			prd += ((dec->maxval + 1) >> 1) * (*coef_p++);
 		}
-		else {
-			for (k = 0; k < dec->back_prd_order - 1; k++) {
-				ry = y + idyx[k].y;
-				rx = x + idyx[k].x;
-
-				if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
-					prd += dec->predictor[cl][k + dec->prd_order + dec->mi_prd_order + 1] * video[0]->val[y][x];
-				}
-				else {
-					prd += dec->predictor[cl][k + dec->prd_order + dec->mi_prd_order + 1] * video[0]->val[ry][rx];
-				}
-			}
+	}
+	else {
+		for (k = 0; k < dec->mi_prd_order[LEFT]; k++) {
+			prd += org_p[*mi_left_roff_p++] * (*coef_p++);
 		}
 	}
 
-	//Forward Inter prediction calculation
-	if (dec->for_prd_order == 1) {
-		prd += dec->predictor[cl][dec->prd_order + dec->mi_prd_order + dec->back_prd_order] * video[2]->val[y][x];
-	}
-	if (dec->for_prd_order > 1) {
-		prd += dec->predictor[cl][dec->prd_order + dec->mi_prd_order + dec->back_prd_order] * video[2]->val[y][x];
-
-		if (y >= fmin_dy && x >= fmin_dx && x < fmax_dx && y < fmax_dy) {
-			for (k = 0; k < dec->for_prd_order - 1; k++) {
-				ry = y + idyx[k].y;
-				rx = x + idyx[k].x;
-
-				prd += dec->predictor[cl][k + dec->prd_order + dec->mi_prd_order + dec->back_prd_order + 1] * video[2]->val[ry][rx];
-			}
+	if (y == 0 && x == 0) {
+		for (k = 0; k < dec->mi_prd_order[LDIAG]; k++) {
+			prd += ((dec->maxval + 1) >> 1) * (*coef_p++);
 		}
-		else {
-			for (k = 0; k < dec->for_prd_order - 1; k++) {
-				ry = y + idyx[k].y;
-				rx = x + idyx[k].x;
+	}
+	else {
+		for (k = 0; k < dec->mi_prd_order[LDIAG]; k++) {
+			prd += org_p[*mi_ldiag_roff_p++] * (*coef_p++);
+		}
+	}
 
-				if (ry < 0 || rx < 0 || ry >= dec->height || rx >= dec->width) {
-					prd += dec->predictor[cl][k + dec->prd_order + dec->mi_prd_order + dec->back_prd_order + 1] * video[2]->val[y][x];
-				}
-				else {
-					prd += dec->predictor[cl][k + dec->prd_order + dec->mi_prd_order + dec->back_prd_order + 1] * video[2]->val[ry][rx];
-				}
-			}
+	if (y == 0 && x == 0) {
+		for (k = 0; k < dec->mi_prd_order[RDIAG]; k++) {
+			prd += ((dec->maxval + 1) >> 1) * (*coef_p++);
+		}
+	}
+	else {
+		for (k = 0; k < dec->mi_prd_order[RDIAG]; k++) {
+			prd += org_p[*mi_rdiag_roff_p++] * (*coef_p++);
 		}
 	}
 
@@ -1849,61 +892,42 @@ int calc_prd(IMAGE *video[3], DECODER *dec, int cl, int y, int x) {
 	return (prd);
 }
 
-void print_contexts(int modo, uint cumfreq, uint freq, uint totfreq, int max, int min, int prd) {
-	if (modo == 0) system("rm /tmp/decoder_context.txt");
-
-	FILE *fp;
-	fp = fileopen("/tmp/decoder_context.txt", "a");
-
-	if (modo != -1) {
-		fprintf(fp, "Frame: %d\n", modo);
-		fprintf(fp, "Cum. Freq.\tFreq.\tTot. Freq.\tMax\tMin\tPrd:\n");
-	}
-	else {
-		fprintf(fp, "%d\t\t%d\t%d\t\t%d\t%d\t%d\n", cumfreq, freq, totfreq, max, min, prd);
-	}
-
-	fclose(fp);
-}
-
 IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 	int x, y, cl, gr, prd, u, e, E, p;
 
-	video[1] = alloc_image(dec->width, dec->height, dec->maxval);
+	// TODO: consider add org to decoder
+	img_t ***org = (img_t ***) alloc_3d_array(dec->height, dec->width, 3, sizeof(img_t));
+
+	for (y = 0; y < dec->height; y++) {
+		for (x = 0; x < dec->width; x++) {
+			if (dec->back_prd_order > 0) {
+				org[0][y][x] = video[0]->val[y][x];
+			}
+
+			if (dec->for_prd_order > 0) {
+				org[2][y][x] = video[2]->val[y][x];
+			}
+		}
+	}
 
 	if (dec->f_huffman == 1) {
 		VLC *vlc;
 		dec->vlcs = init_vlcs(dec->pmodels, dec->num_group, 1);
 
-//		system("rm udec.txt");
-//        FILE *fp2;
-//        fp2 = fileopen("udec.txt", "w"); // TODO: check why gr is not correct with arithmetic coding
-
-//        system("rm prddec.txt");
-//        FILE *fp3;
-//        fp3 = fileopen("prddec.txt", "w");
-
 		for (y = 0; y < dec->height; y++) {
 			for (x = 0; x < dec->width; x++) {
 				cl = dec->class[y][x];
-
 				u = calc_udec(dec, y, x);
-
 				gr = dec->uquant[cl][u];
-//				fprintf(fp2, "%d %d %d %d %d\n", y, x, u, cl, gr);
-				prd = calc_prd(video, dec, cl, y, x);
-//                fprintf(fp3, "%d %d %d\n", y, x, prd);
+				prd = calc_prd(org, dec, cl, y, x);
 				prd >>= (dec->coef_precision - 1);
 				p = (prd + 1) >> 1;
 				vlc = &dec->vlcs[gr][0];
 				dec->err[1][y][x] = E = decode_vlc(fp, vlc);
 				e = E2e(E, p, prd & 1, dec->maxval);
-				video[1]->val[y][x] = (img_t) (p + e);
+				org[1][y][x] = (img_t) (p + e);
 			}
 		}
-
-//        fclose(fp2);
-//		fclose(fp3);
 	}
 	else {
 		PMODEL *pm;
@@ -1913,13 +937,13 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 					cl = dec->class[y][x];
 					u = calc_udec(dec, y, x);
 					gr = dec->uquant[cl][u];
-					prd = calc_prd(video, dec, cl, y, x);
+					prd = calc_prd(org, dec, cl, y, x);
 					prd >>= (dec->coef_precision - 1);
 					p = (prd + 1) >> 1;
 					pm = dec->pmodels[gr][0];
 					dec->err[1][y][x] = E = rc_decode(fp, dec->rc, pm, 0, pm->size);
 					e = E2e(E, p, prd & 1, dec->maxval);
-					video[1]->val[y][x] = (img_t) (p + e);
+					org[1][y][x] = (img_t) (p + e);
 				}
 			}
 		}
@@ -1928,33 +952,34 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 			mask = (1 << dec->pm_accuracy) - 1;
 			shift = dec->coef_precision - dec->pm_accuracy;
 
-//			FILE *fp2;
-//			fp2 = fileopen("udec.txt", "a");
-
 			for (y = 0; y < dec->height; y++) {
 				for (x = 0; x < dec->width; x++) {
 					cl = dec->class[y][x];
 					u = calc_udec(dec, y, x);
 					gr = dec->uquant[cl][u];
-//                    fprintf(fp2, "%d %d %d %d %d %d\n", ff, y, x, u, cl, gr);
-					prd = calc_prd(video, dec, cl, y, x);
+					prd = calc_prd(org, dec, cl, y, x);
 					base = (dec->maxprd - prd + (1 << shift) / 2) >> shift;
 					pm = dec->pmodels[gr][0] + (base & mask);
 					base >>= dec->pm_accuracy;
-
-//					print_contexts(-1, 0, 0, pm->cumfreq[base+dec->maxval+1] - pm->cumfreq[base], base+dec->maxval+1, base, prd);
-
 					p = rc_decode(fp, dec->rc, pm, base, base+dec->maxval+1) - base;
-					video[1]->val[y][x] = (img_t) p;
+					org[1][y][x] = (img_t) p;
 					prd >>= (dec->coef_precision - 1);
 					e = (p << 1) - prd;
 					dec->err[1][y][x] = (e > 0)? (e - 1) : (-e);
 				}
 			}
-
-//			fclose(fp2);
 		}
 	}
+
+	video[1] = alloc_image(dec->width, dec->height, dec->maxval);
+
+	for (y = 0; y < dec->height; y++) {
+		for (x = 0; x < dec->width; x++) {
+			video[1]->val[y][x] = org[1][y][x];
+		}
+	}
+
+	free(org);
 
 	return (video[1]);
 }
@@ -2142,11 +1167,11 @@ IMAGE *histogram_unpacking(IMAGE *img, const int *backward_table) {
 
 int main(int argc, char **argv) {
 	int i, f, **error = NULL;
-	int version, width, height, maxval, frames, depth, bframes, num_comp, num_group, endianness = LITTLE_ENDIANNESS;
+	int width, height, maxval, frames, depth, bframes, bidirectional = 0, num_comp, num_group, endianness = LITTLE_ENDIANNESS;
 	int num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, hevc, hist_bytes;
 	int *backward_table = NULL;
 	int prd_order[6] = {0, 0, 0, 0, 0, 0};
-	int mi_prd_order = 0;
+	int mi_prd_order[4] = {0, 0, 0, 0};
 	int mi_size = 0;
 
 	IMAGE *video[3] = {NULL, NULL, NULL};
@@ -2201,7 +1226,9 @@ int main(int argc, char **argv) {
 	}
 
 	fp = fileopen(infile, "rb");
-	read_header(fp, &version, &width, &height, &maxval, &frames, &depth, &bframes, &num_comp, &num_group, prd_order, &mi_prd_order, &mi_size, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &hevc, &hist_bytes);
+	read_header(fp, &width, &height, &maxval, &frames, &depth, &bframes, &num_comp, &num_group, prd_order,
+				&mi_size, mi_prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta,
+				&hevc, &hist_bytes);
 
 	if (hist_bytes != 0) {
 		backward_table = decode_lookuptable(fp, hist_bytes, (int) pow(2, depth));
@@ -2216,139 +1243,123 @@ int main(int argc, char **argv) {
 		printf("Histogram packing on\n\n");
 	}
 	// Print prediction parameters to screen
-	if (frames == 1) {
-		printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
-	}
-	else if (bframes == 0) {
-		printf("Prediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\n", prd_order[0], prd_order[1], prd_order[2]);
+	if (mi_size > 0) {
+		if (frames == 1) {
+			printf("Prediction order:\n\tFrame I: %d + %d %d %d %d\n\n", prd_order[0], mi_prd_order[UP],
+				   mi_prd_order[LEFT], mi_prd_order[LDIAG], mi_prd_order[RDIAG]);
+		}
+		else if (bframes == 0) {
+			printf("Prediction order:\n\tFrame I: %d + %d %d %d %d\n\tFrame P: %d %d\n\n", prd_order[0],
+				   mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG], mi_prd_order[RDIAG], prd_order[1],
+				   prd_order[2]);
+
+			for (i = 3; i < 6; i++) {
+				prd_order[i] = 0;
+			}
+		}
+		else {
+			printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d + %d %d %d %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n",
+				   bframes == 0 ? 0 : bframes - 1, prd_order[0], mi_prd_order[UP], mi_prd_order[LEFT],
+				   mi_prd_order[LDIAG], mi_prd_order[RDIAG], prd_order[1], prd_order[2], prd_order[3], prd_order[4],
+				   prd_order[5]);
+		}
 	}
 	else {
-		printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n", bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
+		if (frames == 1) {
+			printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
+		}
+		else if (bframes == 0) {
+			printf("Prediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\n", prd_order[0], prd_order[1], prd_order[2]);
+
+			for (i = 3; i < 6; i++) {
+				prd_order[i] = 0;
+			}
+		}
+		else {
+			printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n",
+				   bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4],
+				   prd_order[5]);
+		}
 	}
 
-	if (bframes == 0) {
-		for (f = 0; f < frames; f++) {
-			printf("Decoding frame: %03d", f);
+	int back_reference = 0, for_reference = 0;
+	int **back_ref_error = NULL, **for_ref_error = NULL;
+	IMAGE **seq = (IMAGE **) alloc_mem(frames * sizeof(IMAGE));
+	int ***keep_error = NULL;
+	int first_frame = 0, conta = 0, final = 0;
+	int **bref = NULL;
 
-			if (f == 0) {
-				dec = init_decoder(fp, NULL, NULL, version, width, height, maxval, num_comp, num_group, prd_order[0], 0, 0, mi_prd_order, mi_size, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, depth);
+	if (hevc == 0) {
+		back_reference = 0;
+		for_reference = bframes;
+	}
+	else if (hevc == 1) {
+		keep_error = (int ***)alloc_mem((bframes + 1) * sizeof(int **));
+
+		for (f = 0; f < bframes + 1; f++) keep_error[f] = NULL;
+
+		bref = select_bref(bframes);
+
+		final = ((frames - 1) % bframes != 0) ? bframes * ((frames - 1) / bframes) + 1 : frames;
+	}
+
+	//Loop to decode all the frames
+	f = 0;
+
+	while(f < frames) {
+		printf("Decoding frame: %03d", f);
+
+		// Creates new DECODER structure
+		if (f == 0) {
+			dec = init_decoder(fp, NULL, NULL, width, height, maxval, num_comp, num_group, prd_order[0], 0, 0, mi_size,
+							   mi_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta,
+							   depth);
+		}
+		else if (bidirectional == 0) {
+			video[0] = video[1];
+
+			dec = init_decoder(fp, error, NULL, width, height, maxval, num_comp, num_group, prd_order[1], prd_order[2],
+							   0, mi_size, mi_prd_order, num_pmodel, coef_precision, pm_accuracy, f_huffman,
+							   quadtree_depth, delta, depth);
+
+			free(error);
+		}
+		else {
+			if ((f - first_frame) % bframes == 0) {
+				dec = init_decoder(fp, back_ref_error, NULL, width, height, maxval, num_comp, num_group, prd_order[1],
+								   prd_order[2], 0, mi_size, mi_prd_order, num_pmodel, coef_precision, pm_accuracy,
+								   f_huffman, quadtree_depth, delta, depth);
 			}
 			else {
-				video[0] = video[1];
-
-				dec = init_decoder(fp, error, NULL, version, width, height, maxval, num_comp, num_group, prd_order[1], prd_order[2], 0, mi_prd_order, mi_size, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, depth);
-				free(error);
+				dec = init_decoder(fp, back_ref_error, for_ref_error, width, height, maxval, num_comp, num_group,
+								   prd_order[3], prd_order[4], prd_order[5], mi_size, mi_prd_order, num_pmodel,
+								   coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, depth);
 			}
+		}
 
-			if (dec->f_huffman == 0) {
-				dec->rc = rc_init();
-				rc_startdec(fp, dec->rc);
-			}
+		decode_class(fp, dec);
+		decode_predictor(fp, dec);
+		decode_threshold(fp, dec);
 
-//			//Initiation of the reference offset
-//			dec->intra_roff = init_ref_offset(dec, 0, dec->prd_order, 0);
-//
-//			if (dec->mi_prd_order > 0) {
-//				dec->mi_roff = init_ref_offset(dec, 1, dec->mi_prd_order, dec->mi_size);
-//			}
-//
-//			if (dec->back_prd_order > 0) {
-//				dec->back_roff = init_ref_offset(dec, 2, dec->back_prd_order, 0);
-//			}
-//
-//			if (dec->for_prd_order > 0) {
-//				dec->for_roff = init_ref_offset(dec, 3, dec->for_prd_order, 0);
-//			}
+		dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
 
-			decode_class(fp, dec);
-			decode_predictor(fp, dec);
-			decode_threshold(fp, dec);
+		video[1] = decode_image(fp, video, dec);
 
-			dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
+		seq[f] = copy_yuv(video[1]);
 
-			video[1] = decode_image(fp, video, dec);
+		printf(" --> Process completed\n");
 
-            if (backward_table != NULL) {
-                IMAGE *unpacked = histogram_unpacking(video[1], backward_table);
-
-                write_yuv(unpacked, outfile, dec->depth, endianness);
-
-                safefree_yuv(&unpacked);
-            }
-            else {
-                write_yuv(video[1], outfile, dec->depth, endianness);
-            }
-
+		if (bidirectional == 0) {
 			error = get_dec_err(dec, 1);
-			free_decoder(dec);
 
 			if (f > 0) {
 				free(video[0]->val);
 				free(video[0]);
 			}
 
-			printf(" --> Process completed\n");
+			f++;
 		}
-
-		free(video[1]->val);
-		free(video[1]);
-
-		free(error);
-	}
-	else {
-		int back_reference = 0, for_reference = 0;
-		int **back_ref_error = NULL, **for_ref_error = NULL;
-		IMAGE **seq = (IMAGE **) alloc_mem(frames * sizeof(IMAGE));
-		int ***keep_error = NULL;
-		int first_frame = 0, conta = 0, final = 0;
-		int **bref = NULL;
-
-		if (hevc == 0) {
-			back_reference = 0;
-			for_reference = bframes;
-		}
-		else if (hevc == 1) {
-			keep_error = (int ***)alloc_mem((bframes + 1) * sizeof(int **));
-
-			for (f = 0; f < bframes + 1; f++) keep_error[f] = NULL;
-
-			bref = select_bref(bframes);
-
-			final = ((frames - 1) % bframes != 0) ? bframes * ((frames - 1) / bframes) + 1 : frames;
-		}
-
-		f = 0;
-
-		while(f < frames) {
-			printf("Decoding frame: %03d", f);
-
-			if (f == 0) {
-				dec = init_decoder(fp, NULL, NULL, version, width, height, maxval, num_comp, num_group, prd_order[0], 0, 0, mi_prd_order, mi_size, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, depth);
-			}
-			else if ((f - first_frame) % bframes == 0) {
-				dec = init_decoder(fp, back_ref_error, NULL, version, width, height, maxval, num_comp, num_group, prd_order[1], prd_order[2], 0, mi_prd_order, mi_size, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, depth);
-			}
-			else {
-				dec = init_decoder(fp, back_ref_error, for_ref_error, version, width, height, maxval, num_comp, num_group, prd_order[3], prd_order[4], prd_order[5], mi_prd_order, mi_size, num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, depth);
-			}
-
-			if (dec->f_huffman == 0) {
-				dec->rc = rc_init();
-				rc_startdec(fp, dec->rc);
-			}
-
-			decode_class(fp, dec);
-			decode_predictor(fp, dec);
-			decode_threshold(fp, dec);
-
-			dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
-
-			video[1] = decode_image(fp, video, dec);
-
-			seq[f] = copy_yuv(video[1]);
-
-			printf(" --> Process completed\n");
-
+		else {
 			if (hevc == 0) {
 				if (f == 0) {
 					f = bframes;
@@ -2505,28 +1516,39 @@ int main(int argc, char **argv) {
 					}
 				}
 			}
-
-			free_decoder(dec);
-			dec = NULL;
 		}
 
-		if (dec != NULL) free_decoder(dec);
+		free_decoder(dec);
+		dec = NULL;
+	}
 
-        for (f = 0; f < frames; f++) {
-            if (backward_table != NULL) {
-                IMAGE *unpacked = histogram_unpacking(seq[f], backward_table);
+	if (dec != NULL) free_decoder(dec);
 
-                write_yuv(unpacked, outfile, depth, endianness);
+	for (f = 0; f < frames; f++) {
+		if (backward_table != NULL) {
+			IMAGE *unpacked = histogram_unpacking(seq[f], backward_table);
 
-                safefree_yuv(&unpacked);
-            } else {
-                write_yuv(seq[f], outfile, depth, endianness);
-            }
+			write_yuv(unpacked, outfile, depth, endianness);
 
-            free(seq[f]->val);
-            free(seq[f]);
-        }
+			safefree_yuv(&unpacked);
+		}
+		else {
+			write_yuv(seq[f], outfile, depth, endianness);
+		}
 
+		free(seq[f]->val);
+		free(seq[f]);
+	}
+
+	free(seq);
+
+	if (bidirectional == 0) {
+		free(video[1]->val);
+		free(video[1]);
+
+		free(error);
+	}
+	else {
 		if (hevc == 0) {
 			if (video[1] != video[0] && video[1] != video[2]) {
 				if (video[1] != NULL) safefree_yuv(&video[1]);
@@ -2548,8 +1570,7 @@ int main(int argc, char **argv) {
 			safefree((void **)&keep_error);
 		}
 
-        free(bref);
-		free(seq);
+		free(bref);
 	}
 
 	safefree((void **) &backward_table);
