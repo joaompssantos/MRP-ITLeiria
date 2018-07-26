@@ -37,7 +37,10 @@ int read_class(FILE *fp) {
 	return(getbits(fp, 8));
 }
 
-DECODER *init_decoder(FILE *fp, int **back_ref_error, int **for_ref_error, int width, int height, int maxval, int num_comp, int num_group, int prd_order, int back_prd_order, int for_prd_order, int mi_size, int *mi_prd_order, int num_pmodel, int coef_precision, int pm_accuracy, int f_huffman, int quadtree_depth, int delta, int depth) {
+DECODER *init_decoder(FILE *fp, int **back_ref_error, int **for_ref_error, int width, int height, int maxval,
+                      int num_comp, int num_group, int prd_order, int back_prd_order, int for_prd_order, int mi_size[2],
+                      int *mi_prd_order, int num_pmodel, int coef_precision, int pm_accuracy, int f_huffman,
+                      int quadtree_depth, int delta, int depth) {
 	DECODER *dec;
 	int i;
 
@@ -61,7 +64,8 @@ DECODER *init_decoder(FILE *fp, int **back_ref_error, int **for_ref_error, int w
 	dec->full_prd_order = dec->prd_order + dec->back_prd_order + dec->for_prd_order + dec->mi_prd_order[UP] +
 						  dec->mi_prd_order[LEFT] + dec->mi_prd_order[RDIAG] + dec->mi_prd_order[LDIAG];
 
-	dec->mi_size = mi_size;
+	dec->mi_size[HEIGHT] = mi_size[HEIGHT];
+	dec->mi_size[WIDTH] = mi_size[WIDTH];
 	dec->num_pmodel = num_pmodel;
 	dec->coef_precision = coef_precision;
 	dec->pm_accuracy = pm_accuracy;
@@ -109,7 +113,7 @@ DECODER *init_decoder(FILE *fp, int **back_ref_error, int **for_ref_error, int w
 
 	if (dec->for_prd_order > 0) {
 		dec->for_roff = init_ref_offset(dec->height, dec->width, FOR_PRED, dec->for_prd_order, 0);
-		dec->for_ctx_weight = init_ctx_weight(FOR_PRED, dec->prd_order, dec->delta);
+		dec->for_ctx_weight = init_ctx_weight(FOR_PRED, dec->for_prd_order, dec->delta);
 	}
 
 	if (dec->mi_prd_order[UP] > 0) {
@@ -298,7 +302,7 @@ void free_decoder(DECODER *dec) {
 }
 
 void read_header(FILE *fp, int *width, int *height, int *maxval, int *frames, int *depth, int *bframes, int *num_comp,
-				 int *num_group, int prd_order[6], int *mi_size, int mi_prd_order[4], int *num_pmodel,
+				 int *num_group, int prd_order[6], int mi_size[2], int mi_prd_order[4], int *num_pmodel,
 				 int *coef_precision, int *pm_accuracy, int *f_huffman, int *quadtree_depth, int *delta, int *hevc,
 				 int *hist_bytes) {
 	int i = 0;
@@ -322,7 +326,9 @@ void read_header(FILE *fp, int *width, int *height, int *maxval, int *frames, in
 		prd_order[i] = getbits(fp, 8);
 	}
 
-	*mi_size = getbits(fp, 8);
+	mi_size[HEIGHT] = getbits(fp, 16);
+    mi_size[WIDTH] = getbits(fp, 16);
+
 	for (i = 0; i < 4; i++) {
 		mi_prd_order[i] = getbits(fp, 8);
 	}
@@ -708,24 +714,24 @@ int calc_udec(DECODER *dec, int y, int x) {
 	if (dec->mi_prd_order[UP] > 0) {
 		mi_up_roff_p = dec->mi_up_roff[y][x];
 
-		mi_up_wt_p = (y < dec->mi_size) ? dec->mi_borders_ctx_weight : dec->mi_up_ctx_weight;
+		mi_up_wt_p = (y < dec->mi_size[HEIGHT]) ? dec->mi_borders_ctx_weight : dec->mi_up_ctx_weight;
 	}
 
 	if (dec->mi_prd_order[LEFT] > 0) {
 		mi_left_roff_p = dec->mi_left_roff[y][x];
 
-		mi_left_wt_p = (x < dec->mi_size) ? dec->mi_borders_ctx_weight : dec->mi_left_ctx_weight;
+		mi_left_wt_p = (x < dec->mi_size[WIDTH]) ? dec->mi_borders_ctx_weight : dec->mi_left_ctx_weight;
 	}
 
 	if (dec->mi_prd_order[LDIAG] > 0) {
 		mi_ldiag_roff_p = dec->mi_ldiag_roff[y][x];
 
-		mi_ldiag_wt_p = (y < dec->mi_size || x < dec->mi_size) ? dec->mi_borders_ctx_weight : dec->mi_ldiag_ctx_weight;
+		mi_ldiag_wt_p = (y < dec->mi_size[HEIGHT] || x < dec->mi_size[WIDTH]) ? dec->mi_borders_ctx_weight : dec->mi_ldiag_ctx_weight;
 	}
 
 	if (dec->mi_prd_order[RDIAG] > 0) {
 		mi_rdiag_roff_p = dec->mi_rdiag_roff[y][x];
-		mi_rdiag_wt_p = (y < dec->mi_size || x > dec->width - dec->mi_size) ? dec->mi_borders_ctx_weight : dec->mi_rdiag_ctx_weight;
+		mi_rdiag_wt_p = (y < dec->mi_size[HEIGHT] || x > dec->width - dec->mi_size[WIDTH]) ? dec->mi_borders_ctx_weight : dec->mi_rdiag_ctx_weight;
 	}
 
 	u = 0;
@@ -1172,7 +1178,7 @@ int main(int argc, char **argv) {
 	int *backward_table = NULL;
 	int prd_order[6] = {0, 0, 0, 0, 0, 0};
 	int mi_prd_order[4] = {0, 0, 0, 0};
-	int mi_size = 0;
+	int mi_size[2] = {0, 0};
 
 	IMAGE *video[3] = {NULL, NULL, NULL};
 	DECODER *dec = NULL;
@@ -1227,7 +1233,7 @@ int main(int argc, char **argv) {
 
 	fp = fileopen(infile, "rb");
 	read_header(fp, &width, &height, &maxval, &frames, &depth, &bframes, &num_comp, &num_group, prd_order,
-				&mi_size, mi_prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta,
+				mi_size, mi_prd_order, &num_pmodel, &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta,
 				&hevc, &hist_bytes);
 
 	if (hist_bytes != 0) {
@@ -1243,44 +1249,29 @@ int main(int argc, char **argv) {
 		printf("Histogram packing on\n\n");
 	}
 	// Print prediction parameters to screen
-	if (mi_size > 0) {
-		if (frames == 1) {
-			printf("Prediction order:\n\tFrame I: %d + %d %d %d %d\n\n", prd_order[0], mi_prd_order[UP],
-				   mi_prd_order[LEFT], mi_prd_order[LDIAG], mi_prd_order[RDIAG]);
-		}
-		else if (bframes == 0) {
-			printf("Prediction order:\n\tFrame I: %d + %d %d %d %d\n\tFrame P: %d %d\n\n", prd_order[0],
-				   mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG], mi_prd_order[RDIAG], prd_order[1],
-				   prd_order[2]);
+    if (frames == 1) {
+        printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
+    }
+    else if (bframes == 0) {
+        printf("Prediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\n", prd_order[0], prd_order[1], prd_order[2]);
 
-			for (i = 3; i < 6; i++) {
-				prd_order[i] = 0;
-			}
-		}
-		else {
-			printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d + %d %d %d %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n",
-				   bframes == 0 ? 0 : bframes - 1, prd_order[0], mi_prd_order[UP], mi_prd_order[LEFT],
-				   mi_prd_order[LDIAG], mi_prd_order[RDIAG], prd_order[1], prd_order[2], prd_order[3], prd_order[4],
-				   prd_order[5]);
-		}
-	}
-	else {
-		if (frames == 1) {
-			printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
-		}
-		else if (bframes == 0) {
-			printf("Prediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\n", prd_order[0], prd_order[1], prd_order[2]);
+        for (i = 3; i < 6; i++) {
+            prd_order[i] = 0;
+        }
+    }
+    else {
+        printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n",
+               bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4],
+               prd_order[5]);
 
-			for (i = 3; i < 6; i++) {
-				prd_order[i] = 0;
-			}
-		}
-		else {
-			printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n",
-				   bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4],
-				   prd_order[5]);
-		}
-	}
+        bidirectional = 1;
+    }
+
+    if (mi_size[HEIGHT] > 0 && mi_size[WIDTH] > 0) {
+        printf("Micro Images: %d %d %d %d ", mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG],
+               mi_prd_order[RDIAG]);
+        printf("(MI dimensions: %d x %d)\n\n", mi_size[HEIGHT], mi_size[WIDTH]);
+    }
 
 	int back_reference = 0, for_reference = 0;
 	int **back_ref_error = NULL, **for_ref_error = NULL;

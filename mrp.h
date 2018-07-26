@@ -68,6 +68,9 @@
 #define LDIAG               2
 #define RDIAG               3
 
+#define HEIGHT              0
+#define WIDTH               1
+
 // Endianness
 #define LITTLE_ENDIANNESS   0
 #define BIG_ENDIANNESS      1
@@ -132,7 +135,7 @@ typedef struct {
     int back_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
     int for_prd_order; // Order of the predictors (number of pixels to use) in the next frame
 
-    int mi_size; // Size of micro images in lenslet images
+    int mi_size[2]; // Size of micro images in lenslet images
     int mi_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
 
     int coef_precision; // Precision of the coefficients
@@ -209,7 +212,7 @@ typedef struct {
     int back_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
     int for_prd_order; // Order of the predictors (number of pixels to use) in the next frame
 
-    int mi_size; // Size of micro images in lenslet images
+    int mi_size[2]; // Size of micro images in lenslet images
     int mi_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
 
     int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
@@ -275,9 +278,9 @@ void write_yuv(IMAGE *, char *, int, int);
 
 IMAGE *read_yuv(char *, int, int, int, int, int, int);
 
-int ***init_ref_offset(int, int, int, int, int);
+int ***init_ref_offset(int, int, int, int, int[2]);
 
-void free_ref_offset(int, int, int, int, int, int ***);
+void free_ref_offset(int, int, int, int, int[2], int ***);
 
 int *init_ctx_weight(int, int, int);
 

@@ -7,52 +7,52 @@
 
 //Reference pixel position separated by their distances {y, x}
 const POINT dyx[] = {
-		/* 1 */
-		{ 0,-1}, {-1, 0},
-		/* 2 */
-		{ 0,-2}, {-1,-1}, {-2, 0}, {-1, 1},
-		/* 3 */
-		{ 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2},
-		/* 4 */
-		{ 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3},
-		/* 5 */
-		{ 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4},
-		/* 6 */
-		{ 0,-6}, {-1,-5}, {-2,-4}, {-3,-3}, {-4,-2}, {-5,-1}, {-6, 0}, {-5, 1}, {-4, 2}, {-3, 3}, {-2, 4}, {-1, 5},
-		/* 7 */
-		{ 0,-7}, {-1,-6}, {-2,-5}, {-3,-4}, {-4,-3}, {-5,-2}, {-6,-1}, {-7, 0}, {-6, 1}, {-5, 2}, {-4, 3}, {-3, 4}, {-2, 5}, {-1, 6},
-		/* 8 */
-		{ 0,-8}, {-1,-7}, {-2,-6}, {-3,-5}, {-4,-4}, {-5,-3}, {-6,-2}, {-7,-1}, {-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
+    /* 1 --> 2 */
+    { 0,-1}, {-1, 0},
+    /* 2 --> 6 */
+    { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1},
+    /* 3 --> 12 */
+    { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2},
+    /* 4 --> 20 */
+    { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3},
+    /* 5 --> 30 */
+    { 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4},
+    /* 6 --> 42 */
+    { 0,-6}, {-1,-5}, {-2,-4}, {-3,-3}, {-4,-2}, {-5,-1}, {-6, 0}, {-5, 1}, {-4, 2}, {-3, 3}, {-2, 4}, {-1, 5},
+    /* 7 --> 56 */
+    { 0,-7}, {-1,-6}, {-2,-5}, {-3,-4}, {-4,-3}, {-5,-2}, {-6,-1}, {-7, 0}, {-6, 1}, {-5, 2}, {-4, 3}, {-3, 4}, {-2, 5}, {-1, 6},
+    /* 8 --> 72 */
+    { 0,-8}, {-1,-7}, {-2,-6}, {-3,-5}, {-4,-4}, {-5,-3}, {-6,-2}, {-7,-1}, {-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
 };
 
 //Reference pixel position separated by their distances
 const POINT idyx[] = {
-		/* 0 --> 1 */
-		//{ 0, 0},
-		/* 1 --> 5 */
-		{ 0,-1}, {-1, 0}, { 0, 1}, { 1, 0},
-		/* 2 --> 13 */
-		{ 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2}, { 1, 1}, { 2, 0}, { 1,-1},
-		/* 3 --> 25 */
-		{ 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3}, { 1, 2}, { 2, 1}, { 3, 0}, { 2,-1}, { 1,-2},
-		/* 4 --> 41 */
-		{ 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4}, { 1, 3}, { 2, 2}, { 3, 1}, { 4, 0}, { 3,-1}, { 2,-2}, { 1,-3},
+    /* 0 --> 1 */
+    //{ 0, 0},
+    /* 1 --> 5 */
+    { 0,-1}, {-1, 0}, { 0, 1}, { 1, 0},
+    /* 2 --> 13 */
+    { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2}, { 1, 1}, { 2, 0}, { 1,-1},
+    /* 3 --> 25 */
+    { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3}, { 1, 2}, { 2, 1}, { 3, 0}, { 2,-1}, { 1,-2},
+    /* 4 --> 41 */
+    { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4}, { 1, 3}, { 2, 2}, { 3, 1}, { 4, 0}, { 3,-1}, { 2,-2}, { 1,-3},
 };
 
 //Reference pixel position separated by their distances
 const POINT tridyx[] = {
-        /* 0 --> 1 */
-        //{ 0, 0},
-        /* 1 --> 4 */
-        { 0,-1}, {-1, 0}, { 0, 1},
-        /* 2 --> 9 */
-        { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2},
-        /* 3 --> 16 */
-        { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3},
-        /* 4 --> 25 */
-        { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4},
-        /* 5 --> 36 */
-        { 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4}, { 0, 5}
+    /* 0 --> 1 */
+    //{ 0, 0},
+    /* 1 --> 4 */
+    { 0,-1}, {-1, 0}, { 0, 1},
+    /* 2 --> 9 */
+    { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2},
+    /* 3 --> 16 */
+    { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3},
+    /* 4 --> 25 */
+    { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4},
+    /* 5 --> 36 */
+    { 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4}, { 0, 5}
 };
 
 int bref1[2][5] = {{2, -2, -1, 0, -1},
@@ -444,7 +444,7 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
  |
  |  Returns:  int*** --> Array with the references offset
  *-------------------------------------------------------------------*/
-int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_size) {
+int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_size[2]) {
     int ***roff, *ptr;
     int x, y, dx, dy, k, base = 0;
 
@@ -470,19 +470,19 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
             base = width * (height + 1);
             break;
         case MI_UP_PRED:
-            base = -width * mi_size;
+            base = -width * mi_size[HEIGHT];
             break;
 
         case MI_LEFT_PRED:
-            base = -mi_size;
+            base = -mi_size[WIDTH];
             break;
 
         case MI_LDIAG_PRED:
-            base = (-width - 1) * mi_size;
+            base = -width * mi_size[HEIGHT] - mi_size[WIDTH];
             break;
 
         case MI_RDIAG_PRED:
-            base = (-width + 1) * mi_size;
+            base = -width * mi_size[HEIGHT] + mi_size[WIDTH];
             break;
 
         default:
@@ -734,7 +734,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                     ptr = (int *) alloc_mem((prd_order) * sizeof(int));
 
                     //Micro image reference offset
-                    if (y < mi_size) {
+                    if (y < mi_size[HEIGHT]) {
                         if (y == 0) {
                             if (x == 0) {
                                 roff[y][x] = ptr;
@@ -807,7 +807,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                             free(ptr);
                         }
                     }
-                    else if (y == mi_size) {
+                    else if (y == mi_size[HEIGHT]) {
                         if (x == 0) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
@@ -816,7 +816,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < 0) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < 0) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -832,7 +832,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < 0 || x + dx >= width) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < 0 || x + dx >= width) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -845,7 +845,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                             free(ptr);
                         }
                     }
-                    else if (y + mmin_dy <= mi_size) {
+                    else if (y + mmin_dy <= mi_size[HEIGHT]) {
                         if (x == 0) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
@@ -854,7 +854,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < 0) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < 0) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -870,7 +870,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < 0 || x + dx >= width) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < 0 || x + dx >= width) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -918,7 +918,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                     ptr = (int *) alloc_mem((prd_order) * sizeof(int));
 
                     //Micro image reference offset
-                    if (x < mi_size) {
+                    if (x < mi_size[WIDTH]) {
                         if (y == 0) {
                             if (x == 0) {
                                 roff[y][x] = ptr;
@@ -992,7 +992,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                         }
                     }
                     else if (y == 0) {
-                        if (x == mi_size) {
+                        if (x == mi_size[WIDTH]) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
 
@@ -1000,7 +1000,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = tridyx[k].y;
                                 dx = tridyx[k].x;
 
-                                if (y + dy < 0 || x + dx < mi_size) {
+                                if (y + dy < 0 || x + dx < mi_size[WIDTH]) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1008,7 +1008,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 }
                             }
                         }
-                        else if (x + mmin_dx <= mi_size || x + mmax_dx >= width) {
+                        else if (x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
 
@@ -1016,7 +1016,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = tridyx[k].y;
                                 dx = tridyx[k].x;
 
-                                if (y + dy < 0 || x + dx < mi_size || x + dx >= width) {
+                                if (y + dy < 0 || x + dx < mi_size[WIDTH] || x + dx >= width) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1030,7 +1030,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                         }
                     }
                     else if (y + mmin_dy <= 0) {
-                        if (x == mi_size) {
+                        if (x == mi_size[WIDTH]) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
 
@@ -1038,7 +1038,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = tridyx[k].y;
                                 dx = tridyx[k].x;
 
-                                if (y + dy < 0 || x + dx < mi_size) {
+                                if (y + dy < 0 || x + dx < mi_size[WIDTH]) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1046,7 +1046,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 }
                             }
                         }
-                        else if (x + mmin_dx <= mi_size || x + mmax_dx >= width) {
+                        else if (x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
 
@@ -1054,7 +1054,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = tridyx[k].y;
                                 dx = tridyx[k].x;
 
-                                if (y + dy < 0 || x + dx < mi_size || x + dx >= width) {
+                                if (y + dy < 0 || x + dx < mi_size[WIDTH] || x + dx >= width) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1102,7 +1102,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                     ptr = (int *) alloc_mem((prd_order) * sizeof(int));
 
                     //Micro image reference offset
-                    if (x < mi_size || y < mi_size) {
+                    if (y < mi_size[HEIGHT] || x < mi_size[WIDTH]) {
                         if (y == 0) {
                             if (x == 0) {
                                 roff[y][x] = ptr;
@@ -1175,8 +1175,8 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                             free(ptr);
                         }
                     }
-                    else if (y == mi_size) {
-                        if (x == mi_size) {
+                    else if (y == mi_size[HEIGHT]) {
+                        if (x == mi_size[WIDTH]) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
 
@@ -1184,7 +1184,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < mi_size) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < mi_size[WIDTH]) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1192,7 +1192,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 }
                             }
                         }
-                        else if (x + mmin_dx <= mi_size || x + mmax_dx >= width) {
+                        else if (x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
 
@@ -1200,7 +1200,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < mi_size || x + dx >= width) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < mi_size[WIDTH] || x + dx >= width) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1213,8 +1213,8 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                             free(ptr);
                         }
                     }
-                    else if (y + mmin_dy <= mi_size) {
-                        if (x == mi_size) {
+                    else if (y + mmin_dy <= mi_size[HEIGHT]) {
+                        if (x == mi_size[WIDTH]) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
 
@@ -1222,7 +1222,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < mi_size) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < mi_size[WIDTH]) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1230,7 +1230,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 }
                             }
                         }
-                        else if (x + mmin_dx <= mi_size || x + mmax_dx >= width) {
+                        else if (x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
 
@@ -1238,7 +1238,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < mi_size || x + dx >= width) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < mi_size[WIDTH] || x + dx >= width) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1286,7 +1286,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                     ptr = (int *) alloc_mem((prd_order) * sizeof(int));
 
                     //Micro image reference offset
-                    if (y < mi_size || x > width - mi_size) {
+                    if (y < mi_size[HEIGHT] || x > width - mi_size[WIDTH]) {
                         if (y == 0) {
                             if (x == 0) {
                                 roff[y][x] = ptr;
@@ -1359,7 +1359,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                             free(ptr);
                         }
                     }
-                    else if (y == mi_size) {
+                    else if (y == mi_size[HEIGHT]) {
                         if (x == 0) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
@@ -1368,7 +1368,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < 0) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < 0) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1376,7 +1376,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 }
                             }
                         }
-                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size) {
+                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH]) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
 
@@ -1384,7 +1384,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < 0 || x + dx >= width - mi_size) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < 0 || x + dx >= width - mi_size[WIDTH]) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1397,7 +1397,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                             free(ptr);
                         }
                     }
-                    else if (y + mmin_dy <= mi_size) {
+                    else if (y + mmin_dy <= mi_size[HEIGHT]) {
                         if (x == 0) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
@@ -1406,7 +1406,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < 0) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < 0) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1414,7 +1414,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 }
                             }
                         }
-                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size) {
+                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH]) {
                             roff[y][x] = ptr;
                             *ptr++ = base;
 
@@ -1422,7 +1422,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
                                 dy = idyx[k].y;
                                 dx = idyx[k].x;
 
-                                if (y + dy < mi_size || x + dx < 0 || x + dx >= width - mi_size) {
+                                if (y + dy < mi_size[HEIGHT] || x + dx < 0 || x + dx >= width - mi_size[WIDTH]) {
                                     *ptr++ = base;
                                 }
                                 else {
@@ -1451,7 +1451,7 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
     return (roff);
 }
 
-void free_ref_offset(int height, int width, int type, int prd_order, int mi_size, int ***roff) {
+void free_ref_offset(int height, int width, int type, int prd_order, int mi_size[2], int ***roff) {
     int dy, dx, x, y, k;
 
     int min_dx, max_dx, min_dy, max_dy;
@@ -1540,7 +1540,7 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
             //Cycle that runs for all the pixels
             for (y = 0; y < height; y++) {
                 for (x = 0; x < width; x++) {
-                    if (y < mi_size) {
+                    if (y < mi_size[HEIGHT]) {
                         if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
                             (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
                             free(roff[y][x]);
@@ -1548,8 +1548,8 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
                     }
                     else {
                         //Conditions to check which references are available for each pixel
-                        if ((y == mi_size && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width)) ||
-                            (y + mmin_dy <= mi_size && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width))) {
+                        if ((y == mi_size[HEIGHT] && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width)) ||
+                            (y + mmin_dy <= mi_size[HEIGHT] && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width))) {
                             free(roff[y][x]);
                         }
                     }
@@ -1583,7 +1583,7 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
             //Cycle that runs for all the pixels
             for (y = 0; y < height; y++) {
                 for (x = 0; x < width; x++) {
-                    if (x < mi_size) {
+                    if (x < mi_size[WIDTH]) {
                         if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
                             (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
                             free(roff[y][x]);
@@ -1591,8 +1591,8 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
                     }
                     else {
                         //Conditions to check which references are available for each pixel
-                        if ((y == 0 && (x == mi_size || x + mmin_dx <= mi_size || x + mmax_dx >= width)) ||
-                            (y + mmin_dy <= 0 && (x == mi_size || x + mmin_dx <= mi_size || x + mmax_dx >= width))) {
+                        if ((y == 0 && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width)) ||
+                            (y + mmin_dy <= 0 && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width))) {
                             free(roff[y][x]);
                         }
                     }
@@ -1626,7 +1626,7 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
             //Cycle that runs for all the pixels
             for (y = 0; y < height; y++) {
                 for (x = 0; x < width; x++) {
-                    if (y < mi_size || x < mi_size) {
+                    if (y < mi_size[HEIGHT] || x < mi_size[WIDTH]) {
                         if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
                             (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
                             free(roff[y][x]);
@@ -1634,8 +1634,8 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
                     }
                     else {
                         //Conditions to check which references are available for each pixel
-                        if ((y == mi_size && (x == mi_size || x + mmin_dx <= mi_size || x + mmax_dx >= width)) ||
-                            (y + mmin_dy <= mi_size && (x == mi_size || x + mmin_dx <= mi_size || x + mmax_dx >= width))) {
+                        if ((y == mi_size[HEIGHT] && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width)) ||
+                            (y + mmin_dy <= mi_size[HEIGHT] && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width))) {
                             free(roff[y][x]);
                         }
                     }
@@ -1668,7 +1668,7 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
             //Cycle that runs for all the pixels
             for (y = 0; y < height; y++) {
                 for (x = 0; x < width; x++) {
-                    if (y < mi_size || x > width - mi_size) {
+                    if (y < mi_size[HEIGHT] || x > width - mi_size[WIDTH]) {
                         if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
                             (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
                             free(roff[y][x]);
@@ -1676,8 +1676,8 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
                     }
                     else {
                         //Conditions to check which references are available for each pixel
-                        if ((y == mi_size && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size)) ||
-                            (y + mmin_dy <= mi_size && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size))) {
+                        if ((y == mi_size[HEIGHT] && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH])) ||
+                            (y + mmin_dy <= mi_size[HEIGHT] && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH]))) {
                             free(roff[y][x]);
                         }
                     }

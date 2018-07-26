@@ -42,9 +42,9 @@ extern double qtree_prob[];
  |  Returns:  ENCODER* --> returns a encoder type structure
  *-------------------------------------------------------------------*/
 ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int **back_ref_error, int **for_ref_error,
-                      int num_class, int num_group, int prd_order, int back_prd_order, int for_prd_order, int mi_size,
-                      int mi_prd_order[4], int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel,
-                      int pm_accuracy, int delta, int depth) {
+					  int num_class, int num_group, int prd_order, int back_prd_order, int for_prd_order,
+					  int mi_size[2], int mi_prd_order[4], int coef_precision, int f_huffman, int quadtree_depth,
+					  int num_pmodel, int pm_accuracy, int delta, int depth) {
 	//Declare new encoder struct
 	ENCODER *enc;
 	int x, y, i, j;
@@ -66,7 +66,9 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 	enc->back_prd_order = back_prd_order;
 	enc->for_prd_order = for_prd_order;
 
-    enc->mi_size = mi_size;
+    enc->mi_size[HEIGHT] = mi_size[HEIGHT];
+	enc->mi_size[WIDTH] = mi_size[WIDTH];
+
 	enc->mi_prd_order[UP] = mi_prd_order[UP];
 	enc->mi_prd_order[LEFT] = mi_prd_order[LEFT];
 	enc->mi_prd_order[LDIAG] = mi_prd_order[LDIAG];
@@ -130,7 +132,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 
 	if (enc->for_prd_order > 0) {
 		enc->for_roff = init_ref_offset(enc->height, enc->width, FOR_PRED, enc->for_prd_order, 0);
-		enc->for_ctx_weight = init_ctx_weight(FOR_PRED, enc->prd_order, enc->delta);
+		enc->for_ctx_weight = init_ctx_weight(FOR_PRED, enc->for_prd_order, enc->delta);
 	}
 
 	if (enc->mi_prd_order[UP] > 0) {
@@ -811,24 +813,24 @@ int calc_uenc(ENCODER *enc, int y, int x) {
     if (enc->mi_prd_order[UP] > 0) {
     	mi_up_roff_p = enc->mi_up_roff[y][x];
 
-		mi_up_wt_p = (y < enc->mi_size) ? enc->mi_borders_ctx_weight : enc->mi_up_ctx_weight;
+		mi_up_wt_p = (y < enc->mi_size[HEIGHT]) ? enc->mi_borders_ctx_weight : enc->mi_up_ctx_weight;
     }
 
 	if (enc->mi_prd_order[LEFT] > 0) {
 		mi_left_roff_p = enc->mi_left_roff[y][x];
 
-		mi_left_wt_p = (x < enc->mi_size) ? enc->mi_borders_ctx_weight : enc->mi_left_ctx_weight;
+		mi_left_wt_p = (x < enc->mi_size[WIDTH]) ? enc->mi_borders_ctx_weight : enc->mi_left_ctx_weight;
 	}
 
 	if (enc->mi_prd_order[LDIAG] > 0) {
 		mi_ldiag_roff_p = enc->mi_ldiag_roff[y][x];
 
-		mi_ldiag_wt_p = (y < enc->mi_size || x < enc->mi_size) ? enc->mi_borders_ctx_weight : enc->mi_ldiag_ctx_weight;
+		mi_ldiag_wt_p = (y < enc->mi_size[HEIGHT] || x < enc->mi_size[WIDTH]) ? enc->mi_borders_ctx_weight : enc->mi_ldiag_ctx_weight;
 	}
 
 	if (enc->mi_prd_order[RDIAG] > 0) {
 		mi_rdiag_roff_p = enc->mi_rdiag_roff[y][x];
-		mi_rdiag_wt_p = (y < enc->mi_size || x > enc->width - enc->mi_size) ? enc->mi_borders_ctx_weight : enc->mi_rdiag_ctx_weight;
+		mi_rdiag_wt_p = (y < enc->mi_size[HEIGHT] || x > enc->width - enc->mi_size[WIDTH]) ? enc->mi_borders_ctx_weight : enc->mi_rdiag_ctx_weight;
 	}
 
 	err_p = &enc->err[1][y][x];
@@ -1987,7 +1989,7 @@ void remove_emptyclass(ENCODER *enc) {
  |
  |  Returns:  int		--> Returns the number of bits used
  *---------------------------------------------------------------------*/
-int write_header(ENCODER *enc, int prd_order[6], int mi_size, int mi_prd_order[4], int frames, int bframes, int hevc, FILE *fp) {
+int write_header(ENCODER *enc, int prd_order[6], int mi_size[2], int mi_prd_order[4], int frames, int bframes, int hevc, FILE *fp) {
 	int bits, i;
 
 	bits =  putbits(fp, 16, MAGIC_NUMBER);
@@ -2005,7 +2007,9 @@ int write_header(ENCODER *enc, int prd_order[6], int mi_size, int mi_prd_order[4
 		bits += putbits(fp, 8, (uint) prd_order[i]);
 	}
 
-    bits += putbits(fp, 8, (uint) mi_size);
+    bits += putbits(fp, 16, (uint) mi_size[HEIGHT]);
+    bits += putbits(fp, 16, (uint) mi_size[WIDTH]);
+
     for (i = 0; i < 4; i++) {
         bits += putbits(fp, 8, (uint) mi_prd_order[i]);
     }
@@ -2817,12 +2821,12 @@ double total_variation(IMAGE *img) {
  *-------------------------------------------------------------------------*/
 double sparseness_index(char *infile, int height, int width, int frames, int depth, int endianness, int chroma) {
 	int x, y, f, L = 0;
-	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
+	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int) pow(2, depth)));
 	int max = 0, min = ((int) pow(2, depth) - 1);
 	char *extra_info = NULL;
 	IMAGE *img = NULL;
 
-	for (y = 0; y < (int)pow(2, depth); y++) {
+	for (y = 0; y < (int) pow(2, depth); y++) {
 		hist[y] = 0;
 	}
 
@@ -2873,14 +2877,14 @@ double sparseness_index(char *infile, int height, int width, int frames, int dep
 int* histogram_check(char *infile, int height, int width, int frames, int depth, int endianness, int chroma) {
 	int x, y, f;
 	int used_values = 0;
-	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int)pow(2, depth)));
-	int *forward_table = (int *) alloc_mem(sizeof(int) * (int)(pow(2, depth)));
-	int *table = (int *) alloc_mem(sizeof(int) * (int)pow(2, depth));
+	unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int) pow(2, depth)));
+	int *forward_table = (int *) alloc_mem(sizeof(int) * (int) (pow(2, depth)));
+	int *table = (int *) alloc_mem(sizeof(int) * (int) pow(2, depth));
 	double tv_original = 0.0, tv_packed = 0.0;
 	char *extra_info = NULL;
 	IMAGE *aux_img, *img = NULL;
 
-	for (y = 0; y < (int)pow(2, depth); y++) {
+	for (y = 0; y < (int) pow(2, depth); y++) {
 		hist[y] = 0;
 		forward_table[y] = 0;
 	}
@@ -3133,7 +3137,7 @@ int main(int argc, char **argv) {
 	int num_class = NUM_CLASS;
 	int num_group = NUM_GROUP;
 	int prd_order[6] = {INTRA_PRD_ORDER, INTRA_PRD_ORDER, INTER_PRD_ORDER, INTRA_PRD_ORDER, INTER_PRD_ORDER, INTER_PRD_ORDER};
-	int mi_size = 0;
+	int mi_size[2] = {0, 0};
 	int mi_prd_order[4] = {0, 0, 0, 0};
 	int coef_precision = COEF_PRECISION;
 	int num_pmodel = NUM_PMODEL;
@@ -3239,10 +3243,11 @@ int main(int argc, char **argv) {
 
 					break;
                 case 'J':
-					mi_size = (int) strtol(argv[++i], NULL, 10);
+					mi_size[HEIGHT] = (int) strtol(argv[++i], NULL, 10);
+					mi_size[WIDTH] = (int) strtol(argv[++i], NULL, 10);
 
-                    if (mi_size < 0) {
-                        fprintf(stderr, "The size of the micro images cannot be less than 1!\n");
+                    if (mi_size[HEIGHT] < 0 || mi_size[WIDTH] < 0) {
+                        fprintf(stderr, "The dimensions of the micro images cannot be less than 1!\n");
                         exit(-3);
                     }
 
@@ -3404,7 +3409,7 @@ int main(int argc, char **argv) {
 		printf("    -G num  	Number of frames between references (number of B frames) [%d]\n", bframes);
 		printf("    -B      	Choose HEVC style bidirectional prediction\n");
 		printf("    -K 6 * num  Prediction order [%d %d %d %d %d %d]\n", prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4], prd_order[5]);
-		printf("    -J num	    Use lenslet prediction with micro image size [%d]\n", mi_size);
+		printf("    -J 2 * num  Use lenslet prediction with micro image size [%d %d]\n", mi_size[HEIGHT], mi_size[WIDTH]);
         printf("    -L 4 * num  Lenslet prediction order [%d %d %d %d]\n", mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG], mi_prd_order[RDIAG]);
 		printf("    -P num  	Precision of prediction coefficients (fractional bits) [%d]\n", coef_precision);
 		printf("    -V num  	Number of probability models [%d]\n", num_pmodel);
@@ -3466,43 +3471,27 @@ int main(int argc, char **argv) {
 	if (forward_table != NULL) {
 		printf("Sparseness Index, S = %3.1f%%\n\n", sparseness_index(infile, height, width, frames, depth, endianness, chroma));
 	}
-	if (mi_size > 0) {
-		if (frames == 1) {
-            printf("Prediction order:\n\tFrame I: %d + %d %d %d %d\n\n", prd_order[0], mi_prd_order[UP],
-                   mi_prd_order[LEFT], mi_prd_order[LDIAG], mi_prd_order[RDIAG]);
-		}
-		else if (bframes == 0) {
-            printf("Prediction order:\n\tFrame I: %d + %d %d %d %d\n\tFrame P: %d %d\n\n", prd_order[0],
-                   mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG], mi_prd_order[RDIAG], prd_order[1],
-                   prd_order[2]);
 
-			for (i = 3; i < 6; i++) {
-				prd_order[i] = 0;
-			}
-		}
-		else {
-            printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d + %d %d %d %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n",
-                   bframes == 0 ? 0 : bframes - 1, prd_order[0], mi_prd_order[UP], mi_prd_order[LEFT],
-                   mi_prd_order[LDIAG], mi_prd_order[RDIAG], prd_order[1], prd_order[2], prd_order[3], prd_order[4],
-                   prd_order[5]);
-		}
-	}
-	else {
-		if (frames == 1) {
-			printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
-		}
-		else if (bframes == 0) {
-			printf("Prediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\n", prd_order[0], prd_order[1], prd_order[2]);
+    if (frames == 1) {
+        printf("Prediction order:\n\tFrame I: %d\n\n", prd_order[0]);
+    }
+    else if (bframes == 0) {
+        printf("Prediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\n", prd_order[0], prd_order[1], prd_order[2]);
 
-			for (i = 3; i < 6; i++) {
-				prd_order[i] = 0;
-			}
-		}
-		else {
-			printf("Number of B frames: %d\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n",
-				   bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4],
-				   prd_order[5]);
-		}
+        for (i = 3; i < 6; i++) {
+            prd_order[i] = 0;
+        }
+    }
+    else {
+        printf("Number of B frames: %d\n\nPrediction order:\n\tFrame I: %d\n\tFrame P: %d %d\n\tFrame B: %d %d %d\n\n",
+               bframes == 0 ? 0 : bframes - 1, prd_order[0], prd_order[1], prd_order[2], prd_order[3], prd_order[4],
+               prd_order[5]);
+    }
+
+	if (mi_size[HEIGHT] > 0 && mi_size[WIDTH] > 0) {
+        printf("Micro Images: %d %d %d %d ", mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG],
+               mi_prd_order[RDIAG]);
+        printf("(MI dimensions: %d x %d)\n\n", mi_size[HEIGHT], mi_size[WIDTH]);
 	}
 
 	//Allocation of print results variables
