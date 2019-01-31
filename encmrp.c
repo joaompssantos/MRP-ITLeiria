@@ -5,6 +5,7 @@
 #include <math.h>
 #include <limits.h>
 #include "mrp.h"
+#include "mrp_config.h"
 
 extern POINT dyx[];
 extern POINT idyx[];
@@ -527,7 +528,7 @@ ENCODER *init_encoder(IMAGE *img, IMAGE *back_ref_img, IMAGE *for_ref_img, int *
 
 	for (i = 0; i < enc->num_class; i++) {
 		for (j = 0; j <= MAX_UPARA; j++) {
-			enc->uquant[i][j] = enc->num_group - 1;
+			enc->uquant[i][j] = (char) (enc->num_group - 1);
 		}
 	}
 
@@ -765,7 +766,6 @@ void free_encoder(ENCODER *enc) {
 	free(enc->pmodels);
 
 	if (enc->f_huffman == 1) {
-		int gr;
 		VLC *aux;
 		for (gr = 0; gr < enc->num_group; gr++) {
 			for (k = 0; k < enc->num_pmodel; k++) {
@@ -848,7 +848,7 @@ void init_class(ENCODER *enc) {
 		//Sets the class number for each pixel
 		for (i = 0; i < BASE_BSIZE; i++) {
 			for (j = 0; j < BASE_BSIZE; j++) {
-				enc->class[y + i][x + j] = cl;
+				enc->class[y + i][x + j] = (char) cl;
 			}
 		}
 	}
@@ -911,8 +911,8 @@ void set_cost_model(ENCODER *enc, int f_mmse) {
 		enc->pmlist[gr] = pm = enc->pmodels[gr][enc->num_pmodel >> 1];
 
 		for (k = 0; k <= pm->size; k++) {
-			c = (double)k * 0.5 + 0.25;
-			pm->cost[k] = a + b * c * c;
+			c = (double) k * 0.5 + 0.25;
+			pm->cost[k] = (float) (a + b * c * c);
 		}
 
 		pm->subcost[0] = 0.0;
@@ -922,8 +922,6 @@ void set_cost_model(ENCODER *enc, int f_mmse) {
 		enc->bconv[k] = 0;
 		enc->fconv[k] = 0;
 	}
-
-	return;
 }
 
 /*------------------------------ set_cost_rate -------------------------*
@@ -963,8 +961,8 @@ void set_cost_rate(ENCODER *enc) {
 
 		for (k = 0; k <= enc->maxprd; k++) {
 			i = (enc->maxprd - k + (1 << shift) / 2) >> shift;
-			enc->fconv[k] = (i & mask);
-			enc->bconv[k] = (i >> enc->pm_accuracy);
+			enc->fconv[k] = (img_t) (i & mask);
+			enc->bconv[k] = (img_t) (i >> enc->pm_accuracy);
 		}
 
 		num_spm = 1 << enc->pm_accuracy;
@@ -985,20 +983,20 @@ void set_cost_rate(ENCODER *enc) {
 			}
 			else if (enc->pm_accuracy < 0) {
 				for (k = 0; k < pm->size; k++) {
-					pm->cost[k] = -a * log(pm->freq[k]);
+					pm->cost[k] = (float) (-a * log(pm->freq[k]));
 				}
 
 				c = pm->cumfreq[enc->maxval + 1];
-				pm->subcost[0] = a * log(c);
+				pm->subcost[0] = (float) (a * log(c));
 			}
 			else {
 				for (j = 0; j < num_spm; j++) {
 					for (k = 0; k < pm->size; k++) {
-						pm->cost[k] = -a * log(pm->freq[k]);
+						pm->cost[k] = (float) (-a * log(pm->freq[k]));
 					}
 					for (k = 0; k <= enc->maxval; k++) {
 						c = pm->cumfreq[k + enc->maxval + 1] - pm->cumfreq[k];
-						pm->subcost[k] = a * log(c);
+						pm->subcost[k] = (float) (a * log(c));
 					}
 
 					pm++;
@@ -1144,7 +1142,8 @@ cost_t calc_cost(ENCODER *enc, int tly, int tlx, int bry, int brx) {
 		for (x = tlx; x < brx; x++) {
 			cl = *class_p++;
 			*upara_p++ = u = calc_uenc(enc, y, x);
-			*group_p++ = gr = enc->uquant[cl][u];
+			gr = enc->uquant[cl][u];
+			*group_p++ = (char) gr;
 			e = *encval_p++;
 			prd = *prd_p++;
 
@@ -1284,14 +1283,14 @@ cost_t design_predictor(ENCODER *enc, int f_mmse) {
 				d = 0.0;
 			}
 
-			k = d;
+			k = (int) d;
 			if (k > d) k--;
 
 			if (k < -MAX_COEF) {
-				k = d = -MAX_COEF;
+				d = k = -MAX_COEF;
 			}
 			else if (k > MAX_COEF) {
-				k = d = MAX_COEF;
+				d = k = MAX_COEF;
 			}
 
 			enc->predictor[cl][i] = k; //Coefficient for a given reference in the predictor
@@ -1301,7 +1300,7 @@ cost_t design_predictor(ENCODER *enc, int f_mmse) {
 		}
 
 		/* minimize mean rounding errors */
-		k = e + 0.5;
+		k = (int) (e + 0.5);
 		for (;k > 0; k--) {
 			d = 0;
 			for (j = i = 0; i < full_prd_order; i++) {
@@ -1433,7 +1432,7 @@ cost_t optimize_group(ENCODER *enc) {
 
 		for (gr = 0; gr < enc->num_group; gr++) {
 			for (; u < enc->th[cl][gr]; u++) {
-				enc->uquant[cl][u] = gr;
+				enc->uquant[cl][u] = (char) gr;
 			}
 		}
 	}
@@ -1446,7 +1445,7 @@ cost_t optimize_group(ENCODER *enc) {
 		for (x = 0; x < enc->width; x++) {
 			cl = enc->class[y][x];
 			u = enc->upara[y][x];
-			enc->group[y][x] = gr = enc->uquant[cl][u];
+			gr = enc->group[y][x] = enc->uquant[cl][u];
 			e = enc->encval[y][x];
 			prd = enc->prd[y][x];
 
@@ -1633,7 +1632,7 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int b
 			bufptr += bufsize;
 
 			for (x = tlx; x < brx; x++) {
-				*class_p++ = cl;
+				*class_p++ = (char) cl;
 				*prd_p++ = *prdbuf_p++;
 				*err_p++ = *errbuf_p++;
 			}
@@ -1656,7 +1655,7 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int b
 		errbuf_p = &errbuf[min_cl][bufptr];
 		bufptr += bufsize;
 		for (x = tlx; x < brx; x++) {
-			*class_p++ = min_cl;
+			*class_p++ = (char) min_cl;
 			*prd_p++ = *prdbuf_p++;
 			*err_p++ = *errbuf_p++;
 		}
@@ -1772,7 +1771,7 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tly, int tlx, int
 				bufptr += bufsize;
 
 				for (x = tlx; x < brx; x++) {
-					*class_p++ = cl;
+					*class_p++ = (char) cl;
 					*prd_p++ = *prdbuf_p++;
 					*err_p++ = *errbuf_p++;
 				}
@@ -1877,7 +1876,7 @@ void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
 	cost_t cbuf[SEARCH_RANGE * SUBSEARCH_RANGE], *cbuf_p;
 	float *pmcost_p;
 	int i, j, k, x, y, df1, df2, base;
-	int prd, prd_f, shift, maxprd, *coef_p, *econv_p, *roff_p, *org_p;
+	int prd, prd_f, shift, maxprd, *coef_p, *econv_p = NULL, *roff_p, *org_p;
 	char *class_p;
 	img_t *bconv_p, *fconv_p;
 	PMODEL *pm, *pm_p;
@@ -2034,8 +2033,8 @@ cost_t optimize_predictor(ENCODER *enc) {
 	for (cl = 0; cl < enc->num_class; cl++) {
 		for (k = 0; k < full_prd_order; k++) {
 			retry:
-			pos1 = (int)(((double)rand() * full_prd_order) / (RAND_MAX+1.0));
-			pos2 = (int)(((double)rand() * full_prd_order) / (RAND_MAX+1.0));
+			pos1 = (int)(((double) rand() * full_prd_order) / (RAND_MAX + 1.0));
+			pos2 = (int)(((double) rand() * full_prd_order) / (RAND_MAX + 1.0));
 
 			if (pos1 == pos2) goto retry;
 
@@ -2115,7 +2114,7 @@ void remove_emptyclass(ENCODER *enc) {
 	for (y = 0; y < enc->height; y++) {
 		for (x = 0; x < enc->width; x++) {
 			i = enc->class[y][x];
-			enc->class[y][x] = enc->mtfbuf[i];
+			enc->class[y][x] = (char) enc->mtfbuf[i];
 		}
 	}
 
@@ -2154,27 +2153,29 @@ void remove_emptyclass(ENCODER *enc) {
 int write_header(ENCODER *enc, int prd_order[6], int frames, int bframes, int diff, int hevc, FILE *fp) {
 	int bits, i;
 
-	bits = putbits(fp, 16, MAGIC_NUMBER);
-	bits += putbits(fp, 8, VERSION);
-	bits += putbits(fp, 16, enc->width);
-	bits += putbits(fp, 16, enc->height);
-	bits += putbits(fp, 16, enc->maxval);
-	bits += putbits(fp, 16, frames);
-	bits += putbits(fp, 5, enc->depth);
-	bits += putbits(fp, 8, bframes);
-	bits += putbits(fp, 1, hevc);
-	bits += putbits(fp, 4, 1);	/* number of components (1 = monochrome) */
-	bits += putbits(fp, 6, enc->num_group);
+	bits = putbits(fp, 16,  MAGIC_NUMBER);
+	bits += putbits(fp, 8,  MRP_VERSION);
+	bits += putbits(fp, 16, (uint) enc->width);
+	bits += putbits(fp, 16, (uint) enc->height);
+	bits += putbits(fp, 16, (uint) enc->maxval);
+	bits += putbits(fp, 16, (uint) frames);
+	bits += putbits(fp, 5,  (uint) enc->depth);
+	bits += putbits(fp, 8,  (uint) bframes);
+	bits += putbits(fp, 1,  (uint) hevc);
+	bits += putbits(fp, 4,  1);	/* number of components (1 = monochrome) */
+	bits += putbits(fp, 6,  (uint) enc->num_group);
+
 	for (i = 0; i < 6; i++) {
-		bits += putbits(fp, 8, prd_order[i]);
+		bits += putbits(fp, 8, (uint) prd_order[i]);
 	}
-	bits += putbits(fp, 1, diff);
-	bits += putbits(fp, 8, enc->delta);
-	bits += putbits(fp, 6, enc->num_pmodel - 1);
-	bits += putbits(fp, 4, enc->coef_precision - 1);
-	bits += putbits(fp, 3, enc->pm_accuracy + 1);
-	bits += putbits(fp, 1, enc->f_huffman);
-	bits += putbits(fp, 1, (enc->quadtree_depth < 0)? 0 : 1);
+
+	bits += putbits(fp, 1,  (uint) diff);
+	bits += putbits(fp, 8,  (uint) enc->delta);
+	bits += putbits(fp, 6,  (uint) enc->num_pmodel - 1);
+	bits += putbits(fp, 4,  (uint) enc->coef_precision - 1);
+	bits += putbits(fp, 3,  (uint) enc->pm_accuracy + 1);
+	bits += putbits(fp, 1,  (uint) enc->f_huffman);
+	bits += putbits(fp, 1,  (enc->quadtree_depth < 0)? 0 : 1);
 
 	return (bits);
 }
@@ -2193,7 +2194,7 @@ int write_header(ENCODER *enc, int prd_order[6], int frames, int bframes, int di
 int write_class(ENCODER *enc, FILE *fp) {
 	int bits;
 
-	bits = putbits(fp, 8, enc->num_class);
+	bits = putbits(fp, 8, (uint) enc->num_class);
 	return (bits);
 }
 
@@ -2208,7 +2209,7 @@ int encode_golomb(FILE *fp, int m, int v) {
 	}
 
 	putbits(fp, p, 1);	/* prefix code */
-	putbits(fp, m, v);
+	putbits(fp, m, (uint) v);
 
 	return (bits + m);
 }
@@ -2262,8 +2263,6 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tly, int
 	i = enc->mtfbuf[cl];
 	index[(*numidx)++] = i;
 	hist[i]++;
-
-	return;
 }
 
 /*--------------------------- encode_class ----------------------------*
@@ -2343,13 +2342,13 @@ int encode_class(FILE *fp, ENCODER *enc) {
 					bits += 1;
 				}
 				else {
-					bits += enc->class_cost[i];
+					bits += (int) (enc->class_cost[i]);
 				}
 			}
 		}
 		else {	/* actually encode */
 			for (i = 0; i < enc->num_class; i++) {
-				bits += putbits(fp, 4, vlc->len[i] - 1);
+				bits += putbits(fp, 4, (uint) (vlc->len[i] - 1));
 			}
 
 			for (j = 0; j < numidx; j++) {
@@ -2357,7 +2356,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 
 				if (i < 0) {
 					ctx = -(i + 1);
-					putbits(fp, 1, ctx & 1);
+					putbits(fp, 1, (uint) (ctx & 1));
 				}
 				else {
 					bits += putbits(fp, vlc->len[i], vlc->code[i]);
@@ -2379,7 +2378,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 
 				for (i = k = 0; i < 7; i++) {
 					p = qtree_prob[i];
-					c = -log(p) * (cost_t)enc->qtctx[(ctx << 1) + 1] - log(1.0 - p) * (cost_t)enc->qtctx[ctx << 1];
+					c = -log(p) * (cost_t) enc->qtctx[(ctx << 1) + 1] - log(1.0 - p) * (cost_t) enc->qtctx[ctx << 1];
 
 					if (c < cost) {
 						k = i;
@@ -2403,7 +2402,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 			p = (double)hist[i] / c;
 
 			if (p > 0.0) {
-				mtf_code[i] = -log(p) / log(2.0) * (PMCLASS_LEVEL / PMCLASS_MAX);
+				mtf_code[i] = (int) (-log(p) / log(2.0) * ((float) PMCLASS_LEVEL / PMCLASS_MAX));
 
 				if (mtf_code[i] >= PMCLASS_LEVEL) {
 					mtf_code[i] = PMCLASS_LEVEL - 1;
@@ -2415,7 +2414,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 
 			p = exp(-log(2.0) * ((double)mtf_code[i] + 0.5) * PMCLASS_MAX / PMCLASS_LEVEL);
 			enc->class_cost[i] = -log(p) / log(2.0);
-			hist[i] = p * (1 << 10);
+			hist[i] = (uint) (p * (1 << 10));
 
 			if (hist[i] <= 0) hist[i] = 1;
 		}
@@ -2480,9 +2479,9 @@ int encode_class(FILE *fp, ENCODER *enc) {
 				for (ctx = 0; ctx < QUADTREE_DEPTH << 2; ctx++) {
 					i = qtree_code[ctx];
 					p = qtree_prob[i];
-					pm->freq[(ctx << 1) + 1] = p * (1 << 10);
+					pm->freq[(ctx << 1) + 1] = (uint) (p * (1 << 10));
 					p = 1.0 - p;
-					pm->freq[(ctx << 1)] = p * (1 << 10);
+					pm->freq[(ctx << 1)] = (uint) (p * (1 << 10));
 				}
 
 				for (i = 0; i < pm->size; i++) {
@@ -2571,14 +2570,14 @@ int encode_predictor(FILE *fp, ENCODER *enc) {
 		enc->coef_m[k] = min_m;
 	}
 
-	bits = t_cost;
+	bits = (int) t_cost;
 
 	if (fp != NULL) {
 		bits = 0;
 
 		if (enc->f_huffman == 1) {	/* Huffman */
 			for (k = 0; k < full_prd_order; k++) {
-				bits += putbits(fp, 4, enc->coef_m[k]);
+				bits += putbits(fp, 4, (uint) enc->coef_m[k]);
 
 				for (cl = 0; cl < enc->num_class; cl++) {
 					coef = enc->predictor[cl][k];
@@ -2589,7 +2588,7 @@ int encode_predictor(FILE *fp, ENCODER *enc) {
 					bits += encode_golomb(fp, enc->coef_m[k], coef);
 
 					if (coef != 0) {
-						bits += putbits(fp, 1, sgn);
+						bits += putbits(fp, 1, (uint) sgn);
 					}
 				}
 			}
@@ -2599,7 +2598,7 @@ int encode_predictor(FILE *fp, ENCODER *enc) {
 
 			for (k = 0; k < full_prd_order; k++) {
 				set_spmodel(pm, MAX_COEF + 1, enc->coef_m[k]);
-				rc_encode(fp, enc->rc, enc->coef_m[k], 1, 16);
+				rc_encode(fp, enc->rc, (uint) enc->coef_m[k], 1, 16);
 
 				for (cl = 0; cl < enc->num_class; cl++) {
 					coef = enc->predictor[cl][k];
@@ -2610,12 +2609,12 @@ int encode_predictor(FILE *fp, ENCODER *enc) {
 					rc_encode(fp, enc->rc, pm->cumfreq[coef],  pm->freq[coef], pm->cumfreq[pm->size]);
 
 					if (coef > 0) {
-						rc_encode(fp, enc->rc, sgn, 1, 2);
+						rc_encode(fp, enc->rc, (uint) sgn, 1, 2);
 					}
 				}
 			}
 
-			bits = enc->rc->code;
+			bits = (int) enc->rc->code;
 			enc->rc->code = 0;
 		}
 	}
@@ -2678,10 +2677,10 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
 				enc->th_cost[i] =((i - 1) >> min_m) + min_m + 1 + 1;
 			}
 
-			bits = min_cost;
+			bits = (int) min_cost;
 		}
 		else {
-			bits = putbits(fp, 4, min_m);
+			bits = putbits(fp, 4, (uint) min_m);
 
 			for (cl = 0; cl < enc->num_class; cl++) {
 				k = 0;
@@ -2707,7 +2706,7 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
 
 				for (gr = 0; gr < enc->num_group; gr++) {
 					pm = enc->pmlist[gr];
-					bits += putbits(fp, k, pm->id);
+					bits += putbits(fp, k, (uint) pm->id);
 				}
 			}
 		}
@@ -2750,10 +2749,10 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
 				enc->th_cost[i] = (p - log(pm->freq[i])) / log(2.0);
 			}
 
-			bits = min_cost;
+			bits = (int) min_cost;
 		}
 		else {
-			rc_encode(fp, enc->rc, min_m, 1, 16);
+			rc_encode(fp, enc->rc, (uint) min_m, 1, 16);
 
 			for (cl = 0; cl < enc->num_class; cl++) {
 				k = 0;
@@ -2770,11 +2769,11 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
 			if (enc->num_pmodel > 1) {
 				for (gr = 0; gr < enc->num_group; gr++) {
 					pm = enc->pmlist[gr];
-					rc_encode(fp, enc->rc, pm->id, 1, enc->num_pmodel);
+					rc_encode(fp, enc->rc, (uint) pm->id, 1, (uint) enc->num_pmodel);
 				}
 			}
 
-			bits = enc->rc->code;
+			bits = (int) enc->rc->code;
 			enc->rc->code = 0;
 		}
 	}
@@ -2969,19 +2968,19 @@ IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels, int d
 			aux = cur->val[y][x] - ref->val[y][x] + (int) (pow(2, depth) / 2 - 1);
 
 			if (aux > 0 && aux < (int) (pow(2, depth) - 1)) {
-				diff->val[y][x] = aux;
+				diff->val[y][x] = (img_t) aux;
 			}
 			else if (aux <= 0) {
 				diff->val[y][x] = 0;
 
-				aux_extra_info[conta] = aux;
+				aux_extra_info[conta] = (char) aux;
 
 				conta++;
 			}
 			else if (aux >= (int) (pow(2, depth) - 1)) {
-				diff->val[y][x] = (int) (pow(2, depth) - 1);
+				diff->val[y][x] = (img_t) (pow(2, depth) - 1);
 
-				aux_extra_info[conta] = aux - (int) (pow(2, depth) - 1);
+				aux_extra_info[conta] = (char) (aux - (int) (pow(2, depth) - 1));
 
 				conta++;
 			}
@@ -3020,10 +3019,10 @@ IMAGE* calc_diff(IMAGE* ref, IMAGE* cur, char **extra_info, int *num_pels, int d
 int encode_extra_info(FILE *fp, char *extra_info, int num_pels) {
 	int bits = 0, i;
 
-	bits = putbits(fp, 16, num_pels);
+	bits = putbits(fp, 16, (uint) num_pels);
 
 	for (i = 0; i < num_pels; i++) {
-		bits += putbits(fp, 8, extra_info[i] + 128);
+		bits += putbits(fp, 8, (uint) (extra_info[i] + 128));
 	}
 
 	return bits;
@@ -3079,7 +3078,7 @@ double sparseness_index(char *infile, int height, int width, int frames, int dep
 	char *extra_info = NULL;
 	IMAGE *img = NULL;
 
-	for (y = 0; y < (int)pow(2, depth); y++) {
+	for (y = 0; y < (int) pow(2, depth); y++) {
 		hist[y] = 0;
 	}
 
@@ -3113,7 +3112,7 @@ double sparseness_index(char *infile, int height, int width, int frames, int dep
 	free(hist);
 	safefree((void **)&extra_info);
 
-	return ((double) (1 - (L / (double)(1 + max - min))) * 100.0);
+	return ((1 - (L / (double) (1 + max - min))) * 100.0);
 }
 
 /*--------------------------- histogram_check ---------------------------*
@@ -3174,7 +3173,7 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 
 	free(hist);
 
-	aux_img = alloc_image(height, width, (int) (pow(2, depth) - 1));
+	aux_img = alloc_image(width, height, (int) (pow(2, depth) - 1));
 
 	// Produces the actual forward table
 	for (y = 0; y < (int)pow(2, depth); y++) {
@@ -3198,7 +3197,7 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
 
 		for (y = 0; y < img->height; y++) {
 			for (x = 0; x < img->width; x++) {
-				aux_img->val[y][x] = table[img->val[y][x]];
+				aux_img->val[y][x] = (img_t) table[img->val[y][x]];
 			}
 		}
 
@@ -3231,7 +3230,7 @@ int* histogram_check(char *infile, int height, int width, int frames, int depth,
  |
  |  Returns:  void
  *----------------------------------------------------------------------*/
-void histogram_packing(IMAGE *img, int *forward_table, int depth) {
+void histogram_packing(IMAGE *img, const int *forward_table, int depth) {
 	int x, y;
 	int used_values = 0;
 	int *table = (int *) alloc_mem(sizeof(int) * (int)pow(2, depth));
@@ -3250,7 +3249,7 @@ void histogram_packing(IMAGE *img, int *forward_table, int depth) {
 	// Perform the histogram packing of the image
 	for (y = 0; y < img->height; y++) {
 		for (x = 0; x < img->width; x++) {
-			img->val[y][x] = table[img->val[y][x]];
+			img->val[y][x] = (img_t) table[img->val[y][x]];
 		}
 	}
 
@@ -3261,17 +3260,17 @@ void histogram_packing(IMAGE *img, int *forward_table, int depth) {
 
 // inserts into subject[] at position pos
 char *append(char *subject, char *insert, int pos) {
-	int i = 0;
+	uint i = 0;
 
     char *buf = (char *) alloc_mem(sizeof(char) * (strlen(subject) + strlen(insert) + 1));
     buf[0] = '\0';
 
-    for (i = 0; i < (pos < strlen(subject) ? pos : strlen(subject)); i++) {
+    for (i = 0; i < ((uint) pos < strlen(subject) ? (uint) pos : strlen(subject)); i++) {
     	buf[i] = subject[i];
     }
     buf[i] = '\0';
 
-    int len = strlen(buf);
+    int len = (uint) strlen(buf);
     strcpy(buf + len, insert); // copy all of insert[] at the end
 
     len += strlen(insert);  // increase the length by length of insert[]
@@ -3294,7 +3293,7 @@ char *append(char *subject, char *insert, int pos) {
  |
  |  Returns:  int		--> Number of written bits
  *----------------------------------------------------------------------*/
-int encode_lookuptable(FILE *fp, int *forward_table, int size) {
+int encode_lookuptable(FILE *fp, const int *forward_table, int size) {
 	// Statistics
 	int y = 0;
 	int count = 0;
@@ -3363,11 +3362,10 @@ int encode_lookuptable(FILE *fp, int *forward_table, int size) {
 				new_str = cat_str(new_str, cat_str("11111111", int2bin(count - 383, 16), 0), 1);
 			}
 		}
-		count = 0;
 	}
 
 	// Number of bytes to write in the file
-	int bytes = strlen(new_str) / 8;
+	int bytes = (int) (strlen(new_str) / 8);
 
 	// Separates the bytes in the string
 	for (y = 1; y < bytes; y++) {
@@ -3376,11 +3374,11 @@ int encode_lookuptable(FILE *fp, int *forward_table, int size) {
 
 	char* sEnd = new_str;
 
-	bits = putbits(fp, 16, bytes);
+	bits = putbits(fp, 16, (uint) bytes);
 
 	// Write to file
 	for (y = 0; y < bytes; y++) {
-		bits += putbits(fp, 8, strtol(sEnd, &sEnd, 2));
+		bits += putbits(fp, 8, (uint) strtol(sEnd, &sEnd, 2));
 	}
 
 	safefree((void **) &new_str);
@@ -3394,7 +3392,7 @@ int main(int argc, char **argv) {
 	int i, j, f, k, x, y, cl, **prd_save, **th_save, **error = NULL;
 	char **class_save;
 	IMAGE *video[3] = {NULL, NULL, NULL};
-	ENCODER *enc;
+	ENCODER *enc = NULL;
 	double elapse = 0.0;
 	int f_mmse = 0;
 	int f_optpred = 0;
@@ -3436,162 +3434,196 @@ int main(int argc, char **argv) {
     for (i = 1; i < argc; i++) {
         if (argv[i][0] == '-') {
             switch(argv[i][1]) {
-                case 'H':
-                    height = atoi(argv[++i]);
-                    if (height <= 0) {
-                        fprintf(stderr, "The height of the image cannot be less than %d!\n", BASE_BSIZE);
-                        exit(-1);
-                    }
-                    break;
-                case 'W':
-                    width = atoi(argv[++i]);
-                    if (width <= 0) {
-                        fprintf(stderr, "The width of the image cannot be less than %d!\n", BASE_BSIZE);
-                        exit(-2);
-                    }
-                    break;
-                case 'F':
-                    frames = atoi(argv[++i]);
-                    if (frames <= 0) {
-                        frames = FRAMES;
-                    }
-                    break;
+				case 'H':
+					height = (int) strtol(argv[++i], NULL, 10);
+
+					if (height <= 0) {
+						fprintf(stderr, "The height of the image cannot be less than %d!\n", BASE_BSIZE);
+						exit(-1);
+					}
+
+					break;
+				case 'W':
+					width = (int) strtol(argv[++i], NULL, 10);
+
+					if (width <= 0) {
+						fprintf(stderr, "The width of the image cannot be less than %d!\n", BASE_BSIZE);
+						exit(-2);
+					}
+
+					break;
+				case 'F':
+					frames = (int) strtol(argv[++i], NULL, 10);
+
+					if (frames <= 0) {
+						frames = FRAMES;
+					}
+
+					break;
                 case 'p':
                     diff = 1;
+
                     break;
-                case 'M':
-                    num_class = atoi(argv[++i]);
-                    if (num_class <= 0 || num_class > 63) {
-                        num_class = NUM_CLASS;
-                    }
-                    break;
-                case 'B':
-                    hevc = 1;
-                    break;
+				case 'M':
+					num_class = (int) strtol(argv[++i], NULL, 10);
+
+					if (num_class <= 0 || num_class > 63) {
+						num_class = NUM_CLASS;
+					}
+
+					break;
+				case 'B':
+					hevc = 1;
+
+					break;
                 case 'G':
-                    bframes = atoi(argv[++i]);
+					bframes = (int) strtol(argv[++i], NULL, 10);
+
                     if (bframes <= 0) {
                         bframes = 0;
                     }
                     else {
                         bframes = bframes + 1;
                     }
-                    break;
-                case 'K':
-                    for (j = 0; j < 6; j++) {
-                        prd_order[j] = atoi(argv[++i]);
 
-                        if (prd_order[j] < 0 || prd_order[j] > 72) {
-                            if (j == 0 || j == 1 || j == 3) {
-                                prd_order[j] = INTRA_PRD_ORDER;
-                            }
-                            else {
-                                prd_order[j] = INTER_PRD_ORDER;
-                            }
-                        }
-                    }
                     break;
-                case 'P':
-                    coef_precision = atoi(argv[++i]);
-                    if (coef_precision <= 0 || coef_precision > 16) {
-                        coef_precision = COEF_PRECISION;
-                    }
-                    break;
-                case 'V':
-                    num_pmodel = atoi(argv[++i]);
-                    if (num_pmodel <= 0 || num_pmodel > 64) {
-                        num_pmodel = NUM_PMODEL;
-                    }
-                    break;
-                case 'A':
-                    pm_accuracy = atoi(argv[++i]);
-                    if (pm_accuracy < -1 || pm_accuracy > 6) {
-                        pm_accuracy = PM_ACCURACY;
-                    }
-                    break;
-                case 'I':
-                    max_iteration = atoi(argv[++i]);
-                    if (max_iteration <= 0) {
-                        max_iteration = MAX_ITERATION;
-                    }
-                    break;
+				case 'K':
+					for (j = 0; j < 6; j++) {
+						prd_order[j] = (int) strtol(argv[++i], NULL, 10);
+
+						if (prd_order[j] < 0 || prd_order[j] > 72) {
+							if (j == 0 || j == 1 || j == 3) {
+								prd_order[j] = INTRA_PRD_ORDER;
+							}
+							else {
+								prd_order[j] = INTER_PRD_ORDER;
+							}
+						}
+					}
+
+					break;
+				case 'P':
+					coef_precision = (int) strtol(argv[++i], NULL, 10);
+
+					if (coef_precision <= 0 || coef_precision > 16) {
+						coef_precision = COEF_PRECISION;
+					}
+
+					break;
+				case 'V':
+					num_pmodel = (int) strtol(argv[++i], NULL, 10);
+
+					if (num_pmodel <= 0 || num_pmodel > 64) {
+						num_pmodel = NUM_PMODEL;
+					}
+
+					break;
+				case 'A':
+					pm_accuracy = (int) strtol(argv[++i], NULL, 10);
+
+					if (pm_accuracy < -1 || pm_accuracy > 6) {
+						pm_accuracy = PM_ACCURACY;
+					}
+
+					break;
+				case 'I':
+					max_iteration = (int) strtol(argv[++i], NULL, 10);
+
+					if (max_iteration <= 0) {
+						max_iteration = MAX_ITERATION;
+					}
+
+					break;
                 case 'm':
                     f_mmse = 1;
+
                     break;
                 case 'o':
                     f_optpred = 1;
+
                     break;
                 case 'h':
                     f_huffman = 1;
+
                     break;
                 case 'f':
                     quadtree_depth = -1;
+
                     break;
                 case 'u':
                     do_histogram_packing = 0;
-                    break;
-                case 'D':
-                    delta = atoi(argv[++i]);
-                    if (delta <= 0) {
-                        delta = 1;
-                    }
-                    break;
-                case 'd':
-                    depth = atoi(argv[++i]);
-                    if (depth < 8) {
-                        depth = DEPTH;
-                    }
-                    else if (depth > 16) {
-                        depth = 16;
-                    }
-                    break;
-                case 'E':
-                    endianness = atoi(argv[++i]);
-                    if (endianness == 0) {
-                        endianness = LITTLE_ENDIANNESS;
-                    }
-                    else if (endianness == 1) {
-                        endianness = BIG_ENDIANNESS;
-                    }
-                    else if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
-                        endianness = LITTLE_ENDIANNESS;
-                    }
-                    break;
-                case 'C':
-                    chroma_name = argv[++i];
 
-                    if (strcmp(chroma_name, "GRAY") == 0) {
-                        chroma = GRAY;
-                    }
-                    else if (strcmp(chroma_name, "444") == 0) {
-                        chroma = S444;
-                    }
-                    else if (strcmp(chroma_name, "422") == 0) {
-                        chroma = S422;
-                    }
-                    else if (strcmp(chroma_name, "411") == 0) {
-                        chroma = S411;
-                    }
-                    else if (strcmp(chroma_name, "420") == 0) {
-                        chroma = S420;
-                    }
-                    else {
-                        printf("Chroma format not recognised: %s.\n", chroma_name);
-                        printf("Supported formats:\n");
-                        printf("\tGRAY;\n"
-                               "\t444;\n"
-                               "\t422; --> Not yet implemented\n"
-                               "\t411; --> Not yet implemented\n"
-                               "\t420.\n");
-                        exit(-2);
-                    }
                     break;
+				case 'D':
+					delta = (int) strtol(argv[++i], NULL, 10);
+
+					if (delta <= 0) {
+						delta = 1;
+					}
+
+					break;
+					break;
+				case 'd':
+					depth = (int) strtol(argv[++i], NULL, 10);
+
+					if (depth < 8) {
+						depth = DEPTH;
+					}
+					else if (depth > 16) {
+						depth = 16;
+					}
+
+					break;
+				case 'E':
+					endianness = (int) strtol(argv[++i], NULL, 10);
+
+					if (endianness == 0) {
+						endianness = LITTLE_ENDIANNESS;
+					}
+					else if (endianness == 1) {
+						endianness = BIG_ENDIANNESS;
+					}
+					else if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
+						endianness = LITTLE_ENDIANNESS;
+					}
+
+					break;
+				case 'C':
+					chroma_name = argv[++i];
+
+					if (strcmp(chroma_name, "GRAY") == 0) {
+						chroma = GRAY;
+					}
+					else if (strcmp(chroma_name, "444") == 0) {
+						chroma = S444;
+					}
+					else if (strcmp(chroma_name, "422") == 0) {
+						chroma = S422;
+					}
+					else if (strcmp(chroma_name, "411") == 0) {
+						chroma = S411;
+					}
+					else if (strcmp(chroma_name, "420") == 0) {
+						chroma = S420;
+					}
+					else {
+						printf("Chroma format not recognised: %s.\n", chroma_name);
+						printf("Supported formats:\n");
+						printf("\tGRAY;\n"
+							   "\t444;\n"
+							   "\t422; --> Not yet implemented\n"
+							   "\t411; --> Not yet implemented\n"
+							   "\t420.\n");
+						exit(-2);
+					}
+
+					break;
                 default:
                     fprintf(stderr, "Unknown option: %s!\n", argv[i]);
                     exit (1);
             }
 		}
-		else {
+        else {
 			if (infile == NULL) {
 				infile = argv[i];
 			}
@@ -3608,7 +3640,7 @@ int main(int argc, char **argv) {
 
 	// Help and version
 	if (infile == NULL || outfile == NULL) {
-		printf(BANNER"\n", 0.1 * VERSION);
+		printf(BANNER"\n", MRP_VERSION, MRP_VERSION_DATE);
 		printf("usage: encmrp [options] infile outfile\n");
 		printf("options:\n");
 		printf("    -H num  	Height*\n");
@@ -3655,7 +3687,7 @@ int main(int argc, char **argv) {
 	// If the number of classes was not defined it is now
 	k = width * height;
 	if (num_class < 0) {
-		num_class = 10.4E-5 * k + 13.8;
+		num_class = (int) (10.4E-5 * k + 13.8);
 
 		if (num_class > MAX_CLASS) {
 			num_class = MAX_CLASS;
@@ -3665,7 +3697,7 @@ int main(int argc, char **argv) {
 	// If the prediction order was not defined it is now
 	for (j = 0; j < 6; j++) {
 		if (prd_order[j] < 0) {
-			prd_order[j] = 12.0E-5 * k + 17.2;
+			prd_order[j] = (int) (12.0E-5 * k + 17.2);
 
 			for (i = 1; i < 8; i++) {
 				if (prd_order[j] < (i + 1) * (i + 1)) {
@@ -3718,7 +3750,7 @@ int main(int argc, char **argv) {
 	free(aux);
 
 	res = fileopen(resfile, "w");
-	fprintf(res, "MRP-Video version %d encoding results\n", VERSION);
+	fprintf(res, "MRP-Video version %s (%s) encoding results\n", MRP_VERSION, MRP_VERSION_DATE);
 	fprintf(res, "\tEncoded file: %s\n", infile);
 	fprintf(res, "\tDimensions: %dx%dx%d\n", width, height, frames);
 	fprintf(res, "---------------------------------------------\n");
@@ -3792,9 +3824,10 @@ int main(int argc, char **argv) {
 			min_cost = INT_MAX;
 
 			for (i = j = 0; i < max_iteration; i++) {
-				cost = design_predictor(enc, f_mmse);
-				cost = optimize_group(enc);
+				design_predictor(enc, f_mmse);
+				optimize_group(enc);
 				cost = optimize_class(enc);
+
 				if (cost < min_cost) {
 					min_cost = cost;
 					j = i;
@@ -3839,7 +3872,7 @@ int main(int argc, char **argv) {
 			predict_region(enc, 0, 0, enc->height, enc->width);
 			cost = calc_cost(enc, 0, 0, enc->height, enc->width);
 
-			printf("Frame: %d\n\t1st optimization --> Cost: %d\n", f, (int)cost);
+			printf("Frame: %d\n\t1st optimization --> Cost: %d\n", f, (int) cost);
 
 			/* 2nd loop */
 			//Loop type
@@ -3848,11 +3881,11 @@ int main(int argc, char **argv) {
 
 			for (i = j = 0; i < max_iteration; i++) {
 				if (f_optpred) {
-					cost = optimize_predictor(enc);
+					optimize_predictor(enc);
 				}
 
 				side_cost = encode_predictor(NULL, enc);
-				cost = optimize_group(enc);
+				optimize_group(enc);
 				side_cost += encode_threshold(NULL, enc);
 				cost = optimize_class(enc);
 				side_cost += encode_class(NULL, enc);
@@ -3904,7 +3937,7 @@ int main(int argc, char **argv) {
 					for (k = 0; k < enc->num_group; k++) {
 						enc->th[cl][k] = th_save[cl][k];
 						for (; i < enc->th[cl][k]; i++) {
-							enc->uquant[cl][i] = k;
+							enc->uquant[cl][i] = (char) k;
 						}
 					}
 				}
@@ -3978,10 +4011,10 @@ int main(int argc, char **argv) {
 		free(error);
 	}
 	else {
-		int **back_ref_error, **for_ref_error;
+		int **back_ref_error = NULL, **for_ref_error = NULL;
 		int back_reference = 0, for_reference = 0, first_frame = 0, conta = 0, final = 0;
-		int ***keep_error;
-		int (*bref)[5] = NULL;
+		int ***keep_error = NULL;
+		int **bref = NULL;
 		int prate = 0, pframes = 0;
 
 		if (hevc == 0 || bframes == 2) {
@@ -3996,7 +4029,7 @@ int main(int argc, char **argv) {
 
 			bref = select_bref(bframes);
 
-			final = ((frames - 1) % bframes != 0) ? (bframes * ((int)((frames - 1) / bframes)) + 1) : frames;
+			final = ((frames - 1) % bframes != 0) ? (bframes * (((frames - 1) / bframes)) + 1) : frames;
 		}
 
 		f = 0;
@@ -4048,8 +4081,8 @@ int main(int argc, char **argv) {
 			min_cost = INT_MAX;
 
 			for (i = j = 0; i < max_iteration; i++) {
-				cost = design_predictor(enc, f_mmse);
-				cost = optimize_group(enc);
+				design_predictor(enc, f_mmse);
+				optimize_group(enc);
 				cost = optimize_class(enc);
 
 				if (cost < min_cost) {
@@ -4106,11 +4139,11 @@ int main(int argc, char **argv) {
 
 			for (i = j = 0; i < max_iteration; i++) {
 				if (f_optpred) {
-					cost = optimize_predictor(enc);
+					optimize_predictor(enc);
 				}
 
 				side_cost = encode_predictor(NULL, enc);
-				cost = optimize_group(enc);
+				optimize_group(enc);
 				side_cost += encode_threshold(NULL, enc);
 				cost = optimize_class(enc);
 				side_cost += encode_class(NULL, enc);
@@ -4162,7 +4195,7 @@ int main(int argc, char **argv) {
 					for (k = 0; k < enc->num_group; k++) {
 						enc->th[cl][k] = th_save[cl][k];
 						for (; i < enc->th[cl][k]; i++) {
-							enc->uquant[cl][i] = k;
+							enc->uquant[cl][i] = (char) k;
 						}
 					}
 				}

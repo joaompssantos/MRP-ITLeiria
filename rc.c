@@ -12,13 +12,13 @@
 #include <stdlib.h>
 #include "mrp.h"
 
-RANGECODER *rc_init(void){
+RANGECODER *rc_init(void) {
 	RANGECODER *rc;
 
 	rc = alloc_mem(sizeof(RANGECODER));
 	rc->range = (range_t) -1;
 	rc->low = rc->code = 0;
-	return(rc);
+	return (rc);
 }
 
 void rc_encode(FILE *fp, RANGECODER *rc, uint cumfreq, uint freq, uint totfreq){
@@ -27,7 +27,7 @@ void rc_encode(FILE *fp, RANGECODER *rc, uint cumfreq, uint freq, uint totfreq){
 	rc->range *= freq;
 
 	while((rc->low ^ (rc->low + rc->range)) < RANGE_TOP){
-		putc(rc->low >> (RANGE_SIZE - 8), fp);
+		putc((int) (rc->low >> (RANGE_SIZE - 8)), fp);
 		rc->code += 8;
 		if (rc->code > 1E8) {
 			fprintf(stderr, "Too large!\n");
@@ -38,7 +38,7 @@ void rc_encode(FILE *fp, RANGECODER *rc, uint cumfreq, uint freq, uint totfreq){
 	}
 
 	while(rc->range < RANGE_BOT){
-		putc(rc->low >> (RANGE_SIZE - 8), fp);
+		putc((int) (rc->low >> (RANGE_SIZE - 8)), fp);
 		rc->code += 8;
 		if (rc->code > 1E8) {
 			fprintf(stderr, "Too large!\n");
@@ -47,18 +47,16 @@ void rc_encode(FILE *fp, RANGECODER *rc, uint cumfreq, uint freq, uint totfreq){
 		rc->range = ((-rc->low) & (RANGE_BOT - 1)) << 8;
 		rc->low <<= 8;
 	}
-	return;
 }
 
 void rc_finishenc(FILE *fp, RANGECODER *rc){
 	int i;
 
 	for (i = 0; i < RANGE_SIZE; i += 8) {
-		putc(rc->low >> (RANGE_SIZE - 8), fp);
+		putc((int) (rc->low >> (RANGE_SIZE - 8)), fp);
 		rc->code += 8;
 		rc->low <<= 8;
 	}
-	return;
 }
 
 int rc_decode(FILE *fp, RANGECODER *rc, PMODEL *pm, int min, int max){
@@ -68,8 +66,8 @@ int rc_decode(FILE *fp, RANGECODER *rc, PMODEL *pm, int min, int max){
 
 	offset = pm->cumfreq[min];
 	totfreq = pm->cumfreq[max] - offset;
-	rc->range /= (range_t)totfreq;
-	rfreq = (rc->code - rc->low) / rc->range;
+	rc->range /= totfreq;
+	rfreq = (uint) ((rc->code - rc->low) / rc->range);
 
 	if (rfreq >= totfreq) {
 		fprintf(stderr, "\nData is corrupted!\n");
@@ -114,6 +112,4 @@ void rc_startdec(FILE *fp, RANGECODER *rc){
 	for (i = 0; i < RANGE_SIZE; i += 8) {
 		rc->code = (rc->code << 8) | getc(fp);
 	}
-
-	return;
 }

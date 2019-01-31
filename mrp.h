@@ -1,37 +1,15 @@
+#ifndef MRP_H
+#define MRP_H
+
 #define HAVE_CLOCK
 #define HAVE_64BIT_INTEGER
-#define FRAMES 1
-#define DEPTH 8
-#define QUADTREE_DEPTH	4
-#define BASE_BSIZE      8
-#define MAX_BSIZE       32
-#define MIN_BSIZE       (MAX_BSIZE >> QUADTREE_DEPTH)
-#define MAX_CLASS	63
-#define NUM_CLASS       -1
-#define NUM_GROUP       16
-#define INTRA_PRD_ORDER -1
-#define INTER_PRD_ORDER 1
-#define COEF_PRECISION  6
-#define MAX_COEF	(2 << COEF_PRECISION)
-#define MAX_UPARA       512
-#define UPEL_DIST       3
-#define NUM_UPELS       (UPEL_DIST * (UPEL_DIST + 1))
-#define MAX_ITERATION   100
-#define EXTRA_ITERATION 10
-#define NUM_PMODEL      16
-#define PM_ACCURACY     3
-#define MIN_FREQ        1
-#define MAX_SYMBOL	1024		/* must be >> MAX_UPARA */
-#define PMCLASS_MAX	16
-#define PMCLASS_LEVEL	32
-#define OPT_SIDEINFO
-#define VLC_MAXLEN      32
-#define MAGIC_NUMBER    ('M' << 8) + 'R'
-#define BANNER          "\nIT - Leiria: Minimum Rate Predictors\nencmrp/decmrp version %.1f (July 2016)"
-#define VERSION         9
-#define uint            unsigned int
-#define img_t           unsigned short
-#define cost_t          double
+#define MAGIC_NUMBER        ('M' << 8) + 'R'
+#define BANNER              "\nIT - Leiria: Minimum Rate Predictors\nencmrp/decmrp version %s (%s)"
+#define uint                unsigned int
+#define img_t               unsigned short
+#define cost_t              double
+
+// Entropy coding
 #ifdef HAVE_64BIT_INTEGER
 #  define RANGE_SIZE 64
 #  if defined(_MSC_VER) || defined(__BORLANDC__)
@@ -48,16 +26,43 @@
 #define RANGE_TOP  ((range_t)1 << (RANGE_SIZE - 8))
 #define RANGE_BOT  ((range_t)1 << (RANGE_SIZE - 16))
 
+#define NUM_PMODEL          16
+#define PM_ACCURACY         3
+#define MIN_FREQ            1
+#define MAX_SYMBOL          1024        /* must be >> MAX_UPARA */
+#define PMCLASS_MAX         16
+#define PMCLASS_LEVEL       32
+#define VLC_MAXLEN          32
+
+// MRP Common
+#define FRAMES              1
+#define DEPTH               8
+#define QUADTREE_DEPTH      4
+#define BASE_BSIZE          8
+#define MAX_BSIZE           32
+#define MIN_BSIZE           (MAX_BSIZE >> QUADTREE_DEPTH)
+#define MAX_CLASS           63
+#define NUM_CLASS           -1
+#define NUM_GROUP           16
+#define INTRA_PRD_ORDER     -1
+#define INTER_PRD_ORDER     1
+#define COEF_PRECISION      6
+#define MAX_COEF            (2 << COEF_PRECISION)
+#define MAX_UPARA           512
+#define MAX_ITERATION       100
+#define EXTRA_ITERATION     10
+#define OPT_SIDEINFO
+
 // Endianness
-#define LITTLE_ENDIANNESS 0
-#define BIG_ENDIANNESS 1
+#define LITTLE_ENDIANNESS   0
+#define BIG_ENDIANNESS      1
 
 // Chroma format
-#define GRAY				0
-#define S444				1
-#define S422				2
-#define S411				3
-#define S420				4
+#define GRAY                0
+#define S444                1
+#define S422                2
+#define S411                3
+#define S420                4
 
 // Image
 typedef struct {
@@ -218,3 +223,5 @@ void rc_encode(FILE *, RANGECODER *, uint, uint, uint);
 void rc_finishenc(FILE *, RANGECODER *);
 int rc_decode(FILE *, RANGECODER *, PMODEL *, int, int);
 void rc_startdec(FILE *, RANGECODER *);
+
+#endif //MRP_H

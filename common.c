@@ -5,53 +5,41 @@
 #include <math.h>
 #include "mrp.h"
 
-//Reference pixel position separated by their distances
+//Reference pixel position separated by their distances {y, x}
 const POINT dyx[] = {
-		/* 1 */
-		{ 0,-1}, {-1, 0},
-		/* 2 */
-		{ 0,-2}, {-1,-1}, {-2, 0}, {-1, 1},
-		/* 3 */
-		{ 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2},
-		/* 4 */
-		{ 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3},
-		/* 5 */
-		{ 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4},
-		/* 6 */
-		{ 0,-6}, {-1,-5}, {-2,-4}, {-3,-3}, {-4,-2}, {-5,-1}, {-6, 0}, {-5, 1}, {-4, 2}, {-3, 3}, {-2, 4}, {-1, 5},
-		/* 7 */
-		{ 0,-7}, {-1,-6}, {-2,-5}, {-3,-4}, {-4,-3}, {-5,-2}, {-6,-1}, {-7, 0}, {-6, 1}, {-5, 2}, {-4, 3}, {-3, 4}, {-2, 5}, {-1, 6},
-		/* 8 */
-		{ 0,-8}, {-1,-7}, {-2,-6}, {-3,-5}, {-4,-4}, {-5,-3}, {-6,-2}, {-7,-1}, {-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
-};
-//Reference pixel position separated by their distances
-// {y, x}
-const POINT idyx[] = {
-		/* 0 --> 1 */
-		//{ 0, 0},
-		/* 1 --> 5 */
-		{ 0,-1}, {-1, 0}, { 0, 1}, { 1, 0},
-		/* 2 --> 13 */
-		{ 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2}, { 1, 1}, { 2, 0}, { 1,-1},
-		/* 3 --> 25 */
-		{ 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3}, { 1, 2}, { 2, 1}, { 3, 0}, { 2,-1}, { 1,-2},
-		/* 4 --> 41 */
-		{ 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4}, { 1, 3}, { 2, 2}, { 3, 1}, { 4, 0}, { 3,-1}, { 2,-2}, { 1,-3},
-//		/* 5 */
-//		{ 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2},
-//		{-2, 3}, {-1, 4},
-//		/* 6 */
-//		{ 0,-6}, {-1,-5}, {-2,-4}, {-3,-3}, {-4,-2}, {-5,-1}, {-6, 0}, {-5, 1},
-//		{-4, 2}, {-3, 3}, {-2, 4}, {-1, 5},
-//		/* 7 */
-//		{ 0,-7}, {-1,-6}, {-2,-5}, {-3,-4}, {-4,-3}, {-5,-2}, {-6,-1}, {-7, 0},
-//		{-6, 1}, {-5, 2}, {-4, 3}, {-3, 4}, {-2, 5}, {-1, 6},
-//		/* 8 */
-//		{ 0,-8}, {-1,-7}, {-2,-6}, {-3,-5}, {-4,-4}, {-5,-3}, {-6,-2}, {-7,-1},
-//		{-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
+    /* 1 --> 2 */
+    { 0,-1}, {-1, 0},
+    /* 2 --> 6 */
+    { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1},
+    /* 3 --> 12 */
+    { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2},
+    /* 4 --> 20 */
+    { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3},
+    /* 5 --> 30 */
+    { 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4},
+    /* 6 --> 42 */
+    { 0,-6}, {-1,-5}, {-2,-4}, {-3,-3}, {-4,-2}, {-5,-1}, {-6, 0}, {-5, 1}, {-4, 2}, {-3, 3}, {-2, 4}, {-1, 5},
+    /* 7 --> 56 */
+    { 0,-7}, {-1,-6}, {-2,-5}, {-3,-4}, {-4,-3}, {-5,-2}, {-6,-1}, {-7, 0}, {-6, 1}, {-5, 2}, {-4, 3}, {-3, 4}, {-2, 5}, {-1, 6},
+    /* 8 --> 72 */
+    { 0,-8}, {-1,-7}, {-2,-6}, {-3,-5}, {-4,-4}, {-5,-3}, {-6,-2}, {-7,-1}, {-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
 };
 
-int bref1[4][5] = {{2, -2, -1, 0, -1},
+//Reference pixel position separated by their distances
+const POINT idyx[] = {
+    /* 0 --> 1 */
+    //{ 0, 0},
+    /* 1 --> 5 */
+    { 0,-1}, {-1, 0}, { 0, 1}, { 1, 0},
+    /* 2 --> 13 */
+    { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2}, { 1, 1}, { 2, 0}, { 1,-1},
+    /* 3 --> 25 */
+    { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3}, { 1, 2}, { 2, 1}, { 3, 0}, { 2,-1}, { 1,-2},
+    /* 4 --> 41 */
+    { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4}, { 1, 3}, { 2, 2}, { 3, 1}, { 4, 0}, { 3,-1}, { 2,-2}, { 1,-3},
+};
+
+int bref1[2][5] = {{2, -2, -1, 0, -1},
 				   {-1, -1, 1, 0, 2},
 };
 
@@ -271,8 +259,8 @@ unsigned short reverse_endianness (unsigned short s, int endianness) {
         return s;
     }
     else {
-        c1 = s & 255;
-        c2 = (s >> 8) & 255;
+        c1 = (unsigned char) (s & 255);
+        c2 = (unsigned char) ((s >> 8) & 255);
 
         return (c1 << 8) + c2;
     }
@@ -329,8 +317,6 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
 	}*/
 
 	fclose(fp);
-
-	return;
 }
 
 /*------------------------------- read_yuv --------------------------*
@@ -377,25 +363,25 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 
 	if (frame > 0) {
 		if (depth > 8) {
-			fseek(fp, img->height * img->width * 2 * chroma_pass * frame, SEEK_SET);
+			fseek(fp, (long) (img->height * img->width * 2 * chroma_pass * frame), SEEK_SET);
 		}
 		else {
-			fseek(fp, img->height * img->width * chroma_pass * frame, SEEK_SET);
+			fseek(fp, (long) (img->height * img->width * chroma_pass * frame), SEEK_SET);
 		}
 	}
 
 	for (i = 0; i < img->height; i++) {
 		for (j = 0; j < img->width; j++) {
-			first = (img_t)fgetc(fp);
+			first = (img_t) fgetc(fp);
 
 			if (depth > 8) {
-				second = (img_t)fgetc(fp);
+				second = (img_t) fgetc(fp);
 
-				img->val[i][j] = (first << shift_first) + (second << shift_second);
-				img->val[i][j] = img->val[i][j] & mask[depth - 8];
+				img->val[i][j] = (img_t) ((first << shift_first) + (second << shift_second));
+				img->val[i][j] = (img_t) (img->val[i][j] & mask[depth - 8]);
 			}
 			else {
-				img->val[i][j] = first;
+				img->val[i][j] = (img_t) first;
 			}
 		}
 	}
@@ -425,404 +411,38 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 }
 
 
-int *gen_hufflen(uint *hist, int size, int max_len) {
-	int i, j, k, l, *len, *index, *bits, *link;
-
-	len = (int *)alloc_mem(size * sizeof(int));
-	index = (int *)alloc_mem(size * sizeof(int));
-	bits = (int *)alloc_mem(size * sizeof(int));
-	link = (int *)alloc_mem(size * sizeof(int));
-	for (i = 0; i < size; i++) {
-		len[i] = 0;
-		index[i] = i;
-		link[i] = -1;
-	}
-	/* sort in decreasing order of frequency */
-	for (i = size -1; i > 0; i--) {
-		for (j = 0; j < i; j++) {
-			if (hist[index[j]] < hist[index[j + 1]]) {
-				k = index[j + 1];
-				index[j + 1] = index[j];
-				index[j] = k;
-			}
-		}
-	}
-	for (i = 0; i < size; i++) {
-		bits[i] = index[i];	/* reserv a sorted index table */
-	}
-	for (i = size - 1; i > 0; i--) {
-		k = index[i - 1];
-		l = index[i];
-		hist[k] += hist[l];
-		len[k]++;
-		while (link[k] >= 0) {
-			k = link[k];
-			len[k]++;
-		}
-		link[k] = l;
-		len[l]++;
-		while (link[l] >= 0) {
-			l = link[l];
-			len[l]++;
-		}
-		for (j = i - 1; j > 0; j--) {
-			if (hist[index[j - 1]] < hist[index[j]]) {
-				k = index[j];
-				index[j] = index[j - 1];
-				index[j - 1] = k;
-			} else {
-				break;
-			}
-		}
-	}
-	/* limit the maximum code length to max_len */
-	for (i = 0; i < size; i++) {
-		index[i] = bits[i];	/* restore the index table */
-		bits[i] = 0;
-	}
-	for (i = 0; i < size; i++) {
-		bits[len[i]]++;
-	}
-	for (i = size - 1; i > max_len; i--) {
-		while (bits[i] > 0) {
-			j = i - 2;
-			while(bits[j] == 0) j--;
-			bits[i] -= 2;
-			bits[i - 1]++;
-			bits[j + 1] += 2;
-			bits[j]--;
-		}
-	}
-	for (i = k = 0; i < size; i++) {
-		for (j = 0; j < bits[i]; j++) {
-			len[index[k++]] = i;
-		}
-	}
-	free(link);
-	free(bits);
-	free(index);
-	return (len);
-}
-
-void gen_huffcode(VLC *vlc) {
-	int i, j, *idx, *len;
-	uint k;
-
-	vlc->index = idx = (int *)alloc_mem(vlc->size * sizeof(int));
-	vlc->off = (int *)alloc_mem(vlc->max_len * sizeof(int));
-	vlc->code = (uint *)alloc_mem(vlc->size * sizeof(int));
-	len = vlc->len;
-
-	/* sort in increasing order of code length */
-	for (i = 0; i < vlc->size; i++) {
-		idx[i] = i;
-	}
-
-	for (i = vlc->size -1; i > 0; i--) {
-		for (j = 0; j < i; j++) {
-			if (len[idx[j]] > len[idx[j + 1]]) {
-				k = idx[j + 1];
-				idx[j + 1] = idx[j];
-				idx[j] = k;
-			}
-		}
-	}
-
-	k = 0;
-
-	for (j = 0; j < vlc->max_len; j++) {
-		vlc->off[j] = -1;
-	}
-
-	j = len[idx[0]];
-
-	for (i = 0; i < vlc->size; i++) {
-		if (j < len[idx[i]]) {
-			k <<= (len[idx[i]] - j);
-			j = len[idx[i]];
-		}
-
-		vlc->code[idx[i]] = k++;
-		vlc->off[j - 1] = i;
-	}
-
-	return;
-}
-
-VLC *make_vlc(uint *hist, int size, int max_len) {
-	VLC *vlc;
-
-	vlc = (VLC *)alloc_mem(sizeof(VLC));
-	vlc->size = size;
-	vlc->max_len = max_len;
-	vlc->len = gen_hufflen(hist, size, max_len);
-	gen_huffcode(vlc);
-	return (vlc);
-}
-
-void free_vlc(VLC *vlc) {
-	free(vlc->code);
-	free(vlc->off);
-	free(vlc->index);
-	free(vlc->len);
-	free(vlc);
-	return;
-}
-
-VLC **init_vlcs(PMODEL ***pmodels, int num_group, int num_pmodel) {
-	VLC **vlcs, *vlc;
-	PMODEL *pm;
-	int gr, k;
-
-	vlcs = (VLC **)alloc_2d_array(num_group, num_pmodel, sizeof(VLC));
-	for (gr = 0; gr < num_group; gr++) {
-		for (k = 0; k < num_pmodel; k++) {
-			vlc = &vlcs[gr][k];
-			pm = pmodels[gr][k];
-			vlc->size = pm->size;
-			vlc->max_len = VLC_MAXLEN;
-			vlc->len = gen_hufflen(pm->freq, pm->size, VLC_MAXLEN);
-			gen_huffcode(vlc);
-		}
-	}
-	return (vlcs);
-}
-
-/*
-  Natural logarithm of the gamma function
-  cf. "Numerical Recipes in C", 6.1
-  http://www.ulib.org/webRoot/Books/Numerical_Recipes/bookcpdf.html
- */
-double lngamma(double xx) {
-	int j;
-	double x,y,tmp,ser;
-	double cof[6] = {
-			76.18009172947146,	-86.50532032941677,
-			24.01409824083091,	-1.231739572450155,
-			0.1208650973866179e-2,	-0.5395239384953e-5
-	};
-
-	y = x = xx;
-	tmp = x + 5.5 - (x + 0.5) * log(x + 5.5);
-	ser = 1.000000000190015;
-	for (j=0;j<=5;j++)
-		ser += (cof[j] / ++y);
-	return (log(2.5066282746310005 * ser / x) - tmp);
-}
-
-void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, int center, int idx, double sigma) {
-	double shape, beta, norm, sw, x;
-	int i, j, n;
-
-	if (center == 0) sigma *= 2.0;
-
-	if (idx < 0) {
-		shape = 2.0;
-	}
-	else {
-		shape = 3.2 * (idx + 1) / (double)num_pmodel;
-	}
-
-	/* Generalized Gaussian distribution */
-	beta = exp(0.5*(lngamma(3.0/shape)-lngamma(1.0/shape))) / sigma;
-	sw = 1.0 / (double)num_subpm;
-	n = pm->size * num_subpm;
-	center *= num_subpm;
-
-	if (center == 0) {    /* one-sided distribution */
-		for (i = 0; i < n; i++) {
-			x = (double)i * sw;
-			pdfsamp[i] = exp(-pow(beta * x, shape));
-		}
-	}
-	else {
-		for (i = center; i < n; i++) {
-			x = (double)(i - (double)center + 0.5) * sw;
-			pdfsamp[i + 1] = exp(-pow(beta * x, shape));
-		}
-
-		for (i = 0; i <= center; i++) {
-			pdfsamp[center - i] =  pdfsamp[center + i + 1];
-		}
-
-		for (i = 0; i < n; i++) {
-			if (i == center) {
-				pdfsamp[i] = (2.0 + pdfsamp[i] + pdfsamp[i + 1]) / 2.0;
-			}
-			else {
-				pdfsamp[i] = pdfsamp[i] + pdfsamp[i + 1];
-			}
-		}
-	}
-
-	for (j = 0; j < num_subpm; j++) {
-		norm = 0.0;
-		for (i = 0; i < pm->size; i++) {
-			norm += pdfsamp[i * num_subpm + j];
-		}
-
-		norm = (double)(MAX_TOTFREQ - pm->size * MIN_FREQ) / norm;
-		norm += 1E-8;	/* to avoid machine dependent rounding errors */
-		pm->cumfreq[0] = 0;
-
-		for (i = 0; i < pm->size; i++) {
-			pm->freq[i] = norm * pdfsamp[i * num_subpm + j] + MIN_FREQ;
-			pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
-		}
-
-		pm++;
-	}
-	return;
-}
-
-/*---------------------------- init_pmodels ------------------------*
- |  Function init_pmodels
- |
- |  Purpose:  Initializes the probability models
- |
- |  Parameters:
- |		num_group		--> Number of groups ???? (IN)
- |		num_pmodel		--> Number of probability models (IN)
- |		pm_accuracy		--> Probability model accuracy (IN)
- |		pm_idx			--> ?? --> NULL (IN)
- |		sigma			--> Predefined vectors (IN)
- |		size			--> Image maximum value + 1 (IN)
- |
- |  Returns:  PMODEL*** --> returns a PMODEL type structure
- *-------------------------------------------------------------------*/
-PMODEL ***init_pmodels(int num_group, int num_pmodel, int pm_accuracy, int *pm_idx, double *sigma, int size) {
-	PMODEL ***pmodels, *pmbuf, *pm;
-	int gr, i, j, num_subpm, num_pm, ssize, idx;
-	double *pdfsamp;
-
-	//??
-	if (pm_accuracy < 0) {
-		num_subpm = 1;
-		ssize = 1;
-	}
-	else {
-		num_subpm = 1 << pm_accuracy;
-		ssize = size;
-		size = size + ssize - 1;
-	}
-
-	//Defines the number of probability models
-	num_pm = (pm_idx != NULL)? 1 : num_pmodel;
-
-	pmodels = (PMODEL ***)alloc_2d_array(num_group, num_pm, sizeof(PMODEL *));
-	pmbuf = (PMODEL *)alloc_mem(num_group * num_pm * num_subpm * sizeof(PMODEL));
-
-	//Vector initializations
-	for (gr = 0; gr < num_group; gr++) {
-		for (i = 0; i < num_pm; i++) {
-			pmodels[gr][i] = pmbuf;
-
-			for (j = 0; j < num_subpm; j++) {
-				pm = pmbuf++;
-				pm->id = i;
-				pm->size = size;
-				pm->freq = (uint *)alloc_mem((size * 2 + 1) * sizeof(uint));
-				pm->cumfreq = &pm->freq[size];
-
-				if (pm_idx == NULL) {
-					pm->cost = (float *)alloc_mem((size + ssize) * sizeof(float));
-					pm->subcost = &pm->cost[size];
-				}
-			}
-		}
-	}
-
-	pdfsamp = alloc_mem((size * num_subpm + 1) * sizeof(double));
-
-	for (gr = 0; gr < num_group; gr++) {
-		for (i = 0; i < num_pm; i++) {
-			if (pm_idx != NULL) {
-				idx = pm_idx[gr];
-			}
-			else if (num_pm > 1) {
-				idx = i;
-			}
-			else {
-				idx = -1;
-			}
-
-			set_freqtable(pmodels[gr][i], pdfsamp, num_subpm, num_pmodel, ssize - 1, idx, sigma[gr]);
-		}
-	}
-
-	free(pdfsamp);
-
-	return (pmodels);
-}
-
-/* probability model for coefficients and thresholds */
-void set_spmodel(PMODEL *pm, int size, int m) {
-	int i, sum;
-	double p;
-
-	pm->size = size;
-
-	if (m >= 0) {
-		p = 1.0 / (double)(1 << (m % 8));
-		sum = 0;
-
-		for (i = 0; i < pm->size; i++) {
-			pm->freq[i] = exp(-p * i) * (1 << 10);
-
-			if (pm->freq[i] == 0) pm->freq[i]++;
-
-			sum += pm->freq[i];
-		}
-
-		if (m & 8) pm->freq[0] = (sum - pm->freq[0]);	/* weight for zero */
-	}
-	else {
-		for (i = 0; i < pm->size; i++) {
-			pm->freq[i] = 1;
-		}
-	}
-
-	pm->cumfreq[0] = 0;
-
-	for (i = 0; i < pm->size; i++) {
-		pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
-	}
-
-	return;
-}
-
 int *init_ctx_weight(int prd_order, int back_prd_order, int for_prd_order, int delta) {
 	int *ctx_weight, k;
 	double dy, dx;
 
-	ctx_weight = (int *)alloc_mem((prd_order + back_prd_order + for_prd_order) * sizeof(int));
+	ctx_weight = (int *) alloc_mem((prd_order + back_prd_order + for_prd_order) * sizeof(int));
 
 	for (k = 0; k < prd_order; k++) {
 		dy = dyx[k].y;
 		dx = dyx[k].x;
 
-		ctx_weight[k] = 64.0 / sqrt(dy * dy + dx * dx) + 0.5;
+		ctx_weight[k] = (int) (64.0 / sqrt(dy * dy + dx * dx) + 0.5);
 	}
 
 	if (back_prd_order > 0) {
-		ctx_weight[prd_order] = 64.0 / sqrt(delta * delta) + 0.5;
+		ctx_weight[prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
 
 		for (k = 0; k < back_prd_order - 1; k++) {
 			dy = idyx[k].y;
 			dx = idyx[k].x;
 
-			ctx_weight[k + prd_order + 1] = 64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5;
+			ctx_weight[k + prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
 		}
 	}
 
 	if (for_prd_order > 0) {
-		ctx_weight[prd_order + back_prd_order] = 64.0 / sqrt(delta * delta) + 0.5;
+		ctx_weight[prd_order + back_prd_order] = (int) (64.0 / sqrt(delta * delta) + 0.5);
 
 		for (k = 0; k < for_prd_order - 1; k++) {
 			dy = idyx[k].y;
 			dx = idyx[k].x;
 
-			ctx_weight[k + prd_order + back_prd_order + 1] = 64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5;
+			ctx_weight[k + prd_order + back_prd_order + 1] = (int) (64.0 / sqrt(delta * delta + dy * dy + dx * dx) + 0.5);
 		}
 	}
 
@@ -897,8 +517,6 @@ void mtf_classlabel(char **class, int *mtfbuf, int y, int x, int bsize, int widt
 
 		mtfbuf[ref[k]] = 0;
 	}
-
-	return;
 }
 
 // Returns time
@@ -935,47 +553,61 @@ double cpu_time(void) {
 #endif
 }
 
+int **copy_bref(int bframes, int bref_const[][5]) {
+	int i, j;
+
+	int **bref = (int **) alloc_2d_array(bframes, 5, sizeof(int));
+
+	for (i = 0; i < bframes; i++) {
+		for (j = 0; j < 5; j++) {
+			bref[i][j] = bref_const[i][j];
+		}
+	}
+
+	return bref;
+}
+
 int **select_bref(int bframes) {
-	int (*aux)[5] = NULL;
+	int **bref = NULL;
 
 	switch(bframes) {
 		case 2:
-			aux = bref1;
+			bref = copy_bref(bframes, bref1);
 			break;
 		case 3:
-			aux = bref2;
+			bref = copy_bref(bframes, bref2);
 			break;
 		case 4:
-			aux = bref3;
+			bref = copy_bref(bframes, bref3);
 			break;
 		case 5:
-			aux = bref4;
+			bref = copy_bref(bframes, bref4);
 			break;
 		case 6:
-			aux = bref5;
+			bref = copy_bref(bframes, bref5);
 			break;
 		case 7:
-			aux = bref6;
+			bref = copy_bref(bframes, bref6);
 			break;
 		case 8:
-			aux = bref7;
+			bref = copy_bref(bframes, bref7);
 			break;
 		case 9:
-			aux = bref8;
+			bref = copy_bref(bframes, bref8);
 			break;
 		case 10:
-			aux = bref9;
+			bref = copy_bref(bframes, bref9);
 			break;
 		default:
-			aux = bref3;
+			bref = copy_bref(bframes, bref3);
 			break;
 	}
 
-	return aux;
+	return bref;
 }
 
 char* cat_str(char* str1, char* str2, int type) {
-	char *new_str = (char *)alloc_mem(sizeof(char) * (strlen(str1) + strlen(str2) + 1));
+	char *new_str = (char *) alloc_mem(sizeof(char) * (strlen(str1) + strlen(str2) + 1));
 
 	if(new_str != NULL){
 		new_str[0] = '\0';   // ensures the memory is an empty string
@@ -988,8 +620,8 @@ char* cat_str(char* str1, char* str2, int type) {
 		exit(-12);
 	}
 
-	if (type == 1 ) safefree((void **)&str1);
-	safefree((void **)&str2);
+	if (type == 1 ) safefree((void **) &str1);
+	safefree((void **) &str2);
 
 	return new_str;
 }
@@ -1003,7 +635,7 @@ char *int2bin(int a, int buf_size) {
     buffer[buf_size] = '\0';
 
     for (int i = buf_size - 1; i >= 0; i--) {
-        buffer[i] = (a & 1) + '0';
+        buffer[i] = (char) ((a & 1) + '0');
 
         a >>= 1;
     }

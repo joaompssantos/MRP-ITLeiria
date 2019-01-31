@@ -4,6 +4,7 @@
 #include <math.h>
 #include <unistd.h>
 #include "mrp.h"
+#include "mrp_config.h"
 
 extern POINT dyx[];
 extern POINT idyx[];
@@ -20,7 +21,7 @@ uint getbits(FILE *fp, int n) {
 	while (n > bitpos) {
 		n -= bitpos;
 		x = (x << bitpos) | bitbuf;
-		bitbuf = getc(fp) & 0xff;
+		bitbuf = (uint) (getc(fp) & 0xff);
 		bitpos = 8;
 	}
 
@@ -28,7 +29,7 @@ uint getbits(FILE *fp, int n) {
 	x = (x << n) | (bitbuf >> bitpos);
 	bitbuf &= ((1 << bitpos) - 1);
 
-	return (x);
+	return (uint) x;
 }
 
 int read_class(FILE *fp) {
@@ -231,7 +232,8 @@ int decode_vlc(FILE *fp, VLC *vlc) {
 	int i, k, min, off;
 	uint code;
 
-	code = min = off = k = 0;
+	code = 0;
+	min = off = 0;
 
 	for (i = 0; i < vlc->max_len; i++) {
 		code = (code << 1) | getbits(fp, 1);
@@ -320,8 +322,6 @@ void decode_predictor(FILE *fp, DECODER *dec) {
 			}
 		}
 	}
-
-	return;
 }
 
 void decode_threshold(FILE *fp, DECODER *dec) {
@@ -341,7 +341,7 @@ void decode_threshold(FILE *fp, DECODER *dec) {
 					if (getbits(fp, 1)) k += decode_golomb(fp, m) + 1;
 				}
 
-				for (; u < k; u++) dec->uquant[cl][u] = gr;
+				for (; u < k; u++) dec->uquant[cl][u] = (char) gr;
 			}
 		}
 
@@ -379,7 +379,7 @@ void decode_threshold(FILE *fp, DECODER *dec) {
 					k += rc_decode(fp, dec->rc, pm, 0, pm->size - k);
 				}
 
-				for (; u < k; u++) dec->uquant[cl][u] = gr;
+				for (; u < k; u++) dec->uquant[cl][u] = (char) gr;
 			}
 		}
 
@@ -397,8 +397,6 @@ void decode_threshold(FILE *fp, DECODER *dec) {
 			}
 		}
 	}
-
-	return;
 }
 
 void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int tlx, int blksize, int width, int level) {
@@ -461,11 +459,9 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tly, int 
 
 	for (y = tly; y < bry; y++) {
 		for (x = tlx; x < brx; x++) {
-			dec->class[y][x] = cl;
+			dec->class[y][x] = (char) cl;
 		}
 	}
-
-	return;
 }
 
 void decode_class(FILE *fp, DECODER *dec) {
@@ -536,9 +532,9 @@ void decode_class(FILE *fp, DECODER *dec) {
 			for (ctx = 0; ctx < QUADTREE_DEPTH << 2; ctx++) {
 				i = qtree_code[ctx];
 				p = qtree_prob[i];
-				pm->freq[(ctx << 1) + 1] = p * (1 << 10);
+				pm->freq[(ctx << 1) + 1] = (uint) (p * (1 << 10));
 				p = 1.0 - p;
-				pm->freq[(ctx << 1)] = p * (1 << 10);
+				pm->freq[(ctx << 1)] = (uint) (p * (1 << 10));
 			}
 
 			for (i = 0; i < pm->size; i++) {
@@ -553,7 +549,7 @@ void decode_class(FILE *fp, DECODER *dec) {
 
 		for (i = 0; i < dec->num_class; i++) {
 			p = exp(-log(2.0) * ((double)mtf_code[i] + 0.5) * PMCLASS_MAX/PMCLASS_LEVEL);
-			cpm->freq[i] = p * (1 << 10);
+			cpm->freq[i] = (uint) (p * (1 << 10));
 
 			if (cpm->freq[i] <= 0) cpm->freq[i] = 1;
 
@@ -579,8 +575,6 @@ void decode_class(FILE *fp, DECODER *dec) {
 	else {
 		free(cpm->freq);
 	}
-
-	return;
 }
 
 int calc_udec(DECODER *dec, int y, int x) {
@@ -975,7 +969,7 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 				vlc = &dec->vlcs[gr][0];
 				dec->err[1][y][x] = E = decode_vlc(fp, vlc);
 				e = E2e(E, p, prd & 1, dec->maxval);
-				video[1]->val[y][x] = p + e;
+				video[1]->val[y][x] = (img_t) (p + e);
 			}
 		}
 	}
@@ -993,7 +987,7 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 					pm = dec->pmodels[gr][0];
 					dec->err[1][y][x] = E = rc_decode(fp, dec->rc, pm, 0, pm->size);
 					e = E2e(E, p, prd & 1, dec->maxval);
-					video[1]->val[y][x] = p + e;
+					video[1]->val[y][x] = (img_t) (p + e);
 				}
 			}
 		}
@@ -1011,11 +1005,8 @@ IMAGE *decode_image(FILE *fp, IMAGE *video[3], DECODER *dec) {
 					base = (dec->maxprd - prd + (1 << shift) / 2) >> shift;
 					pm = dec->pmodels[gr][0] + (base & mask);
 					base >>= dec->pm_accuracy;
-
-//					print_contexts(-1, 0, 0, pm->cumfreq[base+dec->maxval+1] - pm->cumfreq[base], base+dec->maxval+1, base, prd);
-
 					p = rc_decode(fp, dec->rc, pm, base, base+dec->maxval+1) - base;
-					video[1]->val[y][x] = p;
+					video[1]->val[y][x] = (img_t) p;
 					prd >>= (dec->coef_precision - 1);
 					e = (p << 1) - prd;
 					dec->err[1][y][x] = (e > 0)? (e - 1) : (-e);
@@ -1034,7 +1025,7 @@ IMAGE* sum_diff(IMAGE* ref, IMAGE* diff, int *extra_info, int num_pels, int fram
 
 	for (y = 0; y < ref->height; y++) {
 		for (x = 0; x < ref->width; x++) {
-			cur->val[y][x] = diff->val[y][x] + ref->val[y][x] - (int) (pow(2, depth) / 2 - 1);
+			cur->val[y][x] = (img_t) (diff->val[y][x] + ref->val[y][x] - (int) (pow(2, depth) / 2 - 1));
 
 			if ((diff->val[y][x] == 0 || diff->val[y][x] == (int) (pow(2, depth) - 1)) && conta < num_pels) {
 				cur->val[y][x] += extra_info[conta + 1];
@@ -1100,7 +1091,7 @@ int *decode_lookuptable(FILE *fp, int hist_bytes, int depth) {
 		new_str = cat_str(new_str, int2bin(getbits(fp, 8), 8), 1);
 	}
 
-	size = strlen(new_str);
+	size = (int) strlen(new_str);
 
 	for (i = 0; i < size; i++) {
 		phrase[0] = '\0';
@@ -1238,14 +1229,14 @@ int *decode_lookuptable(FILE *fp, int hist_bytes, int depth) {
  |
  |  Returns:  IMGAE		--> Returns the reconstructed image
  *----------------------------------------------------------------------*/
-IMAGE *histogram_unpacking(IMAGE *img, int *backward_table) {
+IMAGE *histogram_unpacking(IMAGE *img, const int *backward_table) {
 	int x, y;
 	IMAGE *u_img = alloc_image(img->width, img->height, img->maxval);
 
 	// Perform the histogram packing of the image
 	for (y = 0; y < img->height; y++) {
 		for (x = 0; x < img->width; x++) {
-			u_img->val[y][x] = backward_table[img->val[y][x]];
+			u_img->val[y][x] = (img_t) backward_table[img->val[y][x]];
 		}
 	}
 
@@ -1260,7 +1251,7 @@ int main(int argc, char **argv) {
 	int prd_order[6] = {0, 0, 0, 0, 0, 0};
 
 	IMAGE *video[3] = {NULL, NULL, NULL};
-	DECODER *dec;
+	DECODER *dec = NULL;
 	char *infile, *outfile;
 	FILE *fp;
 
@@ -1273,16 +1264,18 @@ int main(int argc, char **argv) {
 
 	for (i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
-			switch(argv[i][1]) {
-			case 'E':
-				endianness = atoi(argv[++i]);
-				if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
-					endianness = LITTLE_ENDIANNESS;
-				}
-				break;
-			default:
-				fprintf(stderr, "Unknown option: %s!\n", argv[i]);
-				exit (1);
+			switch (argv[i][1]) {
+				case 'E':
+					endianness = (int) strtol(argv[++i], NULL, 10);
+
+					if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
+						endianness = LITTLE_ENDIANNESS;
+					}
+
+					break;
+				default:
+					fprintf(stderr, "Unknown option: %s!\n", argv[i]);
+					exit (1);
 			}
 		}
 		else {
@@ -1296,7 +1289,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (infile == NULL || outfile == NULL) {
-		printf(BANNER"\n", 0.1 * VERSION);
+		printf(BANNER"\n", MRP_VERSION, MRP_VERSION_DATE);
 		printf("usage: decmrp [options] infile outfile\n");
 		printf("-E num		Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
 		printf("infile:     Input file\n");
@@ -1426,9 +1419,9 @@ int main(int argc, char **argv) {
 		int back_reference = 0, for_reference = 0;
 		int **back_ref_error = NULL, **for_ref_error = NULL;
 		IMAGE **seq = (IMAGE **) alloc_mem(frames * sizeof(IMAGE));
-		int ***keep_error;
+		int ***keep_error = NULL;
 		int first_frame = 0, conta = 0, final = 0;
-		int (*bref)[5] = NULL;
+		int **bref = NULL;
 
 		if (hevc == 0) {
 			back_reference = 0;
@@ -1441,7 +1434,7 @@ int main(int argc, char **argv) {
 
 			bref = select_bref(bframes);
 
-			final = ((frames - 1) % bframes != 0) ? bframes * ((int)((frames - 1) / bframes)) + 1 : frames;
+			final = ((frames - 1) % bframes != 0) ? bframes * (((frames - 1) / bframes)) + 1 : frames;
 		}
 
 		f = 0;

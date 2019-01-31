@@ -1,56 +1,95 @@
-cmake_minimum_required(VERSION 3.6)
-project(MRP)
+###
+### CMakeLists for Minimum Rate Predictos
+###
 
-#set(CMAKE_BUILD_TYPE "Release")
+######################################################################################
+# CMake  functions
+######################################################################################
+cmake_minimum_required(VERSION 3.10)
 
-IF(UNIX)
-    IF(CMAKE_COMPILER_IS_GNUCC)
-        IF(CMAKE_BUILD_TYPE MATCHES Debug)
-            message("Debug build.")
-            set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -Wall -funroll-loops")
-            set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -g -Wall -funroll-loops")
-        ELSEIF(CMAKE_BUILD_TYPE MATCHES Release)
-            message("Release build.")
-            set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -funroll-loops")
-            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3 -Wall -funroll-loops")
-        ENDIF()
-    ENDIF(CMAKE_COMPILER_IS_GNUCC)
-ENDIF(UNIX)
+######################################################################################
+# Project Definition
+######################################################################################
+set(PROJECT_NAME "MRP")
+project(${PROJECT_NAME})
 
-# Set binary path
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../)
+set(MRP_VERSION_MAJOR "0")
+set(MRP_VERSION_MINOR "9")
+set(MRP_VERSION_PATCH "0")
+set(MRP_VERSION "${MRP_VERSION_MAJOR}.${MRP_VERSION_MINOR}.${MRP_VERSION_PATCH}")
+set(MRP_VERSION_STRING "${MRP_VERSION}")
 
-# The version number.
-#set (MRP_VERSION_MAJOR 0)
-#set (MRP_VERSION_MINOR 9)
+set(MRP_VERSION_DATE "July 2016")
 
-# Cnfigure a header file to pass some of the CMake settings
-# to the source code
-#configure_file (
-#    "${PROJECT_SOURCE_DIR}/mrp.h.in"
-#    "${PROJECT_SOURCE_DIR}/mrp.h"
-#)
+######################################################################################
+# Variables
+######################################################################################
+OPTION(USE_EXTRA_WARNINGS "Enable extra warnings" OFF)
+OPTION(USE_WERROR "Warnings as errors" OFF)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+######################################################################################
+# Configure targets
+######################################################################################
+include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_BINARY_DIR})
 
-set(ENC_SOURCE_FILES
-        common.c
-        encmrp.c
+# Define C standard 11
+set(CMAKE_C_STANDARD 11)
+
+# Define build type if not defined
+if (NOT CMAKE_BUILD_TYPE)
+    message(STATUS "No build type selected, default to Release")
+    set(CMAKE_BUILD_TYPE "Release")
+endif ()
+
+# Set compile flags
+set(CMAKE_C_FLAGS "-funroll-loops -Wall -Wextra" CACHE STRING "compile flags" FORCE)
+
+# Set extra warnigns
+if (USE_EXTRA_WARNINGS)
+    string(CONCAT CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wfloat-equal -Wundef -Wshadow -Wpointer-arith -Wcast-align "
+            "-Wstrict-prototypes -Wswitch-default -Wswitch-enum -Wconversion -Wunreachable-code")
+endif ()
+
+# Set warnings as errors
+if (USE_WERROR)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+endif ()
+
+# Add optimisation flags for DEBUG and RELEASE
+set(CMAKE_C_FLAGS_DEBUG "-g -O0")
+set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
+
+# Configure a header file to pass some of the CMake settings to the source code
+configure_file("${PROJECT_SOURCE_DIR}/mrp_config.h.in" "${PROJECT_BINARY_DIR}/mrp_config.h")
+
+set(COMMON_SRC
         mrp.h
+        common.c
+        entropy_coding.c
         rc.c)
 
 # Add the executable
-add_executable(encmrp.exe ${ENC_SOURCE_FILES})
+add_executable(encmrp.exe encmrp.c ${COMMON_SRC})
 find_library(M_LIB m)
 target_link_libraries(encmrp.exe ${M_LIB})
 
-set(DEC_SOURCE_FILES
-        common.c
-        decmrp.c
-        mrp.h
-        rc.c)
-
 # Add the executable
-add_executable(decmrp.exe ${DEC_SOURCE_FILES})
+add_executable(decmrp.exe decmrp.c ${COMMON_SRC})
 find_library(M_LIB m)
 target_link_libraries(decmrp.exe ${M_LIB})
+
+######################################################################################
+# Final information dump
+######################################################################################
+message("")
+message(STATUS "${PROJECT_NAME} INFORMATION")
+message(STATUS "Version: " "${MRP_VERSION_STRING}")
+message(STATUS "Configuration:")
+message(STATUS "    C++ Standard: " "${CMAKE_C_STANDARD}")
+message(STATUS "    Build type: " "${CMAKE_BUILD_TYPE}")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "    Build flags: " "${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_DEBUG}")
+else ()
+    message(STATUS "    Build flags: " "${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_RELEASE}")
+endif ()
+message("")
