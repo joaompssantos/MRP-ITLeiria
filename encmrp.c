@@ -2186,7 +2186,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 					bits += 1;
 				}
 				else {
-					bits += enc->class_cost[i];
+					bits += (int) (enc->class_cost[i]);
 				}
 			}
 		}
@@ -2222,7 +2222,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 
 				for (i = k = 0; i < 7; i++) {
 					p = qtree_prob[i];
-					c = -log(p) * (cost_t)enc->qtctx[(ctx << 1) + 1] - log(1.0 - p) * (cost_t)enc->qtctx[ctx << 1];
+					c = -log(p) * (cost_t) enc->qtctx[(ctx << 1) + 1] - log(1.0 - p) * (cost_t) enc->qtctx[ctx << 1];
 
 					if (c < cost) {
 						k = i;
@@ -2246,7 +2246,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
 			p = (double)hist[i] / c;
 
 			if (p > 0.0) {
-				mtf_code[i] = (int) (-log(p) / log(2.0) * (PMCLASS_LEVEL / PMCLASS_MAX));
+				mtf_code[i] = (int) (-log(p) / log(2.0) * ((float) PMCLASS_LEVEL / PMCLASS_MAX));
 
 				if (mtf_code[i] >= PMCLASS_LEVEL) {
 					mtf_code[i] = PMCLASS_LEVEL - 1;
@@ -2666,14 +2666,6 @@ int encode_image(FILE *fp, ENCODER *enc) {
 				pm = enc->pmlist[gr] + enc->fconv[prd];
 				cumbase = pm->cumfreq[base];
 
-//				if (enc->rc->bits > 40000) {
-//                if (y == 76 && x == 81) {
-//                    printf("Aqui: %d %d %lld\n", y, x, enc->rc->bits);
-//                    rc_finishenc(fp, enc->rc);
-//                    bits += enc->rc->code;
-//                    enc->rc = rc_init();
-//                }
-
 				rc_encode(fp, enc->rc, pm->cumfreq[base + e] - cumbase, pm->freq[base + e], pm->cumfreq[base + enc->maxval + 1] - cumbase);
 			}
 		}
@@ -2843,7 +2835,7 @@ double sparseness_index(char *infile, int height, int width, int frames, int dep
 		safefree_yuv(&img);
 	}
 
-	for (y = 0; y < (int)pow(2, depth); y++) {
+	for (y = 0; y < (int) pow(2, depth); y++) {
 		if (hist[y] != 0) {
 			L++;
 
@@ -3389,7 +3381,7 @@ int main(int argc, char **argv) {
 
 	// Help and version
 	if (infile == NULL || outfile == NULL) {
-		printf(BANNER"\n", MRP_VERSION);
+		printf(BANNER"\n", MRP_VERSION, MRP_VERSION_DATE);
 		printf("usage: encmrp [options] infile outfile\n");
 		printf("options:\n");
 		printf("    -H num  	Height*\n");
@@ -3513,7 +3505,7 @@ int main(int argc, char **argv) {
 	free(aux);
 
 	res = fileopen(resfile, "w");
-	fprintf(res, "MRP-Video version %s encoding results\n", MRP_VERSION);
+	fprintf(res, "MRP-Lenslet version %s (%s) encoding results\n", MRP_VERSION, MRP_VERSION_DATE);
 	fprintf(res, "\tEncoded file: %s\n", infile);
 	fprintf(res, "\tDimensions: %dx%dx%d\n", width, height, frames);
 	fprintf(res, "---------------------------------------------\n");
@@ -3648,7 +3640,7 @@ int main(int argc, char **argv) {
 		predict_region(enc, 0, 0, enc->height, enc->width);
 		cost = calc_cost(enc, 0, 0, enc->height, enc->width);
 
-		printf("Frame: %d\n\t1st optimization --> Cost: %d\n", f, (int)cost);
+		printf("Frame: %d\n\t1st optimization --> Cost: %d\n", f, (int) cost);
 
 		/* 2nd loop */
 		//Loop type

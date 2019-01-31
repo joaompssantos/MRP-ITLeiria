@@ -4,7 +4,7 @@
 #define HAVE_CLOCK
 #define HAVE_64BIT_INTEGER
 #define MAGIC_NUMBER        ('M' << 8) + 'R'
-#define BANNER              "\nIT - Leiria: Minimum Rate Predictors\nencmrp/decmrp version %s (March 2018)"
+#define BANNER              "\nIT - Leiria: Minimum Rate Predictors Lenslet\nencmrp/decmrp version %s (%s)"
 #define uint                unsigned int
 #define img_t               unsigned short
 #define cost_t              double

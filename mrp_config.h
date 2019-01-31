@@ -1,9 +1,0 @@
-#ifndef MRP_CONFIG_H
-#define MRP_CONFIG_H
-
-#define MRP_VERSION_MAJOR 0
-#define MRP_VERSION_MINOR 9
-#define MRP_VERSION_PATCH 0
-#define MRP_VERSION "0.9.0"
-
-#endif //MRP_CONFIG_H

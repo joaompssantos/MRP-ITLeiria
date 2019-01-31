@@ -333,8 +333,6 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
 	}*/
 
 	fclose(fp);
-
-	return;
 }
 
 /*------------------------------- read_yuv --------------------------*
@@ -1815,8 +1813,6 @@ void mtf_classlabel(char **class, int *mtfbuf, int y, int x, int bsize, int widt
 
 		mtfbuf[ref[k]] = 0;
 	}
-
-	return;
 }
 
 // Returns time
@@ -1907,7 +1903,7 @@ int **select_bref(int bframes) {
 }
 
 char* cat_str(char* str1, char* str2, int type) {
-	char *new_str = (char *)alloc_mem(sizeof(char) * (strlen(str1) + strlen(str2) + 1));
+	char *new_str = (char *) alloc_mem(sizeof(char) * (strlen(str1) + strlen(str2) + 1));
 
 	if(new_str != NULL){
 		new_str[0] = '\0';   // ensures the memory is an empty string
@@ -1920,8 +1916,8 @@ char* cat_str(char* str1, char* str2, int type) {
 		exit(-12);
 	}
 
-	if (type == 1 ) safefree((void **)&str1);
-	safefree((void **)&str2);
+	if (type == 1 ) safefree((void **) &str1);
+	safefree((void **) &str2);
 
 	return new_str;
 }

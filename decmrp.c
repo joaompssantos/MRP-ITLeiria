@@ -1191,19 +1191,19 @@ int main(int argc, char **argv) {
 
 	for (i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
-			switch(argv[i][1]) {
-			case 'E':
-				endianness = (int) strtol(argv[++i], NULL, 10);
+            switch (argv[i][1]) {
+                case 'E':
+                    endianness = (int) strtol(argv[++i], NULL, 10);
 
-				if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
-					endianness = LITTLE_ENDIANNESS;
-				}
+                    if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
+                        endianness = LITTLE_ENDIANNESS;
+                    }
 
-				break;
-			default:
-				fprintf(stderr, "Unknown option: %s!\n", argv[i]);
-				exit (1);
-			}
+                    break;
+                default:
+                    fprintf(stderr, "Unknown option: %s!\n", argv[i]);
+                    exit(1);
+            }
 		}
 		else {
 			if (infile == NULL) {
@@ -1216,7 +1216,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (infile == NULL || outfile == NULL) {
-		printf(BANNER"\n", MRP_VERSION);
+		printf(BANNER"\n", MRP_VERSION, MRP_VERSION_DATE);
 		printf("usage: decmrp [options] infile outfile\n");
 		printf("-E num		Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
 		printf("infile:     Input file\n");

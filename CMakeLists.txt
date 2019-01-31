@@ -5,32 +5,33 @@
 ######################################################################################
 # CMake  functions
 ######################################################################################
-cmake_minimum_required(VERSION 3.5.1)
-
-include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_BINARY_DIR})
+cmake_minimum_required(VERSION 3.10)
 
 ######################################################################################
 # Project Definition
 ######################################################################################
-set(PROJECT_NAME "MRP")
+set(PROJECT_NAME "MRP-Lenslet")
 project(${PROJECT_NAME})
 
-set(MRP_VERSION_MAJOR "0")
-set(MRP_VERSION_MINOR "9")
+set(MRP_VERSION_MAJOR "1")
+set(MRP_VERSION_MINOR "0")
 set(MRP_VERSION_PATCH "0")
 set(MRP_VERSION "${MRP_VERSION_MAJOR}.${MRP_VERSION_MINOR}.${MRP_VERSION_PATCH}")
 set(MRP_VERSION_STRING "${MRP_VERSION}")
 
+set(MRP_VERSION_DATE "March 2018")
+
 ######################################################################################
 # Variables
 ######################################################################################
-
 OPTION(USE_EXTRA_WARNINGS "Enable extra warnings" OFF)
 OPTION(USE_WERROR "Warnings as errors" OFF)
 
 ######################################################################################
 # Configure targets
 ######################################################################################
+include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_BINARY_DIR})
+
 # Define C standard 11
 set(CMAKE_C_STANDARD 11)
 
@@ -60,20 +61,12 @@ set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 # Configure a header file to pass some of the CMake settings to the source code
 configure_file("${PROJECT_SOURCE_DIR}/mrp_config.h.in" "${PROJECT_BINARY_DIR}/mrp_config.h")
-configure_file("${PROJECT_SOURCE_DIR}/mrp_config.h.in" "${PROJECT_SOURCE_DIR}/mrp_config.h")
 
 set(COMMON_SRC
-        mrp_config.h
         mrp.h
         common.c
         entropy_coding.c
         rc.c)
-
-# Prevents the windows console from showing
-if (WIN32)
-    SET(USE_STATIC ON)
-    set(GUI_TYPE WIN32)
-endif (WIN32)
 
 # Add the executable
 add_executable(encmrp.exe encmrp.c ${COMMON_SRC})
