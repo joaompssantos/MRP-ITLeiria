@@ -16,7 +16,7 @@ int *gen_hufflen(uint *hist, int size, int max_len) {
         link[i] = -1;
     }
     /* sort in decreasing order of frequency */
-    for (i = size -1; i > 0; i--) {
+    for (i = size - 1; i > 0; i--) {
         for (j = 0; j < i; j++) {
             if (hist[index[j]] < hist[index[j + 1]]) {
                 k = index[j + 1];
@@ -26,7 +26,7 @@ int *gen_hufflen(uint *hist, int size, int max_len) {
         }
     }
     for (i = 0; i < size; i++) {
-        bits[i] = index[i];	/* reserv a sorted index table */
+        bits[i] = index[i];    /* reserv a sorted index table */
     }
     for (i = size - 1; i > 0; i--) {
         k = index[i - 1];
@@ -48,14 +48,15 @@ int *gen_hufflen(uint *hist, int size, int max_len) {
                 k = index[j];
                 index[j] = index[j - 1];
                 index[j - 1] = k;
-            } else {
+            }
+            else {
                 break;
             }
         }
     }
     /* limit the maximum code length to max_len */
     for (i = 0; i < size; i++) {
-        index[i] = bits[i];	/* restore the index table */
+        index[i] = bits[i];    /* restore the index table */
         bits[i] = 0;
     }
     for (i = 0; i < size; i++) {
@@ -64,7 +65,7 @@ int *gen_hufflen(uint *hist, int size, int max_len) {
     for (i = size - 1; i > max_len; i--) {
         while (bits[i] > 0) {
             j = i - 2;
-            while(bits[j] == 0) j--;
+            while (bits[j] == 0) j--;
             bits[i] -= 2;
             bits[i - 1]++;
             bits[j + 1] += 2;
@@ -86,9 +87,9 @@ void gen_huffcode(VLC *vlc) {
     int i, j, *idx, *len;
     uint k;
 
-    vlc->index = idx = (int *)alloc_mem(vlc->size * sizeof(int));
-    vlc->off = (int *)alloc_mem(vlc->max_len * sizeof(int));
-    vlc->code = (uint *)alloc_mem(vlc->size * sizeof(int));
+    vlc->index = idx = (int *) alloc_mem(vlc->size * sizeof(int));
+    vlc->off = (int *) alloc_mem(vlc->max_len * sizeof(int));
+    vlc->code = (uint *) alloc_mem(vlc->size * sizeof(int));
     len = vlc->len;
 
     /* sort in increasing order of code length */
@@ -96,7 +97,7 @@ void gen_huffcode(VLC *vlc) {
         idx[i] = i;
     }
 
-    for (i = vlc->size -1; i > 0; i--) {
+    for (i = vlc->size - 1; i > 0; i--) {
         for (j = 0; j < i; j++) {
             if (len[idx[j]] > len[idx[j + 1]]) {
                 k = (uint) (idx[j + 1]);
@@ -130,7 +131,7 @@ void gen_huffcode(VLC *vlc) {
 VLC *make_vlc(uint *hist, int size, int max_len) {
     VLC *vlc;
 
-    vlc = (VLC *)alloc_mem(sizeof(VLC));
+    vlc = (VLC *) alloc_mem(sizeof(VLC));
     vlc->size = size;
     vlc->max_len = max_len;
     vlc->len = gen_hufflen(hist, size, max_len);
@@ -152,7 +153,7 @@ VLC **init_vlcs(PMODEL ***pmodels, int num_group, int num_pmodel) {
     PMODEL *pm;
     int gr, k;
 
-    vlcs = (VLC **)alloc_2d_array(num_group, num_pmodel, sizeof(VLC));
+    vlcs = (VLC **) alloc_2d_array(num_group, num_pmodel, sizeof(VLC));
     for (gr = 0; gr < num_group; gr++) {
         for (k = 0; k < num_pmodel; k++) {
             vlc = &vlcs[gr][k];
@@ -173,17 +174,17 @@ VLC **init_vlcs(PMODEL ***pmodels, int num_group, int num_pmodel) {
  */
 double lngamma(double xx) {
     int j;
-    double x,y,tmp,ser;
+    double x, y, tmp, ser;
     double cof[6] = {
-            76.18009172947146,	-86.50532032941677,
-            24.01409824083091,	-1.231739572450155,
-            0.1208650973866179e-2,	-0.5395239384953e-5
+            76.18009172947146, -86.50532032941677,
+            24.01409824083091, -1.231739572450155,
+            0.1208650973866179e-2, -0.5395239384953e-5
     };
 
     y = x = xx;
     tmp = x + 5.5 - (x + 0.5) * log(x + 5.5);
     ser = 1.000000000190015;
-    for (j=0;j<=5;j++)
+    for (j = 0; j <= 5; j++)
         ser += (cof[j] / ++y);
     return (log(2.5066282746310005 * ser / x) - tmp);
 }
@@ -198,11 +199,11 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
         shape = 2.0;
     }
     else {
-        shape = 3.2 * (idx + 1) / (double)num_pmodel;
+        shape = 3.2 * (idx + 1) / (double) num_pmodel;
     }
 
     /* Generalized Gaussian distribution */
-    beta = exp(0.5*(lngamma(3.0/shape)-lngamma(1.0/shape))) / sigma;
+    beta = exp(0.5 * (lngamma(3.0 / shape) - lngamma(1.0 / shape))) / sigma;
     sw = 1.0 / (double) num_subpm;
     n = pm->size * num_subpm;
     center *= num_subpm;
@@ -220,7 +221,7 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
         }
 
         for (i = 0; i <= center; i++) {
-            pdfsamp[center - i] =  pdfsamp[center + i + 1];
+            pdfsamp[center - i] = pdfsamp[center + i + 1];
         }
 
         for (i = 0; i < n; i++) {
@@ -240,7 +241,7 @@ void set_freqtable(PMODEL *pm, double *pdfsamp, int num_subpm, int num_pmodel, i
         }
 
         norm = (double) (MAX_TOTFREQ - pm->size * MIN_FREQ) / norm;
-        norm += 1E-8;	/* to avoid machine dependent rounding errors */
+        norm += 1E-8;    /* to avoid machine dependent rounding errors */
         pm->cumfreq[0] = 0;
 
         for (i = 0; i < pm->size; i++) {
@@ -285,10 +286,10 @@ PMODEL ***init_pmodels(int num_group, int num_pmodel, int pm_accuracy, int *pm_i
     }
 
     //Defines the number of probability models
-    num_pm = (pm_idx != NULL)? 1 : num_pmodel;
+    num_pm = (pm_idx != NULL) ? 1 : num_pmodel;
 
-    pmodels = (PMODEL ***)alloc_2d_array(num_group, num_pm, sizeof(PMODEL *));
-    pmbuf = (PMODEL *)alloc_mem(num_group * num_pm * num_subpm * sizeof(PMODEL));
+    pmodels = (PMODEL ***) alloc_2d_array(num_group, num_pm, sizeof(PMODEL *));
+    pmbuf = (PMODEL *) alloc_mem(num_group * num_pm * num_subpm * sizeof(PMODEL));
 
     //Vector initializations
     for (gr = 0; gr < num_group; gr++) {
@@ -299,11 +300,11 @@ PMODEL ***init_pmodels(int num_group, int num_pmodel, int pm_accuracy, int *pm_i
                 pm = pmbuf++;
                 pm->id = i;
                 pm->size = size;
-                pm->freq = (uint *)alloc_mem((size * 2 + 1) * sizeof(uint));
+                pm->freq = (uint *) alloc_mem((size * 2 + 1) * sizeof(uint));
                 pm->cumfreq = &pm->freq[size];
 
                 if (pm_idx == NULL) {
-                    pm->cost = (float *)alloc_mem((size + ssize) * sizeof(float));
+                    pm->cost = (float *) alloc_mem((size + ssize) * sizeof(float));
                     pm->subcost = &pm->cost[size];
                 }
             }
@@ -341,7 +342,7 @@ void set_spmodel(PMODEL *pm, int size, int m) {
     pm->size = size;
 
     if (m >= 0) {
-        p = 1.0 / (double)(1 << (m % 8));
+        p = 1.0 / (double) (1 << (m % 8));
         sum = 0;
 
         for (i = 0; i < pm->size; i++) {
@@ -352,7 +353,7 @@ void set_spmodel(PMODEL *pm, int size, int m) {
             sum += pm->freq[i];
         }
 
-        if (m & 8) pm->freq[0] = (sum - pm->freq[0]);	/* weight for zero */
+        if (m & 8) pm->freq[0] = (sum - pm->freq[0]);    /* weight for zero */
     }
     else {
         for (i = 0; i < pm->size; i++) {
