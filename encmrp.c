@@ -431,10 +431,10 @@ void init_class(ENCODER *enc) {
 
         // Check the correct limits due to the image not being multiple of BASE_BSIZE
         bsize_vu[HEIGHT] = (v + BASE_BSIZE > enc->vu[HEIGHT]) ? enc->vu[HEIGHT] - v : BASE_BSIZE;
-        bsize_vu[WIDTH] = (v + BASE_BSIZE > enc->vu[WIDTH]) ? enc->vu[WIDTH] - v : BASE_BSIZE;
+        bsize_vu[WIDTH] = (u + BASE_BSIZE > enc->vu[WIDTH]) ? enc->vu[WIDTH] - u : BASE_BSIZE;
 
-        bsize_ts[HEIGHT] = (v + BASE_BSIZE > enc->ts[HEIGHT]) ? enc->ts[HEIGHT] - v : BASE_BSIZE;
-        bsize_ts[WIDTH] = (v + BASE_BSIZE > enc->ts[WIDTH]) ? enc->ts[WIDTH] - v : BASE_BSIZE;
+        bsize_ts[HEIGHT] = (t + BASE_BSIZE > enc->ts[HEIGHT]) ? enc->ts[HEIGHT] - t : BASE_BSIZE;
+        bsize_ts[WIDTH] = (s + BASE_BSIZE > enc->ts[WIDTH]) ? enc->ts[WIDTH] - s : BASE_BSIZE;
 
         // Run each pixel in a block
         for (g = 0; g < bsize_vu[HEIGHT]; g++) {
@@ -479,11 +479,11 @@ void init_class(ENCODER *enc) {
         s = (z % (ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
 
         // Check the correct limits due to the image not being multiple of BASE_BSIZE
-        bsize_vu[HEIGHT] = (v + BASE_BSIZE > enc->vu[HEIGHT]) ? enc->vu[HEIGHT] - v : BASE_BSIZE;
-        bsize_vu[WIDTH] = (v + BASE_BSIZE > enc->vu[WIDTH]) ? enc->vu[WIDTH] - v : BASE_BSIZE;
+	bsize_vu[HEIGHT] = (v + BASE_BSIZE > enc->vu[HEIGHT]) ? enc->vu[HEIGHT] - v : BASE_BSIZE;
+	bsize_vu[WIDTH] = (u + BASE_BSIZE > enc->vu[WIDTH]) ? enc->vu[WIDTH] - u : BASE_BSIZE;
 
-        bsize_ts[HEIGHT] = (v + BASE_BSIZE > enc->ts[HEIGHT]) ? enc->ts[HEIGHT] - v : BASE_BSIZE;
-        bsize_ts[WIDTH] = (v + BASE_BSIZE > enc->ts[WIDTH]) ? enc->ts[WIDTH] - v : BASE_BSIZE;
+	bsize_ts[HEIGHT] = (t + BASE_BSIZE > enc->ts[HEIGHT]) ? enc->ts[HEIGHT] - t : BASE_BSIZE;
+	bsize_ts[WIDTH] = (s + BASE_BSIZE > enc->ts[WIDTH]) ? enc->ts[WIDTH] - s : BASE_BSIZE;
 
         // Sets the class number for each pixel
         for (g = 0; g < bsize_vu[HEIGHT]; g++) {
@@ -2113,7 +2113,7 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlv, int
                  int width, int level) {
     int i, cl, v, u, t, s, ctx, last_width;
     char ****qtmap;
-
+printf("%d %d %d %d -> %d\n", tlv, tlu, tlt, tls, blksize);
     if (tlv >= enc->vu[HEIGHT] || tlu >= enc->vu[WIDTH] || tlt >= enc->ts[HEIGHT] || tls >= enc->ts[WIDTH]) return;
 
     if (level > 0) {
@@ -2149,8 +2149,8 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlv, int
             set_qtindex(enc, index, hist, numidx, tlv, tlu, tlt, tls, blksize, width, level - 1);
             set_qtindex(enc, index, hist, numidx, tlv, tlu, tlt, tls + blksize, blksize, width, level - 1);
             set_qtindex(enc, index, hist, numidx, tlv, tlu, tlt + blksize, tls, blksize, width, level - 1);
-            last_width = tls + blksize * 2;
 
+            last_width = tls + blksize * 2;
             if (last_width >= enc->ts[WIDTH]) last_width = enc->ts[WIDTH];
 
             set_qtindex(enc, index, hist, numidx, tlv, tlu, tlt + blksize, tls + blksize, blksize, last_width, level - 1);
@@ -2159,8 +2159,8 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlv, int
             set_qtindex(enc, index, hist, numidx, tlv, tlu + blksize, tlt, tls, blksize, width, level - 1);
             set_qtindex(enc, index, hist, numidx, tlv, tlu + blksize, tlt, tls + blksize, blksize, width, level - 1);
             set_qtindex(enc, index, hist, numidx, tlv, tlu + blksize, tlt + blksize, tls, blksize, width, level - 1);
-            last_width = tls + blksize * 2;
 
+            last_width = tls + blksize * 2;
             if (last_width >= enc->ts[WIDTH]) last_width = enc->ts[WIDTH];
 
             set_qtindex(enc, index, hist, numidx, tlv, tlu + blksize, tlt + blksize, tls + blksize, blksize, last_width, level - 1);
@@ -2169,8 +2169,8 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlv, int
             set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu, tlt, tls, blksize, width, level - 1);
             set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu, tlt, tls + blksize, blksize, width, level - 1);
             set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu, tlt + blksize, tls, blksize, width, level - 1);
-            last_width = tls + blksize * 2;
 
+            last_width = tls + blksize * 2;
             if (last_width >= enc->ts[WIDTH]) last_width = enc->ts[WIDTH];
 
             set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu, tlt + blksize, tls + blksize, blksize, last_width, level - 1);
@@ -2179,8 +2179,8 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlv, int
             set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu + blksize, tlt, tls, blksize, width, level - 1);
             set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu + blksize, tlt, tls + blksize, blksize, width, level - 1);
             set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu + blksize, tlt + blksize, tls, blksize, width, level - 1);
-            last_width = tls + blksize * 2;
 
+            last_width = tls + blksize * 2;
             if (last_width >= enc->ts[WIDTH]) last_width = enc->ts[WIDTH];
 
             set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu + blksize, tlt + blksize, tls + blksize, blksize, last_width, level - 1);
@@ -2536,7 +2536,8 @@ int encode_predictor(FILE *fp, ENCODER *enc) {
                     }
                 }
             }
-        } else {			/* Arithmetic */
+        }
+        else {			/* Arithmetic */
             PMODEL *pm;
             pm = &enc->spm;
 
@@ -3246,7 +3247,7 @@ void debug_predictors(ENCODER *enc) {
 
 // Write partition to file
 void debug_partition(ENCODER *enc, int endianness) {
-    int d, k, i, v, u, t, s;
+    int d, k, i, v, u, t, s, a, b;
     unsigned short byte;
 
     img_t *qt_lf_ptr[3];
@@ -3280,66 +3281,80 @@ void debug_partition(ENCODER *enc, int endianness) {
             uint blksize = MAX_BSIZE;
 
             // TODO: Rever e fazer bonito
-            for (d = enc->quadtree_depth - 1; d >= 0; d--) {
-                for (v = 0; v < enc->vu[HEIGHT]; v += blksize) {
-                    for (u = 0; u < enc->vu[WIDTH]; u += blksize) {
-                        for (t = 0; t < enc->ts[HEIGHT]; t += blksize) {
-                            for (s = 0; s < enc->ts[WIDTH]; s += blksize) {
-                                if ((enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 && d == enc->quadtree_depth - 1) ||
-                                    (enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 && d < enc->quadtree_depth - 1 &&
-                                     enc->qtmap[d + 1][v / (blksize * 2)][u / (blksize * 2)][t / (blksize * 2)][s / (blksize * 2)] == 1)) {
-                                    if (t + blksize - 1 < enc->ts[HEIGHT]) {
-                                        for (i = s; i < (s + blksize < enc->ts[WIDTH] ? s + blksize : enc->ts[WIDTH]); i++) {
-                                            qt_lf[0]->val[v][u][t + blksize - 1][i] = (img_t) enc->maxval;
-                                            qt_lf[1]->val[v][u][t + blksize - 1][i] = (img_t) enc->maxval;
-                                            qt_lf[2]->val[v][u][t + blksize - 1][i] = (img_t) enc->maxval;
-                                        }
-                                    }
-                                    if (s + blksize - 1 < enc->ts[WIDTH]) {
-                                        for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize : enc->ts[HEIGHT]); i++) {
-                                            qt_lf[0]->val[v][u][t][i + blksize - 1] = (img_t) enc->maxval;
-                                            qt_lf[1]->val[v][u][t][i + blksize - 1] = (img_t) enc->maxval;
-                                            qt_lf[2]->val[v][u][t][i + blksize - 1] = (img_t) enc->maxval;
-                                        }
-                                    }
-                                }
-                                if (d == 0 && enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 1) {
-                                    if (t + blksize / 2 - 1 < enc->ts[HEIGHT]) {
-                                        for (i = s; i < (s + blksize < enc->ts[WIDTH] ? s + blksize : enc->ts[WIDTH]); i++) {
-                                            qt_lf[0]->val[v][u][t + blksize / 2 - 1][i] = (img_t) enc->maxval;
-                                            qt_lf[1]->val[v][u][t + blksize / 2 - 1][i] = (img_t) enc->maxval;
-                                            qt_lf[2]->val[v][u][t + blksize / 2 - 1][i] = (img_t) enc->maxval;
-                                        }
-                                    }
-                                    if (t + blksize - 1 < enc->ts[HEIGHT]) {
-                                        for (i = s; i < (s + blksize < enc->ts[WIDTH] ? s + blksize : enc->ts[WIDTH]); i++) {
-                                            qt_lf[0]->val[v][u][t + blksize - 1][i] = (img_t) enc->maxval;
-                                            qt_lf[1]->val[v][u][t + blksize - 1][i] = (img_t) enc->maxval;
-                                            qt_lf[2]->val[v][u][t + blksize - 1][i] = (img_t) enc->maxval;
-                                        }
-                                    }
-                                    if (s + blksize / 2 - 1 < enc->ts[WIDTH]) {
-                                        for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize : enc->ts[HEIGHT]); i++) {
-                                            qt_lf[0]->val[v][u][i][s + blksize / 2 - 1] = (img_t) enc->maxval;
-                                            qt_lf[1]->val[v][u][i][s + blksize / 2 - 1] = (img_t) enc->maxval;
-                                            qt_lf[2]->val[v][u][i][s + blksize / 2 - 1] = (img_t) enc->maxval;
-                                        }
-                                    }
-                                    if (s + blksize - 1 < enc->ts[WIDTH]) {
-                                        for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize : enc->ts[HEIGHT]); i++) {
-                                            qt_lf[0]->val[v][u][i][t + blksize - 1] = (img_t) enc->maxval;
-                                            qt_lf[1]->val[v][u][i][t + blksize - 1] = (img_t) enc->maxval;
-                                            qt_lf[2]->val[v][u][i][t + blksize - 1] = (img_t) enc->maxval;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                blksize >>= 1u;
-            }
+//            for (d = enc->quadtree_depth - 1; d >= 0; d--) {
+//                for (v = 0; v < enc->vu[HEIGHT]; v += blksize) {
+//                    for (u = 0; u < enc->vu[WIDTH]; u += blksize) {
+//                        for (t = 0; t < enc->ts[HEIGHT]; t += blksize) {
+//                            for (s = 0; s < enc->ts[WIDTH]; s += blksize) {
+//                                for (a = v; a < (v + blksize < enc->vu[HEIGHT] ? v + blksize : enc->vu[HEIGHT]); a++) {
+//                                    for (b = u; b < (u + blksize < enc->vu[WIDTH] ? u + blksize : enc->vu[WIDTH]); b++) {
+//                                        if ((enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
+//                                             d == enc->quadtree_depth - 1) ||
+//                                            (enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
+//                                             d < enc->quadtree_depth - 1 &&
+//                                             enc->qtmap[d + 1][v / (blksize * 2)][u / (blksize * 2)][t / (blksize * 2)][
+//                                                     s / (blksize * 2)] == 1)) {
+//                                            if (t + blksize - 1 < enc->ts[HEIGHT]) {
+//                                                for (i = s; i < (s + blksize < enc->ts[WIDTH] ? s + blksize
+//                                                                                              : enc->ts[WIDTH]); i++) {
+//                                                    qt_lf[0]->val[a][b][t + blksize - 1][i] = (img_t) enc->maxval;
+//                                                    qt_lf[1]->val[a][b][t + blksize - 1][i] = (img_t) enc->maxval;
+//                                                    qt_lf[2]->val[a][b][t + blksize - 1][i] = (img_t) enc->maxval;
+//                                                }
+//                                            }
+//                                            if (s + blksize - 1 < enc->ts[WIDTH]) {
+//                                                for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize
+//                                                                                               : enc->ts[HEIGHT]); i++) {
+//                                                    qt_lf[0]->val[a][b][t][i + blksize - 1] = (img_t) enc->maxval;
+//                                                    qt_lf[1]->val[a][b][t][i + blksize - 1] = (img_t) enc->maxval;
+//                                                    qt_lf[2]->val[a][b][t][i + blksize - 1] = (img_t) enc->maxval;
+//                                                }
+//                                            }
+//                                        }
+//                                        if (d == 0 &&
+//                                            enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 1) {
+//                                            if (t + blksize / 2 - 1 < enc->ts[HEIGHT]) {
+//                                                for (i = s; i < (s + blksize < enc->ts[WIDTH] ? s + blksize
+//                                                                                              : enc->ts[WIDTH]); i++) {
+//                                                    qt_lf[0]->val[a][b][t + blksize / 2 - 1][i] = (img_t) enc->maxval;
+//                                                    qt_lf[1]->val[a][b][t + blksize / 2 - 1][i] = (img_t) enc->maxval;
+//                                                    qt_lf[2]->val[a][b][t + blksize / 2 - 1][i] = (img_t) enc->maxval;
+//                                                }
+//                                            }
+//                                            if (t + blksize - 1 < enc->ts[HEIGHT]) {
+//                                                for (i = s; i < (s + blksize < enc->ts[WIDTH] ? s + blksize
+//                                                                                              : enc->ts[WIDTH]); i++) {
+//                                                    qt_lf[0]->val[a][b][t + blksize - 1][i] = (img_t) enc->maxval;
+//                                                    qt_lf[1]->val[a][b][t + blksize - 1][i] = (img_t) enc->maxval;
+//                                                    qt_lf[2]->val[a][b][t + blksize - 1][i] = (img_t) enc->maxval;
+//                                                }
+//                                            }
+//                                            if (s + blksize / 2 - 1 < enc->ts[WIDTH]) {
+//                                                for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize
+//                                                                                               : enc->ts[HEIGHT]); i++) {
+//                                                    qt_lf[0]->val[a][b][i][s + blksize / 2 - 1] = (img_t) enc->maxval;
+//                                                    qt_lf[1]->val[a][b][i][s + blksize / 2 - 1] = (img_t) enc->maxval;
+//                                                    qt_lf[2]->val[a][b][i][s + blksize / 2 - 1] = (img_t) enc->maxval;
+//                                                }
+//                                            }
+//                                            if (s + blksize - 1 < enc->ts[WIDTH]) {
+//                                                for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize
+//                                                                                               : enc->ts[HEIGHT]); i++) {
+//                                                    qt_lf[0]->val[a][b][i][t + blksize - 1] = (img_t) enc->maxval;
+//                                                    qt_lf[1]->val[a][b][i][t + blksize - 1] = (img_t) enc->maxval;
+//                                                    qt_lf[2]->val[a][b][i][t + blksize - 1] = (img_t) enc->maxval;
+//                                                }
+//                                            }
+//                                        }
+//                                    }
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//
+//                blksize >>= 1u;
+//            }
         }
 
         // Quadtree partition image name

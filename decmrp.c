@@ -477,7 +477,7 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tlv, int 
 
     brv = (tlv + blksize < dec->vu[HEIGHT]) ? (tlv + blksize) : dec->vu[HEIGHT];
     bru = (tlu + blksize < dec->vu[WIDTH]) ? (tlu + blksize) : dec->vu[WIDTH];
-    brt = (tls + blksize < dec->ts[HEIGHT]) ? (tlt + blksize) : dec->ts[HEIGHT];
+    brt = (tlt + blksize < dec->ts[HEIGHT]) ? (tlt + blksize) : dec->ts[HEIGHT];
     brs = (tls + blksize < dec->ts[WIDTH]) ? (tls + blksize) : dec->ts[WIDTH];
 
     if (tlv >= brv || tlu >= bru || tlt >= brt || tls >= brs) return;
@@ -1124,7 +1124,7 @@ void debug_partition(DECODER *dec, LF4D *lf, int endianness) {
             for (u = 0; u < dec->vu[WIDTH]; u++) {
                 for (t = 0; t < dec->ts[HEIGHT]; t++) {
                     for (s = 0; s < dec->ts[WIDTH]; s++) {
-                        *qt_lf_ptr[0]++ = lf->val[v][u][t][s];
+                        *qt_lf_ptr[0]++ = 0;//lf->val[v][u][t][s];
 
                         *qt_lf_ptr[1]++ = dec->class[v][u][t][s] * scale;
                         *qt_lf_ptr[2]++ = dec->class[v][u][t][s] * scale;
@@ -1136,67 +1136,67 @@ void debug_partition(DECODER *dec, LF4D *lf, int endianness) {
         if (dec->quadtree_depth > 0) {
             uint blksize = MAX_BSIZE;
 
-            // TODO: Rever e fazer bonito
-            for (d = dec->quadtree_depth - 1; d >= 0; d--) {
-                for (v = 0; v < dec->vu[HEIGHT]; v += blksize) {
-                    for (u = 0; u < dec->vu[WIDTH]; u += blksize) {
-                        for (t = 0; t < dec->ts[HEIGHT]; t += blksize) {
-                            for (s = 0; s < dec->ts[WIDTH]; s += blksize) {
-                                if ((dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 && d == dec->quadtree_depth - 1) ||
-                                    (dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 && d < dec->quadtree_depth - 1 &&
-                                     dec->qtmap[d + 1][v / (blksize * 2)][u / (blksize * 2)][t / (blksize * 2)][s / (blksize * 2)] == 1)) {
-                                    if (t + blksize - 1 < dec->ts[HEIGHT]) {
-                                        for (i = s; i < (s + blksize < dec->ts[WIDTH] ? s + blksize : dec->ts[WIDTH]); i++) {
-                                            qt_lf[0]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
-                                            qt_lf[1]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
-                                            qt_lf[2]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
-                                        }
-                                    }
-                                    if (s + blksize - 1 < dec->ts[WIDTH]) {
-                                        for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize : dec->ts[HEIGHT]); i++) {
-                                            qt_lf[0]->val[v][u][t][i + blksize - 1] = (img_t) dec->maxval;
-                                            qt_lf[1]->val[v][u][t][i + blksize - 1] = (img_t) dec->maxval;
-                                            qt_lf[2]->val[v][u][t][i + blksize - 1] = (img_t) dec->maxval;
-                                        }
-                                    }
-                                }
-                                if (d == 0 && dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 1) {
-                                    if (t + blksize / 2 - 1 < dec->ts[HEIGHT]) {
-                                        for (i = s; i < (s + blksize < dec->ts[WIDTH] ? s + blksize : dec->ts[WIDTH]); i++) {
-                                            qt_lf[0]->val[v][u][t + blksize / 2 - 1][i] = (img_t) dec->maxval;
-                                            qt_lf[1]->val[v][u][t + blksize / 2 - 1][i] = (img_t) dec->maxval;
-                                            qt_lf[2]->val[v][u][t + blksize / 2 - 1][i] = (img_t) dec->maxval;
-                                        }
-                                    }
-                                    if (t + blksize - 1 < dec->ts[HEIGHT]) {
-                                        for (i = s; i < (s + blksize < dec->ts[WIDTH] ? s + blksize : dec->ts[WIDTH]); i++) {
-                                            qt_lf[0]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
-                                            qt_lf[1]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
-                                            qt_lf[2]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
-                                        }
-                                    }
-                                    if (s + blksize / 2 - 1 < dec->ts[WIDTH]) {
-                                        for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize : dec->ts[HEIGHT]); i++) {
-                                            qt_lf[0]->val[v][u][i][s + blksize / 2 - 1] = (img_t) dec->maxval;
-                                            qt_lf[1]->val[v][u][i][s + blksize / 2 - 1] = (img_t) dec->maxval;
-                                            qt_lf[2]->val[v][u][i][s + blksize / 2 - 1] = (img_t) dec->maxval;
-                                        }
-                                    }
-                                    if (s + blksize - 1 < dec->ts[WIDTH]) {
-                                        for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize : dec->ts[HEIGHT]); i++) {
-                                            qt_lf[0]->val[v][u][i][t + blksize - 1] = (img_t) dec->maxval;
-                                            qt_lf[1]->val[v][u][i][t + blksize - 1] = (img_t) dec->maxval;
-                                            qt_lf[2]->val[v][u][i][t + blksize - 1] = (img_t) dec->maxval;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                blksize >>= 1u;
-            }
+//            // TODO: Rever e fazer bonito
+//            for (d = dec->quadtree_depth - 1; d >= 0; d--) {
+//                for (v = 0; v < dec->vu[HEIGHT]; v += blksize) {
+//                    for (u = 0; u < dec->vu[WIDTH]; u += blksize) {
+//                        for (t = 0; t < dec->ts[HEIGHT]; t += blksize) {
+//                            for (s = 0; s < dec->ts[WIDTH]; s += blksize) {
+//                                if ((dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 && d == dec->quadtree_depth - 1) ||
+//                                    (dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 && d < dec->quadtree_depth - 1 &&
+//                                     dec->qtmap[d + 1][v / (blksize * 2)][u / (blksize * 2)][t / (blksize * 2)][s / (blksize * 2)] == 1)) {
+//                                    if (t + blksize - 1 < dec->ts[HEIGHT]) {
+//                                        for (i = s; i < (s + blksize < dec->ts[WIDTH] ? s + blksize : dec->ts[WIDTH]); i++) {
+//                                            qt_lf[0]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
+//                                            qt_lf[1]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
+//                                            qt_lf[2]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
+//                                        }
+//                                    }
+//                                    if (s + blksize - 1 < dec->ts[WIDTH]) {
+//                                        for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize : dec->ts[HEIGHT]); i++) {
+//                                            qt_lf[0]->val[v][u][t][i + blksize - 1] = (img_t) dec->maxval;
+//                                            qt_lf[1]->val[v][u][t][i + blksize - 1] = (img_t) dec->maxval;
+//                                            qt_lf[2]->val[v][u][t][i + blksize - 1] = (img_t) dec->maxval;
+//                                        }
+//                                    }
+//                                }
+//                                if (d == 0 && dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 1) {
+//                                    if (t + blksize / 2 - 1 < dec->ts[HEIGHT]) {
+//                                        for (i = s; i < (s + blksize < dec->ts[WIDTH] ? s + blksize : dec->ts[WIDTH]); i++) {
+//                                            qt_lf[0]->val[v][u][t + blksize / 2 - 1][i] = (img_t) dec->maxval;
+//                                            qt_lf[1]->val[v][u][t + blksize / 2 - 1][i] = (img_t) dec->maxval;
+//                                            qt_lf[2]->val[v][u][t + blksize / 2 - 1][i] = (img_t) dec->maxval;
+//                                        }
+//                                    }
+//                                    if (t + blksize - 1 < dec->ts[HEIGHT]) {
+//                                        for (i = s; i < (s + blksize < dec->ts[WIDTH] ? s + blksize : dec->ts[WIDTH]); i++) {
+//                                            qt_lf[0]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
+//                                            qt_lf[1]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
+//                                            qt_lf[2]->val[v][u][t + blksize - 1][i] = (img_t) dec->maxval;
+//                                        }
+//                                    }
+//                                    if (s + blksize / 2 - 1 < dec->ts[WIDTH]) {
+//                                        for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize : dec->ts[HEIGHT]); i++) {
+//                                            qt_lf[0]->val[v][u][i][s + blksize / 2 - 1] = (img_t) dec->maxval;
+//                                            qt_lf[1]->val[v][u][i][s + blksize / 2 - 1] = (img_t) dec->maxval;
+//                                            qt_lf[2]->val[v][u][i][s + blksize / 2 - 1] = (img_t) dec->maxval;
+//                                        }
+//                                    }
+//                                    if (s + blksize - 1 < dec->ts[WIDTH]) {
+//                                        for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize : dec->ts[HEIGHT]); i++) {
+//                                            qt_lf[0]->val[v][u][i][t + blksize - 1] = (img_t) dec->maxval;
+//                                            qt_lf[1]->val[v][u][i][t + blksize - 1] = (img_t) dec->maxval;
+//                                            qt_lf[2]->val[v][u][i][t + blksize - 1] = (img_t) dec->maxval;
+//                                        }
+//                                    }
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//
+//                blksize >>= 1u;
+//            }
         }
 
         // Quadtree partition image name
@@ -1371,13 +1371,16 @@ int main(int argc, char **argv) {
 
     decode_class(fp, dec);
 
-//    if (debug == 1) {
-//        printf("oi\n");
-//        debug_partition(dec, lf, endianness);
-//        printf("adeus\n");
-//    }
+    if (debug == 1) {
+        debug_partition(dec, lf, endianness);
+    }
 
     decode_predictor(fp, dec);
+
+    if (debug == 1) {
+        debug_predictors(dec);
+    }
+
     decode_threshold(fp, dec);
 
     dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
