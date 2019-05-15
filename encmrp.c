@@ -3685,8 +3685,8 @@ int main(int argc, char **argv) {
         printf(BANNER"\n", MRP_VERSION, MRP_VERSION_DATE);
         printf("usage: encmrp [options] infile outfile\n");
         printf("options:\n");
-        printf("    -J 2 * num  Views dimensions (in pixels) [%d %d]\n", mi_size[HEIGHT], mi_size[WIDTH]);
-        printf("    -K 2 * num  Dimensions of the array of views [%d %d]\n", vu[HEIGHT], vu[WIDTH]);
+        printf("    -J 2 * num  Views dimensions (in pixels) [%c %c]\n", 'H', 'W');
+        printf("    -K 2 * num  Dimensions of the array of views [%c %c]\n", 'H', 'W');
         printf("    -L 5 * num  Prediction order (1 * Intra, 4 * Inter) [%d %d %d %d %d]\n", INTRA_PRD_ORDER, mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG], mi_prd_order[RDIAG]);
         printf("    -b num  	Bit depth [%d]\n", depth);
         printf("    -E num  	Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
