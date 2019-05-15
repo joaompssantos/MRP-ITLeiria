@@ -403,9 +403,17 @@ void init_class(ENCODER *enc) {
     int k, v, u, t, s, g, h, i, j, z, cl, sum, num_block;
     int *var, *tmp, **ptr;
 
+    int vu[2], ts[2], bsize_vu[2], bsize_ts[2];
+
+    // Calculates the next multiple of BASE_BSIZE to correctly calculate the number of blocks
+    vu[HEIGHT] = (int) ceil((double) enc->vu[HEIGHT] / BASE_BSIZE) * BASE_BSIZE;
+    vu[WIDTH] = (int) ceil((double) enc->vu[WIDTH] / BASE_BSIZE) * BASE_BSIZE;
+
+    ts[HEIGHT] = (int) ceil((double) enc->ts[HEIGHT] / BASE_BSIZE) * BASE_BSIZE;
+    ts[WIDTH] = (int) ceil((double) enc->ts[WIDTH] / BASE_BSIZE) * BASE_BSIZE;
+
     // Number of blocks in the frame
-    num_block = enc->vu[HEIGHT] * enc->vu[WIDTH] * enc->ts[HEIGHT] * enc->ts[WIDTH] /
-                (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE * BASE_BSIZE);
+    num_block = vu[HEIGHT] * vu[WIDTH] * ts[HEIGHT] * ts[WIDTH] / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE * BASE_BSIZE);
 
     var = (int *) alloc_mem(num_block * sizeof(int));
     ptr = (int **) alloc_mem(num_block * sizeof(int *));
@@ -413,19 +421,26 @@ void init_class(ENCODER *enc) {
     // Variance calculation for each block
     for (k = 0; k < num_block; k++) {
         // Gives the position of the top right pixel of each block
-        v = (k / ((enc->vu[WIDTH] * enc->ts[HEIGHT] * enc->ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
-        u = ((k % ((enc->vu[WIDTH] * enc->ts[HEIGHT] * enc->ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) / ((enc->ts[HEIGHT] * enc->ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
+        v = (k / ((vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
+        u = ((k % ((vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) / ((ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
 
-        t = ((k % ((enc->ts[HEIGHT] * enc->ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) / (enc->ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
-        s = (k % (enc->ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
+        t = ((k % ((ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) / (ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
+        s = (k % (ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
 
         var[k] = sum = 0;
 
+        // Check the correct limits due to the image not being multiple of BASE_BSIZE
+        bsize_vu[HEIGHT] = (v + BASE_BSIZE > enc->vu[HEIGHT]) ? enc->vu[HEIGHT] - v : BASE_BSIZE;
+        bsize_vu[WIDTH] = (v + BASE_BSIZE > enc->vu[WIDTH]) ? enc->vu[WIDTH] - v : BASE_BSIZE;
+
+        bsize_ts[HEIGHT] = (v + BASE_BSIZE > enc->ts[HEIGHT]) ? enc->ts[HEIGHT] - v : BASE_BSIZE;
+        bsize_ts[WIDTH] = (v + BASE_BSIZE > enc->ts[WIDTH]) ? enc->ts[WIDTH] - v : BASE_BSIZE;
+
         // Run each pixel in a block
-        for (g = 0; g < BASE_BSIZE; g++) {
-            for (h = 0; h < BASE_BSIZE; h++) {
-                for (i = 0; i < BASE_BSIZE; i++) {
-                    for (j = 0; j < BASE_BSIZE; j++) {
+        for (g = 0; g < bsize_vu[HEIGHT]; g++) {
+            for (h = 0; h < bsize_vu[WIDTH]; h++) {
+                for (i = 0; i < bsize_ts[HEIGHT]; i++) {
+                    for (j = 0; j < bsize_ts[WIDTH]; j++) {
                         z = enc->org[v + g][u + h][t + i][s + j];
                         sum += z;
                         var[k] += z * z;
@@ -435,7 +450,7 @@ void init_class(ENCODER *enc) {
         }
 
         // Final result of the variance for one block
-        var[k] -= sum * sum / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE * BASE_BSIZE);
+        var[k] -= sum * sum / (bsize_vu[HEIGHT] * bsize_vu[WIDTH] * bsize_vu[HEIGHT] * bsize_ts[WIDTH]);
         ptr[k] = &(var[k]);
     }
 
@@ -457,17 +472,24 @@ void init_class(ENCODER *enc) {
         z = (int) (ptr[k] - var);
 
         // Gives the position of the top right pixel of each of the sorted blocks
-        v = (z / ((enc->vu[WIDTH] * enc->ts[HEIGHT] * enc->ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
-        u = ((z % ((enc->vu[WIDTH] * enc->ts[HEIGHT] * enc->ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) / ((enc->ts[HEIGHT] * enc->ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
+        v = (z / ((vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
+        u = ((z % ((vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) / ((ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
 
-        t = ((z % ((enc->ts[HEIGHT] * enc->ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) / (enc->ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
-        s = (z % (enc->ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
+        t = ((z % ((ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) / (ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
+        s = (z % (ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
+
+        // Check the correct limits due to the image not being multiple of BASE_BSIZE
+        bsize_vu[HEIGHT] = (v + BASE_BSIZE > enc->vu[HEIGHT]) ? enc->vu[HEIGHT] - v : BASE_BSIZE;
+        bsize_vu[WIDTH] = (v + BASE_BSIZE > enc->vu[WIDTH]) ? enc->vu[WIDTH] - v : BASE_BSIZE;
+
+        bsize_ts[HEIGHT] = (v + BASE_BSIZE > enc->ts[HEIGHT]) ? enc->ts[HEIGHT] - v : BASE_BSIZE;
+        bsize_ts[WIDTH] = (v + BASE_BSIZE > enc->ts[WIDTH]) ? enc->ts[WIDTH] - v : BASE_BSIZE;
 
         // Sets the class number for each pixel
-        for (g = 0; g < BASE_BSIZE; g++) {
-            for (h = 0; h < BASE_BSIZE; h++) {
-                for (i = 0; i < BASE_BSIZE; i++) {
-                    for (j = 0; j < BASE_BSIZE; j++) {
+        for (g = 0; g < bsize_vu[HEIGHT]; g++) {
+            for (h = 0; h < bsize_vu[WIDTH]; h++) {
+                for (i = 0; i < bsize_ts[HEIGHT]; i++) {
+                    for (j = 0; j < bsize_ts[WIDTH]; j++) {
                         enc->class[v + g][u + h][t + i][s + j] = (char) cl;
                     }
                 }
