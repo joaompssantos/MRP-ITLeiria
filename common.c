@@ -7,139 +7,139 @@
 
 //Reference pixel position separated by their distances {y, x}
 const POINT dyx[] = {
-    /* 1 --> 2 */
-    { 0,-1}, {-1, 0},
-    /* 2 --> 6 */
-    { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1},
-    /* 3 --> 12 */
-    { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2},
-    /* 4 --> 20 */
-    { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3},
-    /* 5 --> 30 */
-    { 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4},
-    /* 6 --> 42 */
-    { 0,-6}, {-1,-5}, {-2,-4}, {-3,-3}, {-4,-2}, {-5,-1}, {-6, 0}, {-5, 1}, {-4, 2}, {-3, 3}, {-2, 4}, {-1, 5},
-    /* 7 --> 56 */
-    { 0,-7}, {-1,-6}, {-2,-5}, {-3,-4}, {-4,-3}, {-5,-2}, {-6,-1}, {-7, 0}, {-6, 1}, {-5, 2}, {-4, 3}, {-3, 4}, {-2, 5}, {-1, 6},
-    /* 8 --> 72 */
-    { 0,-8}, {-1,-7}, {-2,-6}, {-3,-5}, {-4,-4}, {-5,-3}, {-6,-2}, {-7,-1}, {-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
+        /* 1 --> 2 */
+        { 0,-1}, {-1, 0},
+        /* 2 --> 6 */
+        { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1},
+        /* 3 --> 12 */
+        { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2},
+        /* 4 --> 20 */
+        { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3},
+        /* 5 --> 30 */
+        { 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4},
+        /* 6 --> 42 */
+        { 0,-6}, {-1,-5}, {-2,-4}, {-3,-3}, {-4,-2}, {-5,-1}, {-6, 0}, {-5, 1}, {-4, 2}, {-3, 3}, {-2, 4}, {-1, 5},
+        /* 7 --> 56 */
+        { 0,-7}, {-1,-6}, {-2,-5}, {-3,-4}, {-4,-3}, {-5,-2}, {-6,-1}, {-7, 0}, {-6, 1}, {-5, 2}, {-4, 3}, {-3, 4}, {-2, 5}, {-1, 6},
+        /* 8 --> 72 */
+        { 0,-8}, {-1,-7}, {-2,-6}, {-3,-5}, {-4,-4}, {-5,-3}, {-6,-2}, {-7,-1}, {-8, 0}, {-7, 1}, {-6, 2}, {-5, 3}, {-4, 4}, {-3, 5}, {-2, 6}, {-1, 7},
 };
 
 //Reference pixel position separated by their distances
 const POINT idyx[] = {
-    /* 0 --> 1 */
-    //{ 0, 0},
-    /* 1 --> 5 */
-    { 0,-1}, {-1, 0}, { 0, 1}, { 1, 0},
-    /* 2 --> 13 */
-    { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2}, { 1, 1}, { 2, 0}, { 1,-1},
-    /* 3 --> 25 */
-    { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3}, { 1, 2}, { 2, 1}, { 3, 0}, { 2,-1}, { 1,-2},
-    /* 4 --> 41 */
-    { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4}, { 1, 3}, { 2, 2}, { 3, 1}, { 4, 0}, { 3,-1}, { 2,-2}, { 1,-3},
+        /* 0 --> 1 */
+        //{ 0, 0},
+        /* 1 --> 5 */
+        { 0,-1}, {-1, 0}, { 0, 1}, { 1, 0},
+        /* 2 --> 13 */
+        { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2}, { 1, 1}, { 2, 0}, { 1,-1},
+        /* 3 --> 25 */
+        { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3}, { 1, 2}, { 2, 1}, { 3, 0}, { 2,-1}, { 1,-2},
+        /* 4 --> 41 */
+        { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4}, { 1, 3}, { 2, 2}, { 3, 1}, { 4, 0}, { 3,-1}, { 2,-2}, { 1,-3},
 };
 
 //Reference pixel position separated by their distances
 const POINT tridyx[] = {
-    /* 0 --> 1 */
-    //{ 0, 0},
-    /* 1 --> 4 */
-    { 0,-1}, {-1, 0}, { 0, 1},
-    /* 2 --> 9 */
-    { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2},
-    /* 3 --> 16 */
-    { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3},
-    /* 4 --> 25 */
-    { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4},
-    /* 5 --> 36 */
-    { 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4}, { 0, 5}
+        /* 0 --> 1 */
+        //{ 0, 0},
+        /* 1 --> 4 */
+        { 0,-1}, {-1, 0}, { 0, 1},
+        /* 2 --> 9 */
+        { 0,-2}, {-1,-1}, {-2, 0}, {-1, 1}, { 0, 2},
+        /* 3 --> 16 */
+        { 0,-3}, {-1,-2}, {-2,-1}, {-3, 0}, {-2, 1}, {-1, 2}, { 0, 3},
+        /* 4 --> 25 */
+        { 0,-4}, {-1,-3}, {-2,-2}, {-3,-1}, {-4, 0}, {-3, 1}, {-2, 2}, {-1, 3}, { 0, 4},
+        /* 5 --> 36 */
+        { 0,-5}, {-1,-4}, {-2,-3}, {-3,-2}, {-4,-1}, {-5, 0}, {-4, 1}, {-3, 2}, {-2, 3}, {-1, 4}, { 0, 5}
 };
 
 int bref1[2][5] = {{2, -2, -1, 0, -1},
-				   {-1, -1, 1, 0, 2},
+                   {-1, -1, 1, 0, 2},
 };
 
 int bref2[3][5] = {{3, -3, -1, 0, -1},
-				   {-2, -1, 2, 0, 3},
-				   {1, -1, 1, 1, 3}
+                   {-2, -1, 2, 0, 3},
+                   {1, -1, 1, 1, 3}
 };
 
 int bref3[4][5] = {{4, -4, -1, 0, -1},
-				   {-2, -2, 2, 0, 4},
-				   {-1, -1, 1, 0, 2},
-				   {2, -1, 1, 2, 4}
+                   {-2, -2, 2, 0, 4},
+                   {-1, -1, 1, 0, 2},
+                   {2, -1, 1, 2, 4}
 };
 
 int bref4[5][5] = {{5, -5, -1, 0, -1},
-				   {-3, -2, 3, 0, 5},
-				   {-1, -1, 1, 0, 2},
-				   {2, -1, 2, 2, 5},
-				   {1, -1, 1, 3, 5}
+                   {-3, -2, 3, 0, 5},
+                   {-1, -1, 1, 0, 2},
+                   {2, -1, 2, 2, 5},
+                   {1, -1, 1, 3, 5}
 };
 
 int bref5[6][5] = {{6, -6, -1, 0, -1},
-				   {-3, -3, 3, 0, 6},
-				   {-2, -1, 2, 0, 3},
-				   {1, -1, 1, 1, 3},
-				   {2, -1, 2, 3, 6},
-				   {1, -1, 1, 4, 6}
+                   {-3, -3, 3, 0, 6},
+                   {-2, -1, 2, 0, 3},
+                   {1, -1, 1, 1, 3},
+                   {2, -1, 2, 3, 6},
+                   {1, -1, 1, 4, 6}
 };
 
 int bref6[7][5] = {{7, -7, -1, 0, -1},
-				   {-4, -3, 4, 0, 7},
-				   {-2, -1, 2, 0, 3},
-				   {1, -1, 1, 1, 3},
-				   {3, -2, 2, 3, 7},
-				   {-1, -1, 1, 3, 5},
-				   {2, -1, 1, 5, 7}
+                   {-4, -3, 4, 0, 7},
+                   {-2, -1, 2, 0, 3},
+                   {1, -1, 1, 1, 3},
+                   {3, -2, 2, 3, 7},
+                   {-1, -1, 1, 3, 5},
+                   {2, -1, 1, 5, 7}
 };
 
 int bref7[8][5] = {{8, -8, -1, 0, -1},
-				   {-4, -4, 4, 0, 8},
-				   {-2, -2, 2, 0, 4},
-				   {-1, -1, 1, 0, 2},
-				   {2, -1, 1, 2, 4},
-				   {3, -2, 2, 4, 8},
-				   {-1, -1, 1, 4, 8},
-				   {2, -1, 1, 6, 8}
+                   {-4, -4, 4, 0, 8},
+                   {-2, -2, 2, 0, 4},
+                   {-1, -1, 1, 0, 2},
+                   {2, -1, 1, 2, 4},
+                   {3, -2, 2, 4, 8},
+                   {-1, -1, 1, 4, 8},
+                   {2, -1, 1, 6, 8}
 };
 
 int bref8[9][5] = {{9, -9, -1, 0, -1},
-				   {-5, -4, 5, 0, 9},
-				   {-2, -2, 2, 0, 4},
-				   {-1, -1, 1, 0, 2},
-				   {2, -1, 1, 2, 4},
-				   {3, -2, 3, 4, 9},
-				   {-1, -1, 1, 4, 6},
-				   {2, -1, 2, 6, 9},
-				   {1, -1, 1, 7, 9}
+                   {-5, -4, 5, 0, 9},
+                   {-2, -2, 2, 0, 4},
+                   {-1, -1, 1, 0, 2},
+                   {2, -1, 1, 2, 4},
+                   {3, -2, 3, 4, 9},
+                   {-1, -1, 1, 4, 6},
+                   {2, -1, 2, 6, 9},
+                   {1, -1, 1, 7, 9}
 };
 
 int bref9[10][5] = {{10, -10, -1, 0, -1},
-				   {-5, -5, 5, 0, 10},
-				   {-3, -2, 3, 0, 5},
-				   {-1, -1, 1, 0, 2},
-				   {2, -1, 2, 2, 5},
-				   {1, -1, 1, 3, 5},
-				   {3, -2, 3, 5, 10},
-				   {-1, -1, 1, 5, 7},
-				   {2, -1, 2, 7, 10},
-				   {1, -1, 1, 8, 10}
+                    {-5, -5, 5, 0, 10},
+                    {-3, -2, 3, 0, 5},
+                    {-1, -1, 1, 0, 2},
+                    {2, -1, 2, 2, 5},
+                    {1, -1, 1, 3, 5},
+                    {3, -2, 3, 5, 10},
+                    {-1, -1, 1, 5, 7},
+                    {2, -1, 2, 7, 10},
+                    {1, -1, 1, 8, 10}
 };
 
 const int mask[9] = {0x00FF,
-				 	 0x01FF,
-					 0x03FF,
-					 0x07FF,
-					 0x0FFF,
-					 0x1FFF,
-					 0x3FFF,
-					 0x7FFF,
-					 0xFFFF
+                     0x01FF,
+                     0x03FF,
+                     0x07FF,
+                     0x0FFF,
+                     0x1FFF,
+                     0x3FFF,
+                     0x7FFF,
+                     0xFFFF
 };
 
-double sigma_h[] = {0.85, 1.15, 1.50, 1.90, 2.55, 3.30, 4.25, 5.60, 7.15, 9.20,12.05,15.35,19.95,25.85,32.95,44.05};
-double sigma_a[] = {0.15, 0.26, 0.38, 0.57, 0.83, 1.18, 1.65, 2.31, 3.22, 4.47, 6.19, 8.55,11.80,16.27,22.42,30.89};
+double sigma_h[] = {0.85, 1.15, 1.50, 1.90, 2.55, 3.30, 4.25, 5.60, 7.15, 9.20, 12.05, 15.35, 19.95, 25.85, 32.95, 44.05};
+double sigma_a[] = {0.15, 0.26, 0.38, 0.57, 0.83, 1.18, 1.65, 2.31, 3.22, 4.47, 6.19, 8.55, 11.80, 16.27, 22.42, 30.89};
 double qtree_prob[] = {0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95};
 
 /* Alternative version for 'free()' */
@@ -152,11 +152,11 @@ void safefree(void **pp) {
     }
 }
 
-void safefree_yuv(IMAGE **pp) {
+void safefree_lf4d(LF4D **pp) {
     /* in debug mode, abort if pp is NULL */
     assert(pp);
     if (pp != NULL) {               /* safety check */
-    	free((*pp)->val);
+        free((*pp)->val);
         free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
         *pp = NULL;                 /* reset original pointer */
     }
@@ -174,97 +174,153 @@ void safefree_yuv(IMAGE **pp) {
  |  Returns:  fp* --> returns a file type structure
  *-------------------------------------------------------------------*/
 FILE *fileopen(char *filename, char *mode) {
-	FILE *fp;
-	fp = fopen(filename, mode);
-	if (fp == NULL) {
-		fprintf(stderr, "Can\'t open %s!\n", filename);
-		exit(1);
-	}
-	return (fp);
+    FILE *fp;
+    fp = fopen(filename, mode);
+    if (fp == NULL) {
+        fprintf(stderr, "Can\'t open %s!\n", filename);
+        exit(1);
+    }
+    return (fp);
 }
 
 // Memory allocation
 void *alloc_mem(size_t size) {
-	void *ptr;
+    void *ptr;
 
-	// Check if memory was allocated
-	if ((ptr = malloc(size)) == NULL) {
-		fprintf(stderr, "Can\'t allocate memory (size = %d)!\n", (int)size);
-		exit(1);
-	}
-	return (ptr);
+    // Check if memory was allocated
+    if ((ptr = malloc(size)) == NULL) {
+        fprintf(stderr, "Can\'t allocate memory (size = %d)!\n", (int)size);
+        exit(1);
+    }
+    return (ptr);
 }
 
 // Image matrix allocation
 void **alloc_2d_array(int height, int width, int size) {
-	void **mat;
-	char *ptr;
-	int k;
+    void **mat;
+    char *ptr;
+    int k;
 
-	mat = (void **) alloc_mem(sizeof(void **) * height + height * width * size);
-	ptr = (char *) (mat + height);
+    mat = (void **) alloc_mem(sizeof(void *) * height + height * width * size);
+    ptr = (char *) (mat + height);
 
-	for (k = 0; k < height; k++) {
-		mat[k] =  ptr;
-		ptr += width * size;
-	}
+    for (k = 0; k < height; k++) {
+        mat[k] =  ptr;
+        ptr += width * size;
+    }
 
-	return (mat);
+    return (mat);
 }
 
 // Image matrix allocation
 void ***alloc_3d_array(int height, int width, int frames, int size) {
-	void ***mat;
-	int i, j;
+    void ***mat;
+    int i, j;
 
-	mat = (void ***) alloc_mem(sizeof(void ***) * frames + sizeof(void **) * frames * height + size * frames  * height * width);
+    mat = (void ***) alloc_mem(sizeof(void **) * frames + sizeof(void *) * frames * height + size * frames * height * width);
 
-	void** hei = (void**)(mat + frames);
-	char* wid = (char*)(hei + frames * height);
+    void **hei = (void **) (mat + frames);
+    char *wid = (char *) (hei + frames * height);
 
-	for (i = 0; i < frames; i++) {
-		mat[i] = &hei[i * height];
-	}
+    for (i = 0; i < frames; i++) {
+        mat[i] = &hei[i * height];
+    }
 
-	for (i = 0; i < frames; i++) {
-		for (j = 0; j < height; j++) {
-			hei[i * height + j] = &wid[i * height * width * size + j * width * size];
-		}
-	}
+    for (i = 0; i < frames; i++) {
+        for (j = 0; j < height; j++) {
+            hei[i * height + j] = &wid[i * height * width * size + j * width * size];
+        }
+    }
 
-	return (mat);
+    return (mat);
+}
+
+// 4D matrix allocation
+void ****alloc_4d_array(int v, int u, int t, int s, int size) {
+    void ****mat;
+    int i, j, k;
+
+    // mat = (void ***) alloc_mem(sizeof(void ***) * frames + sizeof(void **) * frames * height + size * frames * height * width);
+    mat = (void ****) alloc_mem(sizeof(void ***) * v + sizeof(void **) * v * u + sizeof(void *) * v * u * t + size * v * u * t * s);
+
+    void ***vv = (void ***) (mat + v);
+    void **vu = (void **) (vv + v * u);
+    char *vut = (char *) (vu + v * u * t);
+
+    for (i = 0; i < v; i++) {
+        mat[i] = vv;
+        vv += u;
+
+        for (j = 0; j < u; j++) {
+            mat[i][j] = vu;
+            vu += t;
+
+            for (k = 0; k < t; k++) {
+                mat[i][j][k] = vut;
+                vut += s * size;
+            }
+        }
+    }
+
+    /*for (i = 0; i < v; i++) {
+        mat[i] = &vv[i * u];
+    }
+
+    for (i = 0; i < v; i++) {
+        for (j = 0; j < u; j++) {
+            vv[i * u + j] = &vu[i * u * t * size + j * t * size];
+        }
+    }
+
+    for (i = 0; i < v; i++) {
+        for (j = 0; j < u; j++) {
+            for (k = 0; k < t; k++) {
+                vu[i * u + j * t + k * size] = &vut[i * u * t * s * size + j * t * s * size + k * s * size];
+            }
+        }
+    }*/
+
+    return (mat);
 }
 
 // Function to alloc image
-IMAGE *alloc_image(int width, int height, int maxval) {
-	// Image struct vector
-	IMAGE *img;
+LF4D *alloc_lf4d( int v, int u, int t, int s, int maxval) {
+    // Image struct vector
+    LF4D *lf;
 
-	// Image struct memory allocation
-	img = (IMAGE *)alloc_mem(sizeof(IMAGE));
+    // Image struct memory allocation
+    lf = (LF4D *) alloc_mem(sizeof(LF4D));
 
-	// Set image values
-	img->width = width;
-	img->height = height;
-	img->maxval = maxval;
+    // Set image values
+    lf->t = t;
+    lf->s = s;
+    lf->v = v;
+    lf->u = u;
 
-	img->val = (img_t **) alloc_2d_array(img->height, img->width, sizeof(img_t));
-	return (img);
+    lf->maxval = maxval;
+
+    lf->val = (img_t ****) alloc_4d_array(lf->v, lf->u, lf->t, lf->s, sizeof(img_t));
+
+    return (lf);
 }
 
-// Function to copy YUV image
-IMAGE *copy_yuv(IMAGE *img) {
-	int i, j;
+// Function to copy LF4D
+LF4D *copy_yuv(LF4D *lf) {
+    int i, j, k, l;
 
-	IMAGE *new_img = alloc_image(img->width, img->height, img->maxval);
+    LF4D *new_lf = alloc_lf4d(lf->v, lf->u, lf->t, lf->s, lf->maxval);
 
-	for (i = 0; i < new_img->height; i++) {
-		for (j = 0; j < new_img->width; j++) {
-			new_img->val[i][j] = img->val[i][j];
-		}
-	}
+    for (i = 0; i < lf->v; i++) {
+        for (j = 0; j < lf->u; j++) {
+            for (k = 0; k < lf->t; k++) {
+                for (l = 0; l < lf->s; l++) {
+                    new_lf->val[i][j][k][l] = lf->val[i][j][k][l];
+                }
+            }
+        }
+    }
 
-	return(new_img);
+    return (new_lf);
 }
 
 // Function to reverse the endianness of a unsigned short
@@ -283,56 +339,41 @@ unsigned short reverse_endianness (unsigned short s, int endianness) {
 }
 
 // Write YUV image to file
-void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
-	int i, j;
-	unsigned short byte;
-	FILE *fp;
+void write_yuv(LF4D *lf, char *filename, int depth, int endianness) {
+    int v, u, t, s;
+    unsigned short byte;
+    FILE *fp;
 
-	fp = fileopen(filename, "ab");
+    fp = fileopen(filename, "ab");
 
-	for (i = 0; i < img->height; i++) {
-		for (j = 0; j < img->width; j++) {
-			if (depth == 8) {
-				putc(img->val[i][j], fp);
-			}
-			else if (depth > 8) {
-				byte = reverse_endianness(img->val[i][j], endianness);
+    int elements = lf->v * lf->u * lf->t * lf->s * (depth == 8 ? 1 : 2);
+    unsigned char *stream_ptr, *stream = (unsigned char *) alloc_mem(elements * sizeof(unsigned char));
 
-				putc((byte >> 8) & 0x00FF, fp);
-				putc(byte & 0x00FF, fp);
-			}
-		}
-	}
+    // TODO: the reading/writing of the image depends on how the data are arranged, should implement for array and PVS maybe?
+    stream_ptr = stream;
 
-/*	for (i = 0; i < img->height / 2; i++) {
-		for (j = 0; j < img->width / 2; j++) {
-			if (depth > 8) {
-				byte = reverse_endianness((int) (pow(2, depth) / 2), endianness);
+    for (v = 0; v < lf->v; v++) {
+        for (t = 0; t < lf->t; t++) {
+            for (u = 0; u < lf->u; u++) {
+                for (s = 0; s < lf->s; s++) {
+                    if (depth == 8) {
+                        *stream_ptr++ = lf->val[v][u][t][s];
+                    }
+                    else if (depth > 8) {
+                        byte = reverse_endianness(lf->val[v][u][t][s], endianness);
 
-				putc((byte >> 8) & 0x00FF, fp);
-				putc(byte & 0x00FF, fp);
-			}
-			else {
-				putc((int) (pow(2, depth) / 2), fp);
-			}
-		}
-	}
+                        *stream_ptr++ = (byte >> 8u) & 0x00FFu;
+                        *stream_ptr++ = byte & 0x00FFu;
+                    }
+                }
+            }
+        }
+    }
 
-	for (i = 0; i < img->height / 2; i++) {
-		for (j = 0; j < img->width / 2; j++) {
-			if (depth > 8) {
-				byte = reverse_endianness((int) (pow(2, depth) / 2), endianness);
+    fwrite(stream, sizeof(unsigned char), elements, fp);
 
-				putc((byte >> 8) & 0x00FF, fp);
-				putc(byte & 0x00FF, fp);
-			}
-			else {
-				putc((int) (pow(2, depth) / 2), fp);
-			}
-		}
-	}*/
-
-	fclose(fp);
+    free(stream);
+    fclose(fp);
 }
 
 /*------------------------------- read_yuv --------------------------*
@@ -350,80 +391,77 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
  |
  |  Returns:  IMAGE* --> returns a video type structure
  *-------------------------------------------------------------------*/
-IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int endianness, int chroma) {
-	int i, j, shift_first, shift_second, first, second;
+LF4D *read_yuv(char *filename, int v, int u, int t, int s, int depth, int endianness, int chroma) {
+    int i, j, k, l;
+    int shift_first, shift_second, first, second;
     double chroma_pass = (chroma == GRAY ? 1 : (chroma == S444 ? 3 : 1.5));
-	IMAGE *img;
-	FILE *fp;
+    LF4D *lf;
+    FILE *fp;
 
-	//Open file
-	fp = fileopen(filename, "rb");
+    //Open file
+    fp = fileopen(filename, "rb");
 
-	// Check if image dimensions are correct (It has to be multiple of BASE_BSIZE)
-	if ((width % BASE_BSIZE) || (height % BASE_BSIZE)) {
-		fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
-		exit(1);
-	}
+    // Check if image dimensions are correct (It has to be multiple of BASE_BSIZE)
+//    if ((width % BASE_BSIZE) || (height % BASE_BSIZE)) {
+//        fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
+//        exit(1);
+//    }
 
-	if( endianness == LITTLE_ENDIANNESS ) {
-		shift_first = 0;
-		shift_second = 8;
-	}
-	else {
-		shift_first = 8;
-		shift_second = 0;
-	}
+    if (endianness == LITTLE_ENDIANNESS) {
+        shift_first = 0;
+        shift_second = 8;
+    }
+    else {
+        shift_first = 8;
+        shift_second = 0;
+    }
 
-	// Image allocation
-	img = alloc_image(width, height, (int) (pow(2, depth) - 1));
+    // Image allocation
+    lf = alloc_lf4d(v, u, t, s, (int) (pow(2, depth) - 1));
 
-	if (frame > 0) {
-		if (depth > 8) {
-			fseek(fp, (long) (img->height * img->width * 2 * chroma_pass * frame), SEEK_SET);
-		}
-		else {
-			fseek(fp, (long) (img->height * img->width * chroma_pass * frame), SEEK_SET);
-		}
-	}
+    for (i = 0; i < lf->v; i++) {
+        for (k = 0; k < lf->t; k++) {
+            for (j = 0; j < lf->u; j++) {
+                for (l = 0; l < lf->s; l++) {
+                    first = (img_t) fgetc(fp);
 
-	for (i = 0; i < img->height; i++) {
-		for (j = 0; j < img->width; j++) {
-			first = (img_t) fgetc(fp);
+                    if (depth > 8) {
+                        second = (img_t) fgetc(fp);
 
-			if (depth > 8) {
-				second = (img_t) fgetc(fp);
+                        lf->val[i][j][k][l] = (img_t) ((first << shift_first) + (second << shift_second));
+                        lf->val[i][j][k][l] = (img_t) (lf->val[i][j][k][l] & mask[depth - 8]);
+                    }
+                    else {
+                        lf->val[i][j][k][l] = (img_t) first;
+                    }
+                }
+            }
+        }
+    }
 
-				img->val[i][j] = (img_t) ((first << shift_first) + (second << shift_second));
-				img->val[i][j] = (img_t) (img->val[i][j] & mask[depth - 8]);
-			}
-			else {
-				img->val[i][j] = (img_t) first;
-			}
-		}
-	}
+//    for (i = 0; i < lf->v; i++) {
+//        for (j = 0; j < lf->u; j++) {
+//            for (k = 0; k < lf->t; k++) {
+//                for (l = 0; l < lf->s; l++) {
+//                    first = (img_t) fgetc(fp);
+//
+//                    if (depth > 8) {
+//                        second = (img_t) fgetc(fp);
+//
+//                        lf->val[i][j][k][l] = (img_t) ((first << shift_first) + (second << shift_second));
+//                        lf->val[i][j][k][l] = (img_t) (lf->val[i][j][k][l] & mask[depth - 8]);
+//                    }
+//                    else {
+//                        lf->val[i][j][k][l] = (img_t) first;
+//                    }
+//                }
+//            }
+//        }
+//    }
 
-/*	for (i = 0; i < img->height / 2; i++) {
-		for (j = 0; j < img->width / 2; j++) {
-			fgetc(fp);
+    fclose(fp);
 
-			if (depth > 8) {
-				fgetc(fp);
-			}
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++) {
-		for (j = 0; j < img->width / 2; j++) {
-			fgetc(fp);
-
-			if (depth > 8) {
-				fgetc(fp);
-			}
-		}
-	}*/
-
-	fclose(fp);
-	return (img);
+    return (lf);
 }
 
 // TODO: fix functions headers
@@ -435,24 +473,22 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
  |  Parameters:
  |		img				--> Image structure (IN)
  |		prd_order		--> Number of intra reference pixels (IN)
- |		back_prd_order	--> Number of back reference pixels (IN)
- |		for_prd_order	--> Number of forward reference pixels (IN)
  |		mi_prd_order	--> Number of neighbour micro images reference pixels (IN)
  |		mi_size     	--> Micro image size (IN)
  |
  |  Returns:  int*** --> Array with the references offset
  *-------------------------------------------------------------------*/
-int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_size[2]) {
-    int ***roff, *ptr;
-    int x, y, dx, dy, k, base = 0;
+int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
+    int *****roff, *ptr;
+    int v, u, t, s, ds, dt, k, base = 0;
 
-    int min_dx, max_dx, min_dy, max_dy;
-    int mmin_dx, mmax_dx, mmin_dy, mmax_dy;
+    int min_ds, max_ds, min_dt, max_dt;
+    int mmin_ds, mmax_ds, mmin_dt, mmax_dt;
 
-    min_dx = max_dx = min_dy = max_dy = 0;
-    mmin_dx = mmax_dx = mmin_dy = mmax_dy = 0;
+    min_ds = max_ds = min_dt = max_dt = 0;
+    mmin_ds = mmax_ds = mmin_dt = mmax_dt = 0;
 
-    roff = (int ***) alloc_2d_array(height, width, sizeof(int *));
+    roff = (int *****) alloc_4d_array(vu[HEIGHT], vu[WIDTH], ts[HEIGHT], ts[WIDTH], sizeof(int *));
 
     switch (type) {
         case INTRA_PRED: // Intra
@@ -460,27 +496,20 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
             base = 0;
             break;
 
-        case BACK_PRED: // Inter backwards
-            base = -width * (height + 1);
-            break;
-
-        case FOR_PRED: // Inter forward
-            base = width * (height + 1);
-            break;
         case MI_UP_PRED:
-            base = -width * mi_size[HEIGHT];
+            base = -ts[WIDTH] * ts[HEIGHT] * vu[WIDTH];
             break;
 
         case MI_LEFT_PRED:
-            base = -mi_size[WIDTH];
+            base = -ts[WIDTH] * ts[HEIGHT];
             break;
 
         case MI_LDIAG_PRED:
-            base = -width * mi_size[HEIGHT] - mi_size[WIDTH];
+            base = -ts[WIDTH] * ts[HEIGHT] * (vu[WIDTH] + 1);
             break;
 
         case MI_RDIAG_PRED:
-            base = -width * mi_size[HEIGHT] + mi_size[WIDTH];
+            base = -ts[WIDTH] * ts[HEIGHT] * (vu[WIDTH] - 1);
             break;
 
         default:
@@ -492,950 +521,1077 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
         case INTRA_PRED: // Intra
             //Values to check for special cases
             for (k = 0; k < prd_order; k++) {
-                dy = dyx[k].y;
-                dx = dyx[k].x;
+                dt = dyx[k].y;
+                ds = dyx[k].x;
 
-                if (dy < min_dy) min_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dy > max_dy) max_dy = dy;
-                if (dx > max_dx) max_dx = dx;
+                if (dt < min_dt) min_dt = dt;
+                if (ds < min_ds) min_ds = ds;
+                if (dt > max_dt) max_dt = dt;
+                if (ds > max_ds) max_ds = ds;
             }
 
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
-                    //Conditions to check which references are available for each pixel
-                    if (y == 0) {
-                        if (x == 0) {
-                            roff[y][x] = ptr;
-                            dx = 0;
-                            dy = height;
+            // Cycle that runs for all the pixels
+            for (v = 0; v < vu[HEIGHT]; v++) {
+                for (u = 0; u < vu[WIDTH]; u++) {
+                    for (t = 0; t < ts[HEIGHT]; t++) {
+                        for (s = 0; s < ts[WIDTH]; s++) {
+                            ptr = (int *) alloc_mem((prd_order) * sizeof(int));
 
-                            for (k = 0; k < prd_order; k++) {
-                                *ptr++ = dy * width + dx; //Points to a line filled with 128 (if max_val = 256)
-                            }
-                        }
-                        else if (x + min_dx <= 0 || x + max_dx >= width) {
-                            roff[y][x] = ptr;
-                            dy = 0;
+                            //Conditions to check which references are available for each pixel
+                            if (v == 0 && u == 0) {
+                                if (t == 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        ds = 0;
+                                        dt = ts[HEIGHT];
 
-                            for (k = 0; k < prd_order; k++) {
-                                dx = dyx[k].x;
-
-                                if (x + dx < 0) dx = -x;
-                                else if (dx >= 0) dx = -1;
-
-                                *ptr++ = dy * width + dx;
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else if (y + min_dy <= 0) {
-                        if (x == 0) {
-                            roff[y][x] = ptr;
-
-                            for (k = 0; k < prd_order; k++) {
-                                dy = dyx[k].y;
-
-                                if (y + dy < 0) dy = -y;
-                                else if (dy >= 0) dy = -1;
-
-                                dx = dyx[k].x;
-
-                                if (x + dx < 0) dx = -x;
-
-                                *ptr++ = dy * width + dx;
-                            }
-                        }
-                        else if (x + min_dx <= 0 || x + max_dx >= width) {
-                            roff[y][x] = ptr;
-
-                            for (k = 0; k < prd_order; k++) {
-                                dy = dyx[k].y;
-
-                                if (y + dy < 0) dy = -y;
-                                dx = dyx[k].x;
-
-                                if (x + dx < 0) dx = -x;
-                                else if (x + dx >= width) {
-                                    dx = width - x - 1;
-                                }
-
-                                *ptr++ = dy * width + dx;
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else {
-                        roff[y][x] = roff[y - 1][x];
-                        free(ptr);
-                    }
-                }
-            }
-
-            break;
-
-        case BACK_PRED: // Inter Backwards
-        case FOR_PRED: // Inter Forward
-            for (k = 0; k < prd_order - 1; k++) {
-                dy = idyx[k].y;
-                dx = idyx[k].x;
-
-                if (dy < min_dy) min_dy = dy;
-                if (dy > max_dy) max_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
-            }
-
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
-
-                    if (y == 0) {
-                        if (x == 0) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < 0 || x + dx < 0) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else if (x + min_dx <= 0 || x + max_dx >= width) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < 0 || x + dx < 0 || x + dx >= width) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else if (y + min_dy <= 0) {
-                        if (x == 0) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < 0 || x + dx < 0) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else if (x + min_dx <= 0 || x + max_dx >= width) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < 0 || x + dx < 0 || x + dx >= width) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else if (y + max_dy >= height) {
-                        if (x == 0 || x + min_dx <= 0 || x + max_dx >= width) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy >= height || x + dx < 0 || x + dx >= width) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else {
-                        roff[y][x] = roff[y - 1][x];
-                        free(ptr);
-                    }
-                }
-            }
-
-            break;
-
-        case MI_UP_PRED: // Lenslet up
-            for (k = 0; k < prd_order; k++) {
-                dy = dyx[k].y;
-                dx = dyx[k].x;
-
-                if (dy < min_dy) min_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
-            }
-
-            for (k = 0; k < prd_order - 1; k++) {
-                dy = idyx[k].y;
-                dx = idyx[k].x;
-
-                if (dy < mmin_dy) mmin_dy = dy;
-                if (dy > mmax_dy) mmax_dy = dy;
-                if (dx < mmin_dx) mmin_dx = dx;
-                if (dx > mmax_dx) mmax_dx = dx;
-            }
-
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
-
-                    //Micro image reference offset
-                    if (y < mi_size[HEIGHT]) {
-                        if (y == 0) {
-                            if (x == 0) {
-                                roff[y][x] = ptr;
-                                dx = 0;
-                                dy = height;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    *ptr++ = dy * width + dx; //Points to a line filled with 128 (if max_val = 256)
-                                }
-                            }
-                            else if (x + min_dx <= 0 || x + max_dx >= width) {
-                                roff[y][x] = ptr;
-                                dy = 0;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-                                    else if (dx >= 0) dx = -1;
-
-                                    *ptr++ = dy * width + dx;
-                                }
-                            }
-                            else {
-                                roff[y][x] = roff[y][x - 1];
-                                free(ptr);
-                            }
-                        }
-                        else if (y + min_dy <= 0) {
-                            if (x == 0) {
-                                roff[y][x] = ptr;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dy = dyx[k].y;
-
-                                    if (y + dy < 0) dy = -y;
-                                    else if (dy >= 0) dy = -1;
-
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-
-                                    *ptr++ = dy * width + dx;
-                                }
-                            }
-                            else if (x + min_dx <= 0 || x + max_dx >= width) {
-                                roff[y][x] = ptr;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dy = dyx[k].y;
-
-                                    if (y + dy < 0) dy = -y;
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-                                    else if (x + dx >= width) {
-                                        dx = width - x - 1;
+                                        for (k = 0; k < prd_order; k++) {
+                                            // Points to a line filled with 128 (if max_val = 256)
+                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        }
                                     }
+                                    else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        dt = 0;
 
-                                    *ptr++ = dy * width + dx;
+                                        for (k = 0; k < prd_order; k++) {
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+                                            else if (ds >= 0) ds = -1;
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + min_dt <= 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            dt = dyx[k].y;
+
+                                            if (t + dt < 0) dt = -t;
+                                            else if (dt >= 0) dt = -1;
+
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            dt = dyx[k].y;
+
+                                            if (t + dt < 0) dt = -t;
+
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+                                            else if (s + ds >= ts[WIDTH]) {
+                                                ds = ts[WIDTH] - s - 1;
+                                            }
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v][u][t - 1][s];
+                                    free(ptr);
+                                }
+                            }
+                            else if (u > 0) {
+                                if (t == 0 && s == 0) {
+                                    roff[v][u][t][s] = ptr;
+                                    ds = 0;
+                                    dt = ts[HEIGHT];
+
+                                    for (k = 0; k < prd_order; k++) {
+                                        // Points to a line filled with 128 (if max_val = 256)
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v][u - 1][t][s];
+                                    free(ptr);
                                 }
                             }
                             else {
-                                roff[y][x] = roff[y][x - 1];
-                                free(ptr);
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y - 1][x];
-                            free(ptr);
-                        }
-                    }
-                    else if (y == mi_size[HEIGHT]) {
-                        if (x == 0) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
+                                if (t == 0 && s == 0) {
+                                    roff[v][u][t][s] = ptr;
+                                    ds = 0;
+                                    dt = ts[HEIGHT];
 
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < mi_size[HEIGHT] || x + dx < 0) {
-                                    *ptr++ = base;
+                                    for (k = 0; k < prd_order; k++) {
+                                        // Points to a line filled with 128 (if max_val = 256)
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                    }
                                 }
                                 else {
-                                    *ptr++ = dy * width + dx + base;
+                                    roff[v][u][t][s] = roff[v - 1][u][t][s];
+                                    free(ptr);
                                 }
                             }
                         }
-                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < mi_size[HEIGHT] || x + dx < 0 || x + dx >= width) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else if (y + mmin_dy <= mi_size[HEIGHT]) {
-                        if (x == 0) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < mi_size[HEIGHT] || x + dx < 0) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < mi_size[HEIGHT] || x + dx < 0 || x + dx >= width) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else {
-                        roff[y][x] = roff[y - 1][x];
-                        free(ptr);
                     }
                 }
             }
 
             break;
 
-        case MI_LEFT_PRED: // Lenslet left
+        case MI_UP_PRED: // Up prediction
             for (k = 0; k < prd_order; k++) {
-                dy = dyx[k].y;
-                dx = dyx[k].x;
+                dt = dyx[k].y;
+                ds = dyx[k].x;
 
-                if (dy < min_dy) min_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
+                if (dt < min_dt) min_dt = dt;
+                if (ds < min_ds) min_ds = ds;
+                if (ds > max_ds) max_ds = ds;
             }
 
             for (k = 0; k < prd_order - 1; k++) {
-                dy = tridyx[k].y;
-                dx = tridyx[k].x;
+                dt = idyx[k].y;
+                ds = idyx[k].x;
 
-                if (dy < mmin_dy) mmin_dy = dy;
-                if (dy > mmax_dy) mmax_dy = dy;
-                if (dx < mmin_dx) mmin_dx = dx;
-                if (dx > mmax_dx) mmax_dx = dx;
+                if (dt < mmin_dt) mmin_dt = dt;
+                if (dt > mmax_dt) mmax_dt = dt;
+                if (ds < mmin_ds) mmin_ds = ds;
+                if (ds > mmax_ds) mmax_ds = ds;
             }
 
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+            // Cycle that runs for all the pixels
+            for (v = 0; v < vu[HEIGHT]; v++) {
+                for (u = 0; u < vu[WIDTH]; u++) {
+                    for (t = 0; t < ts[HEIGHT]; t++) {
+                        for (s = 0; s < ts[WIDTH]; s++) {
+                            ptr = (int *) alloc_mem((prd_order) * sizeof(int));
 
-                    //Micro image reference offset
-                    if (x < mi_size[WIDTH]) {
-                        if (y == 0) {
-                            if (x == 0) {
-                                roff[y][x] = ptr;
-                                dx = 0;
-                                dy = height;
+                            // LF reference offset
+                            if (v == 0 && u == 0) {
+                                if (t == 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        ds = 0;
+                                        dt = ts[HEIGHT];
 
-                                for (k = 0; k < prd_order; k++) {
-                                    *ptr++ = dy * width + dx; //Points to a line filled with 128 (if max_val = 256)
-                                }
-                            }
-                            else if (x + min_dx <= 0 || x + max_dx >= width) {
-                                roff[y][x] = ptr;
-                                dy = 0;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-                                    else if (dx >= 0) dx = -1;
-
-                                    *ptr++ = dy * width + dx;
-                                }
-                            }
-                            else {
-                                roff[y][x] = roff[y][x - 1];
-                                free(ptr);
-                            }
-                        }
-                        else if (y + min_dy <= 0) {
-                            if (x == 0) {
-                                roff[y][x] = ptr;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dy = dyx[k].y;
-
-                                    if (y + dy < 0) dy = -y;
-                                    else if (dy >= 0) dy = -1;
-
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-
-                                    *ptr++ = dy * width + dx;
-                                }
-                            }
-                            else if (x + min_dx <= 0 || x + max_dx >= width) {
-                                roff[y][x] = ptr;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dy = dyx[k].y;
-
-                                    if (y + dy < 0) dy = -y;
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-                                    else if (x + dx >= width) {
-                                        dx = width - x - 1;
+                                        for (k = 0; k < prd_order; k++) {
+                                            // Points to a line filled with 128 (if max_val = 256)
+                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        }
                                     }
+                                    else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        dt = 0;
 
-                                    *ptr++ = dy * width + dx;
+                                        for (k = 0; k < prd_order; k++) {
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+                                            else if (ds >= 0) ds = -1;
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + min_dt <= 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            dt = dyx[k].y;
+
+                                            if (t + dt < 0) dt = -t;
+                                            else if (dt >= 0) dt = -1;
+
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            dt = dyx[k].y;
+
+                                            if (t + dt < 0) dt = -t;
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+                                            else if (s + ds >= ts[WIDTH]) {
+                                                ds = ts[WIDTH] - s - 1;
+                                            }
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v][u][t - 1][s];
+                                    free(ptr);
                                 }
                             }
+                            else if (v == 0) {
+                                if (t == 0 && s == 0) {
+                                    roff[v][u][t][s] = ptr;
+                                    ds = 0;
+                                    dt = ts[HEIGHT];
+
+                                    for (k = 0; k < prd_order; k++) {
+                                        // Points to a line filled with 128 (if max_val = 256)
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v][u - 1][t][s];
+                                    free(ptr);
+                                }
+                            }
+                            else if (v == 1 && u == 0) {
+                                if (t == 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else if (s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + mmin_dt <= 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < ts[HEIGHT] || s + ds < 0) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else if (s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + mmax_dt >= ts[HEIGHT]) {
+                                    if (s == 0 || s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt >= ts[HEIGHT] || s + ds < 0 || s + ds >= ts[HEIGHT]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v][u][t - 1][s];
+                                    free(ptr);
+                                }
+                            }
+                            else if (v == 1) {
+                                roff[v][u][t][s] = roff[v][u - 1][t][s];
+                                free(ptr);
+                            }
                             else {
-                                roff[y][x] = roff[y][x - 1];
+                                roff[v][u][t][s] = roff[v - 1][u][t][s];
                                 free(ptr);
                             }
                         }
-                        else {
-                            roff[y][x] = roff[y - 1][x];
-                            free(ptr);
-                        }
-                    }
-                    else if (y == 0) {
-                        if (x == mi_size[WIDTH]) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = tridyx[k].y;
-                                dx = tridyx[k].x;
-
-                                if (y + dy < 0 || x + dx < mi_size[WIDTH]) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else if (x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = tridyx[k].y;
-                                dx = tridyx[k].x;
-
-                                if (y + dy < 0 || x + dx < mi_size[WIDTH] || x + dx >= width) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else if (y + mmin_dy <= 0) {
-                        if (x == mi_size[WIDTH]) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = tridyx[k].y;
-                                dx = tridyx[k].x;
-
-                                if (y + dy < 0 || x + dx < mi_size[WIDTH]) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else if (x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = tridyx[k].y;
-                                dx = tridyx[k].x;
-
-                                if (y + dy < 0 || x + dx < mi_size[WIDTH] || x + dx >= width) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else {
-                        roff[y][x] = roff[y - 1][x];
-                        free(ptr);
                     }
                 }
             }
 
             break;
 
-        case MI_LDIAG_PRED: // Lenslet left diagonal
+        case MI_LEFT_PRED: // Left prediction
             for (k = 0; k < prd_order; k++) {
-                dy = dyx[k].y;
-                dx = dyx[k].x;
+                dt = dyx[k].y;
+                ds = dyx[k].x;
 
-                if (dy < min_dy) min_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
+                if (dt < min_dt) min_dt = dt;
+                if (ds < min_ds) min_ds = ds;
+                if (ds > max_ds) max_ds = ds;
             }
 
             for (k = 0; k < prd_order - 1; k++) {
-                dy = idyx[k].y;
-                dx = idyx[k].x;
+                dt = tridyx[k].y;
+                ds = tridyx[k].x;
 
-                if (dy < mmin_dy) mmin_dy = dy;
-                if (dy > mmax_dy) mmax_dy = dy;
-                if (dx < mmin_dx) mmin_dx = dx;
-                if (dx > mmax_dx) mmax_dx = dx;
+                if (dt < mmin_dt) mmin_dt = dt;
+                if (dt > mmax_dt) mmax_dt = dt;
+                if (ds < mmin_ds) mmin_ds = ds;
+                if (ds > mmax_ds) mmax_ds = ds;
             }
 
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+            // Cycle that runs for all the pixels
+            for (v = 0; v < vu[HEIGHT]; v++) {
+                for (u = 0; u < vu[WIDTH]; u++) {
+                    for (t = 0; t < ts[HEIGHT]; t++) {
+                        for (s = 0; s < ts[WIDTH]; s++) {
+                            ptr = (int *) alloc_mem((prd_order) * sizeof(int));
 
-                    //Micro image reference offset
-                    if (y < mi_size[HEIGHT] || x < mi_size[WIDTH]) {
-                        if (y == 0) {
-                            if (x == 0) {
-                                roff[y][x] = ptr;
-                                dx = 0;
-                                dy = height;
+                            // LF reference offset
+                            if (v == 0 && u == 0) {
+                                if (t == 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        ds = 0;
+                                        dt = ts[HEIGHT];
 
-                                for (k = 0; k < prd_order; k++) {
-                                    *ptr++ = dy * width + dx; //Points to a line filled with 128 (if max_val = 256)
-                                }
-                            }
-                            else if (x + min_dx <= 0 || x + max_dx >= width) {
-                                roff[y][x] = ptr;
-                                dy = 0;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-                                    else if (dx >= 0) dx = -1;
-
-                                    *ptr++ = dy * width + dx;
-                                }
-                            }
-                            else {
-                                roff[y][x] = roff[y][x - 1];
-                                free(ptr);
-                            }
-                        }
-                        else if (y + min_dy <= 0) {
-                            if (x == 0) {
-                                roff[y][x] = ptr;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dy = dyx[k].y;
-
-                                    if (y + dy < 0) dy = -y;
-                                    else if (dy >= 0) dy = -1;
-
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-
-                                    *ptr++ = dy * width + dx;
-                                }
-                            }
-                            else if (x + min_dx <= 0 || x + max_dx >= width) {
-                                roff[y][x] = ptr;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dy = dyx[k].y;
-
-                                    if (y + dy < 0) dy = -y;
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-                                    else if (x + dx >= width) {
-                                        dx = width - x - 1;
+                                        for (k = 0; k < prd_order; k++) {
+                                            // Points to a line filled with 128 (if max_val = 256)
+                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        }
                                     }
+                                    else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        dt = 0;
 
-                                    *ptr++ = dy * width + dx;
+                                        for (k = 0; k < prd_order; k++) {
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+                                            else if (ds >= 0) ds = -1;
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + min_dt <= 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            dt = dyx[k].y;
+
+                                            if (t + dt < 0) dt = -t;
+                                            else if (dt >= 0) dt = -1;
+
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            dt = dyx[k].y;
+
+                                            if (t + dt < 0) dt = -t;
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+                                            else if (s + ds >= ts[WIDTH]) {
+                                                ds = ts[WIDTH] - s - 1;
+                                            }
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v][u][t - 1][s];
+                                    free(ptr);
                                 }
                             }
+                            else if (u == 0) {
+                                if (t == 0 && s == 0) {
+                                    roff[v][u][t][s] = ptr;
+                                    ds = 0;
+                                    dt = ts[HEIGHT];
+
+                                    for (k = 0; k < prd_order; k++) {
+                                        // Points to a line filled with 128 (if max_val = 256)
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v - 1][u][t][s];
+                                    free(ptr);
+                                }
+                            }
+                            else if (v == 0 && u == 1) {
+                                if (t == 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else if (s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + mmin_dt <= 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = tridyx[k].y;
+                                            ds = tridyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else if (s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = tridyx[k].y;
+                                            ds = tridyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v][u][t - 1][s];
+                                    free(ptr);
+                                }
+                            }
+                            else if (u == 1){
+                                roff[v][u][t][s] = roff[v - 1][u][t][s];
+                                free(ptr);
+                            }
                             else {
-                                roff[y][x] = roff[y][x - 1];
+                                roff[v][u][t][s] = roff[v][u - 1][t][s];
                                 free(ptr);
                             }
                         }
-                        else {
-                            roff[y][x] = roff[y - 1][x];
-                            free(ptr);
-                        }
-                    }
-                    else if (y == mi_size[HEIGHT]) {
-                        if (x == mi_size[WIDTH]) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < mi_size[HEIGHT] || x + dx < mi_size[WIDTH]) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else if (x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < mi_size[HEIGHT] || x + dx < mi_size[WIDTH] || x + dx >= width) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else if (y + mmin_dy <= mi_size[HEIGHT]) {
-                        if (x == mi_size[WIDTH]) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < mi_size[HEIGHT] || x + dx < mi_size[WIDTH]) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else if (x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < mi_size[HEIGHT] || x + dx < mi_size[WIDTH] || x + dx >= width) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
-                            }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else {
-                        roff[y][x] = roff[y - 1][x];
-                        free(ptr);
                     }
                 }
             }
 
             break;
 
-        case MI_RDIAG_PRED: // Lenslet right diagonal
+        case MI_LDIAG_PRED: // Left diagonal prediction
             for (k = 0; k < prd_order; k++) {
-                dy = dyx[k].y;
-                dx = dyx[k].x;
+                dt = dyx[k].y;
+                ds = dyx[k].x;
 
-                if (dy < min_dy) min_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
+                if (dt < min_dt) min_dt = dt;
+                if (ds < min_ds) min_ds = ds;
+                if (ds > max_ds) max_ds = ds;
             }
 
             for (k = 0; k < prd_order - 1; k++) {
-                dy = idyx[k].y;
-                dx = idyx[k].x;
+                dt = idyx[k].y;
+                ds = idyx[k].x;
 
-                if (dy < mmin_dy) mmin_dy = dy;
-                if (dy > mmax_dy) mmax_dy = dy;
-                if (dx < mmin_dx) mmin_dx = dx;
-                if (dx > mmax_dx) mmax_dx = dx;
+                if (dt < mmin_dt) mmin_dt = dt;
+                if (dt > mmax_dt) mmax_dt = dt;
+                if (ds < mmin_ds) mmin_ds = ds;
+                if (ds > mmax_ds) mmax_ds = ds;
             }
 
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+            // Cycle that runs for all the pixels
+            for (v = 0; v < vu[HEIGHT]; v++) {
+                for (u = 0; u < vu[WIDTH]; u++) {
+                    for (t = 0; t < ts[HEIGHT]; t++) {
+                        for (s = 0; s < ts[WIDTH]; s++) {
+                            ptr = (int *) alloc_mem((prd_order) * sizeof(int));
 
-                    //Micro image reference offset
-                    if (y < mi_size[HEIGHT] || x > width - mi_size[WIDTH]) {
-                        if (y == 0) {
-                            if (x == 0) {
-                                roff[y][x] = ptr;
-                                dx = 0;
-                                dy = height;
+                            // LF reference offset
+                            if (v == 0 || u == 0) {
+                                if (t == 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        ds = 0;
+                                        dt = ts[HEIGHT];
 
-                                for (k = 0; k < prd_order; k++) {
-                                    *ptr++ = dy * width + dx; //Points to a line filled with 128 (if max_val = 256)
-                                }
-                            }
-                            else if (x + min_dx <= 0 || x + max_dx >= width) {
-                                roff[y][x] = ptr;
-                                dy = 0;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-                                    else if (dx >= 0) dx = -1;
-
-                                    *ptr++ = dy * width + dx;
-                                }
-                            }
-                            else {
-                                roff[y][x] = roff[y][x - 1];
-                                free(ptr);
-                            }
-                        }
-                        else if (y + min_dy <= 0) {
-                            if (x == 0) {
-                                roff[y][x] = ptr;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dy = dyx[k].y;
-
-                                    if (y + dy < 0) dy = -y;
-                                    else if (dy >= 0) dy = -1;
-
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-
-                                    *ptr++ = dy * width + dx;
-                                }
-                            }
-                            else if (x + min_dx <= 0 || x + max_dx >= width) {
-                                roff[y][x] = ptr;
-
-                                for (k = 0; k < prd_order; k++) {
-                                    dy = dyx[k].y;
-
-                                    if (y + dy < 0) dy = -y;
-                                    dx = dyx[k].x;
-
-                                    if (x + dx < 0) dx = -x;
-                                    else if (x + dx >= width) {
-                                        dx = width - x - 1;
+                                        for (k = 0; k < prd_order; k++) {
+                                            // Points to a line filled with 128 (if max_val = 256)
+                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        }
                                     }
+                                    else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        dt = 0;
 
-                                    *ptr++ = dy * width + dx;
+                                        for (k = 0; k < prd_order; k++) {
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+                                            else if (ds >= 0) ds = -1;
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + min_dt <= 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            dt = dyx[k].y;
+
+                                            if (t + dt < 0) dt = -t;
+                                            else if (dt >= 0) dt = -1;
+
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            dt = dyx[k].y;
+
+                                            if (t + dt < 0) dt = -t;
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+                                            else if (s + ds >= ts[WIDTH]) {
+                                                ds = ts[WIDTH] - s - 1;
+                                            }
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v][u][t - 1][s];
+                                    free(ptr);
                                 }
                             }
+                            else if (u == 0) {
+                                if (t == 0 && s == 0) {
+                                    roff[v][u][t][s] = ptr;
+                                    ds = 0;
+                                    dt = ts[HEIGHT];
+
+                                    for (k = 0; k < prd_order; k++) {
+                                        // Points to a line filled with 128 (if max_val = 256)
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v - 1][u][t][s];
+                                    free(ptr);
+                                }
+                            }
+                            else if (v == 0) {
+                                if (t == 0 && s == 0) {
+                                    roff[v][u][t][s] = ptr;
+                                    ds = 0;
+                                    dt = ts[HEIGHT];
+
+                                    for (k = 0; k < prd_order; k++) {
+                                        // Points to a line filled with 128 (if max_val = 256)
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v][u - 1][t][s];
+                                    free(ptr);
+                                }
+                            }
+                            else if (v == 1 && u == 1) {
+                                if (t == 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else if (s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + mmin_dt <= 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else if (s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + mmax_dt >= ts[HEIGHT]) {
+                                    if (s == 0 || s + mmin_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt >= ts[HEIGHT] || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else {
+                                    roff[v][u][t][s] = roff[v][u][t - 1][s];
+                                    free(ptr);
+                                }
+                            }
+                            else if (v == 1) {
+                                roff[v][u][t][s] = roff[v][u - 1][t][s];
+                                free(ptr);
+                            }
                             else {
-                                roff[y][x] = roff[y][x - 1];
+                                roff[v][u][t][s] = roff[v - 1][u][t][s];
                                 free(ptr);
                             }
                         }
-                        else {
-                            roff[y][x] = roff[y - 1][x];
-                            free(ptr);
-                        }
                     }
-                    else if (y == mi_size[HEIGHT]) {
-                        if (x == 0) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
+                }
+            }
 
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
+            break;
 
-                                if (y + dy < mi_size[HEIGHT] || x + dx < 0) {
-                                    *ptr++ = base;
+        case MI_RDIAG_PRED: // Right diagonal prediction
+            for (k = 0; k < prd_order; k++) {
+                dt = dyx[k].y;
+                ds = dyx[k].x;
+
+                if (dt < min_dt) min_dt = dt;
+                if (ds < min_ds) min_ds = ds;
+                if (ds > max_ds) max_ds = ds;
+            }
+
+            for (k = 0; k < prd_order - 1; k++) {
+                dt = idyx[k].y;
+                ds = idyx[k].x;
+
+                if (dt < mmin_dt) mmin_dt = dt;
+                if (dt > mmax_dt) mmax_dt = dt;
+                if (ds < mmin_ds) mmin_ds = ds;
+                if (ds > mmax_ds) mmax_ds = ds;
+            }
+
+            // Cycle that runs for all the pixels
+            for (v = 0; v < vu[HEIGHT]; v++) {
+                for (u = 0; u < vu[WIDTH]; u++) {
+                    for (t = 0; t < ts[HEIGHT]; t++) {
+                        for (s = 0; s < ts[WIDTH]; s++) {
+                            ptr = (int *) alloc_mem((prd_order) * sizeof(int));
+
+                            // LF reference offset
+                            if (v == 0 || u == vu[WIDTH] - 1) {
+                                if (t == 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        ds = 0;
+                                        dt = ts[HEIGHT];
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            // Points to a line filled with 128 (if max_val = 256)
+                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        }
+                                    }
+                                    else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        dt = 0;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+                                            else if (ds >= 0) ds = -1;
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + min_dt <= 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            dt = dyx[k].y;
+
+                                            if (t + dt < 0) dt = -t;
+                                            else if (dt >= 0) dt = -1;
+
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+
+                                        for (k = 0; k < prd_order; k++) {
+                                            dt = dyx[k].y;
+
+                                            if (t + dt < 0) dt = -t;
+                                            ds = dyx[k].x;
+
+                                            if (s + ds < 0) ds = -s;
+                                            else if (s + ds >= ts[WIDTH]) {
+                                                ds = ts[WIDTH] - s - 1;
+                                            }
+
+                                            *ptr++ = dt * ts[WIDTH] + ds;
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
                                 }
                                 else {
-                                    *ptr++ = dy * width + dx + base;
+                                    roff[v][u][t][s] = roff[v][u][t - 1][s];
+                                    free(ptr);
                                 }
                             }
-                        }
-                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH]) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
+                            else if (v == 0) {
+                                if (t == 0 && s == 0) {
+                                    roff[v][u][t][s] = ptr;
+                                    ds = 0;
+                                    dt = ts[HEIGHT];
 
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < mi_size[HEIGHT] || x + dx < 0 || x + dx >= width - mi_size[WIDTH]) {
-                                    *ptr++ = base;
+                                    for (k = 0; k < prd_order; k++) {
+                                        // Points to a line filled with 128 (if max_val = 256)
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                    }
                                 }
                                 else {
-                                    *ptr++ = dy * width + dx + base;
+                                    roff[v][u][t][s] = roff[v][u - 1][t][s];
+                                    free(ptr);
                                 }
                             }
-                        }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else if (y + mmin_dy <= mi_size[HEIGHT]) {
-                        if (x == 0) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
+                            else if (u == vu[WIDTH] - 1) {
+                                roff[v][u][t][s] = roff[v - 1][u][t][s];
+                                free(ptr);
+                            }
+                            else if (v == 1 && u == 0) {
+                                if (t == 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
 
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
 
-                                if (y + dy < mi_size[HEIGHT] || x + dx < 0) {
-                                    *ptr++ = base;
+                                            if (t + dt < 0 || s + ds < 0) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else if (s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + mmin_dt <= 0) {
+                                    if (s == 0) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else if (s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt < 0 || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
+                                }
+                                else if (t + mmax_dt >= ts[HEIGHT]) {
+                                    if (s == 0 || s + mmin_ds <= 0 || s + max_ds >= ts[WIDTH]) {
+                                        roff[v][u][t][s] = ptr;
+                                        *ptr++ = base;
+
+                                        for (k = 0; k < prd_order - 1; k++) {
+                                            dt = idyx[k].y;
+                                            ds = idyx[k].x;
+
+                                            if (t + dt >= ts[HEIGHT] || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                                                *ptr++ = base;
+                                            }
+                                            else {
+                                                *ptr++ = dt * ts[WIDTH] + ds + base;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        roff[v][u][t][s] = roff[v][u][t][s - 1];
+                                        free(ptr);
+                                    }
                                 }
                                 else {
-                                    *ptr++ = dy * width + dx + base;
+                                    roff[v][u][t][s] = roff[v][u][t - 1][s];
+                                    free(ptr);
                                 }
                             }
-                        }
-                        else if (x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH]) {
-                            roff[y][x] = ptr;
-                            *ptr++ = base;
-
-                            for (k = 0; k < prd_order - 1; k++) {
-                                dy = idyx[k].y;
-                                dx = idyx[k].x;
-
-                                if (y + dy < mi_size[HEIGHT] || x + dx < 0 || x + dx >= width - mi_size[WIDTH]) {
-                                    *ptr++ = base;
-                                }
-                                else {
-                                    *ptr++ = dy * width + dx + base;
-                                }
+                            else if (v == 1) {
+                                roff[v][u][t][s] = roff[v][u - 1][t][s];
+                                free(ptr);
+                            }
+                            else {
+                                roff[v][u][t][s] = roff[v - 1][u][t][s];
+                                free(ptr);
                             }
                         }
-                        else {
-                            roff[y][x] = roff[y][x - 1];
-                            free(ptr);
-                        }
-                    }
-                    else {
-                        roff[y][x] = roff[y - 1][x];
-                        free(ptr);
                     }
                 }
             }
@@ -1449,64 +1605,40 @@ int ***init_ref_offset(int height, int width, int type, int prd_order, int mi_si
     return (roff);
 }
 
-void free_ref_offset(int height, int width, int type, int prd_order, int mi_size[2], int ***roff) {
-    int dy, dx, x, y, k;
+void free_ref_offset(int vu[2], int ts[2], int type, int prd_order, int *****roff) {
+    int dt, ds, v, u, t, s, k;
 
-    int min_dx, max_dx, min_dy, max_dy;
-    int mmin_dx, mmax_dx, mmin_dy, mmax_dy;
+    int min_ds, max_ds, min_dt, max_dt;
+    int mmin_ds, mmax_ds, mmin_dt, mmax_dt;
 
-    min_dx = max_dx = min_dy = max_dy = 0;
-    mmin_dx = mmax_dx = mmin_dy = mmax_dy = 0;
+    min_ds = max_ds = min_dt = max_dt = 0;
+    mmin_ds = mmax_ds = mmin_dt = mmax_dt = 0;
 
     switch (type) {
         case INTRA_PRED: // Intra
             // Check if mi_size should be also used
             for (k = 0; k < prd_order; k++) {
-                dy = dyx[k].y;
-                dx = dyx[k].x;
+                dt = dyx[k].y;
+                ds = dyx[k].x;
 
-                if (dy < min_dy) min_dy = dy;
-                if (dy > max_dy) max_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
+                if (dt < min_dt) min_dt = dt;
+                if (dt > max_dt) max_dt = dt;
+                if (ds < min_ds) min_ds = ds;
+                if (ds > max_ds) max_ds = ds;
             }
 
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    //Conditions to check which references are available for each pixel
-                    if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
-                        (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
-                        free(roff[y][x]);
-                    }
-                }
-            }
-
-            safefree((void **) &(roff));
-
-            break;
-
-        case BACK_PRED: // Inter Backwards
-        case FOR_PRED: // Inter Forward
-            // Check if mi_size should be also used
-            for (k = 0; k < prd_order - 1; k++) {
-                dy = idyx[k].y;
-                dx = idyx[k].x;
-
-                if (dy < min_dy) min_dy = dy;
-                if (dy > max_dy) max_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
-            }
-
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    //Conditions to check which references are available for each pixel
-                    if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
-                        (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
-                        (y + max_dy >= height && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
-                        free(roff[y][x]);
+            // Cycle that runs for all the pixels
+            for (v = 0; v < vu[HEIGHT]; v++) {
+                for (u = 0; u < vu[WIDTH]; u++) {
+                    for (t = 0; t < ts[HEIGHT]; t++) {
+                        for (s = 0; s < ts[WIDTH]; s++) {
+                            //Conditions to check which references are available for each pixel
+                            if (((v == 0 && u == 0) && ((t == 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH])) ||
+                                                        (t + min_dt <= 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH])))) ||
+                                ((v > 0 || u > 0) && (t == 0 && s == 0))) {
+                                free(roff[v][u][t][s]);
+                            }
+                        }
                     }
                 }
             }
@@ -1517,38 +1649,46 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
 
         case MI_UP_PRED:
             for (k = 0; k < prd_order; k++) {
-                dy = dyx[k].y;
-                dx = dyx[k].x;
+                dt = dyx[k].y;
+                ds = dyx[k].x;
 
-                if (dy < min_dy) min_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
+                if (dt < min_dt) min_dt = dt;
+                if (ds < min_ds) min_ds = ds;
+                if (ds > max_ds) max_ds = ds;
             }
 
             for (k = 0; k < prd_order - 1; k++) {
-                dy = idyx[k].y;
-                dx = idyx[k].x;
+                dt = idyx[k].y;
+                ds = idyx[k].x;
 
-                if (dy < mmin_dy) mmin_dy = dy;
-                if (dy > mmax_dy) mmax_dy = dy;
-                if (dx < mmin_dx) mmin_dx = dx;
-                if (dx > mmax_dx) mmax_dx = dx;
+                if (dt < mmin_dt) mmin_dt = dt;
+                if (dt > mmax_dt) mmax_dt = dt;
+                if (ds < mmin_ds) mmin_ds = ds;
+                if (ds > mmax_ds) mmax_ds = ds;
             }
 
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    if (y < mi_size[HEIGHT]) {
-                        if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
-                            (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
-                            free(roff[y][x]);
-                        }
-                    }
-                    else {
-                        //Conditions to check which references are available for each pixel
-                        if ((y == mi_size[HEIGHT] && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width)) ||
-                            (y + mmin_dy <= mi_size[HEIGHT] && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width))) {
-                            free(roff[y][x]);
+            // Cycle that runs for all the pixels
+            for (v = 0; v < vu[HEIGHT]; v++) {
+                for (u = 0; u < vu[WIDTH]; u++) {
+                    for (t = 0; t < ts[HEIGHT]; t++) {
+                        for (s = 0; s < ts[WIDTH]; s++) {
+                            if (v == 0 && u == 0) {
+                                if ((t == 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH])) ||
+                                    (t + min_dt <= 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH]))) {
+                                    free(roff[v][u][t][s]);
+                                }
+                            }
+                            else if (v == 0 && t == 0 && s == 0) {
+                                free(roff[v][u][t][s]);
+                            }
+                            else if (v == 1 && u == 0) {
+                                //Conditions to check which references are available for each pixel
+                                if ((t == 0 && (s == 0 || s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH])) ||
+                                    (t + mmin_dt <= 0 && (s == 0 || s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH])) ||
+                                    (t + mmax_dt >= ts[HEIGHT] && (s == 0 || s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]))) {
+                                    free(roff[v][u][t][s]);
+                                }
+                            }
                         }
                     }
                 }
@@ -1560,38 +1700,45 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
 
         case MI_LEFT_PRED:
             for (k = 0; k < prd_order; k++) {
-                dy = dyx[k].y;
-                dx = dyx[k].x;
+                dt = dyx[k].y;
+                ds = dyx[k].x;
 
-                if (dy < min_dy) min_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
+                if (dt < min_dt) min_dt = dt;
+                if (ds < min_ds) min_ds = ds;
+                if (ds > max_ds) max_ds = ds;
             }
 
             for (k = 0; k < prd_order - 1; k++) {
-                dy = tridyx[k].y;
-                dx = tridyx[k].x;
+                dt = tridyx[k].y;
+                ds = tridyx[k].x;
 
-                if (dy < mmin_dy) mmin_dy = dy;
-                if (dy > mmax_dy) mmax_dy = dy;
-                if (dx < mmin_dx) mmin_dx = dx;
-                if (dx > mmax_dx) mmax_dx = dx;
+                if (dt < mmin_dt) mmin_dt = dt;
+                if (dt > mmax_dt) mmax_dt = dt;
+                if (ds < mmin_ds) mmin_ds = ds;
+                if (ds > mmax_ds) mmax_ds = ds;
             }
 
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    if (x < mi_size[WIDTH]) {
-                        if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
-                            (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
-                            free(roff[y][x]);
-                        }
-                    }
-                    else {
-                        //Conditions to check which references are available for each pixel
-                        if ((y == 0 && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width)) ||
-                            (y + mmin_dy <= 0 && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width))) {
-                            free(roff[y][x]);
+            // Cycle that runs for all the pixels
+            for (v = 0; v < vu[HEIGHT]; v++) {
+                for (u = 0; u < vu[WIDTH]; u++) {
+                    for (t = 0; t < ts[HEIGHT]; t++) {
+                        for (s = 0; s < ts[WIDTH]; s++) {
+                            if (v == 0 && u == 0) {
+                                if ((t == 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH])) ||
+                                    (t + min_dt <= 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH]))) {
+                                    free(roff[v][u][t][s]);
+                                }
+                            }
+                            else if (u == 0 && t == 0 && s == 0) {
+                                free(roff[v][u][t][s]);
+                            }
+                            else if (v == 0 && u == 1) {
+                                //Conditions to check which references are available for each pixel
+                                if ((t == 0 && (s == 0 || s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH])) ||
+                                    (t + mmin_dt <= 0 && (s == 0 || s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH]))) {
+                                    free(roff[v][u][t][s]);
+                                }
+                            }
                         }
                     }
                 }
@@ -1603,38 +1750,51 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
 
         case MI_LDIAG_PRED:
             for (k = 0; k < prd_order; k++) {
-                dy = dyx[k].y;
-                dx = dyx[k].x;
+                dt = dyx[k].y;
+                ds = dyx[k].x;
 
-                if (dy < min_dy) min_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
+                if (dt < min_dt) min_dt = dt;
+                if (ds < min_ds) min_ds = ds;
+                if (ds > max_ds) max_ds = ds;
             }
 
             for (k = 0; k < prd_order - 1; k++) {
-                dy = idyx[k].y;
-                dx = idyx[k].x;
+                dt = idyx[k].y;
+                ds = idyx[k].x;
 
-                if (dy < mmin_dy) mmin_dy = dy;
-                if (dy > mmax_dy) mmax_dy = dy;
-                if (dx < mmin_dx) mmin_dx = dx;
-                if (dx > mmax_dx) mmax_dx = dx;
+                if (dt < mmin_dt) mmin_dt = dt;
+                if (dt > mmax_dt) mmax_dt = dt;
+                if (ds < mmin_ds) mmin_ds = ds;
+                if (ds > mmax_ds) mmax_ds = ds;
             }
 
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    if (y < mi_size[HEIGHT] || x < mi_size[WIDTH]) {
-                        if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
-                            (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
-                            free(roff[y][x]);
-                        }
-                    }
-                    else {
-                        //Conditions to check which references are available for each pixel
-                        if ((y == mi_size[HEIGHT] && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width)) ||
-                            (y + mmin_dy <= mi_size[HEIGHT] && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width))) {
-                            free(roff[y][x]);
+            // Cycle that runs for all the pixels
+            for (v = 0; v < vu[HEIGHT]; v++) {
+                for (u = 0; u < vu[WIDTH]; u++) {
+                    for (t = 0; t < ts[HEIGHT]; t++) {
+                        for (s = 0; s < ts[WIDTH]; s++) {
+                            if (v == 0 || u == 0) {
+                                if ((t == 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH])) ||
+                                    (t + min_dt <= 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH]))) {
+                                    free(roff[v][u][t][s]);
+                                }
+                            }
+                            else if ((v == 0 || u == 0) && t == 0 && s == 0) {
+                                free(roff[v][u][t][s]);
+                            }
+                            else if (v == 0) {
+                                if (t == 0 && s == 0) {
+
+                                }
+                            }
+                            else if (v == 1 && u == 1) {
+                                //Conditions to check which references are available for each pixel
+                                if ((t == 0 && (s == 0 || s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH])) ||
+                                    (t + mmin_dt <= 0 && ( s == 0 || s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH])) ||
+                                    (t + mmax_dt >= ts[HEIGHT] && (s == 0 || s + mmin_ds <= 0 || s + max_ds >= ts[WIDTH]))) {
+                                    free(roff[v][u][t][s]);
+                                }
+                            }
                         }
                     }
                 }
@@ -1645,38 +1805,46 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
 
         case MI_RDIAG_PRED:
             for (k = 0; k < prd_order; k++) {
-                dy = dyx[k].y;
-                dx = dyx[k].x;
+                dt = dyx[k].y;
+                ds = dyx[k].x;
 
-                if (dy < min_dy) min_dy = dy;
-                if (dx < min_dx) min_dx = dx;
-                if (dx > max_dx) max_dx = dx;
+                if (dt < min_dt) min_dt = dt;
+                if (ds < min_ds) min_ds = ds;
+                if (ds > max_ds) max_ds = ds;
             }
 
             for (k = 0; k < prd_order - 1; k++) {
-                dy = idyx[k].y;
-                dx = idyx[k].x;
+                dt = idyx[k].y;
+                ds = idyx[k].x;
 
-                if (dy < mmin_dy) mmin_dy = dy;
-                if (dy > mmax_dy) mmax_dy = dy;
-                if (dx < mmin_dx) mmin_dx = dx;
-                if (dx > mmax_dx) mmax_dx = dx;
+                if (dt < mmin_dt) mmin_dt = dt;
+                if (dt > mmax_dt) mmax_dt = dt;
+                if (ds < mmin_ds) mmin_ds = ds;
+                if (ds > mmax_ds) mmax_ds = ds;
             }
 
-            //Cycle that runs for all the pixels
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    if (y < mi_size[HEIGHT] || x > width - mi_size[WIDTH]) {
-                        if ((y == 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width)) ||
-                            (y + min_dy <= 0 && (x == 0 || x + min_dx <= 0 || x + max_dx >= width))) {
-                            free(roff[y][x]);
-                        }
-                    }
-                    else {
-                        //Conditions to check which references are available for each pixel
-                        if ((y == mi_size[HEIGHT] && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH])) ||
-                            (y + mmin_dy <= mi_size[HEIGHT] && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH]))) {
-                            free(roff[y][x]);
+            // Cycle that runs for all the pixels
+            for (v = 0; v < vu[HEIGHT]; v++) {
+                for (u = 0; u < vu[WIDTH]; u++) {
+                    for (t = 0; t < ts[HEIGHT]; t++) {
+                        for (s = 0; s < ts[WIDTH]; s++) {
+                            if (v == 0 || u == vu[WIDTH] - 1) {
+                                if ((t == 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH])) ||
+                                    (t + min_dt <= 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH]))) {
+                                    free(roff[v][u][t][s]);
+                                }
+                            }
+                            else if (v == 0 && t == 0 && s == 0) {
+                                free(roff[v][u][t][s]);
+                            }
+                            else if (v == 1 && u == 0) {
+                                //Conditions to check which references are available for each pixel
+                                if ((t == 0 && (s == 0 || s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH])) ||
+                                    (t + mmin_dt <= 0 && ( s == 0 || s + mmin_ds <= 0 || s + mmax_ds >= ts[WIDTH])) ||
+                                    (t + mmax_dt >= ts[HEIGHT] && (s == 0 || s + mmin_ds <= 0 || s + max_ds >= ts[WIDTH]))) {
+                                    free(roff[v][u][t][s]);
+                                }
+                            }
                         }
                     }
                 }
@@ -1709,8 +1877,6 @@ int *init_ctx_weight(int type, int prd_order, int delta) {
 
             break;
 
-        case BACK_PRED: // Inter backwards
-        case FOR_PRED: // Inter forward
         case MI_UP_PRED:
         case MI_LDIAG_PRED:
         case MI_RDIAG_PRED:
@@ -1746,106 +1912,136 @@ int *init_ctx_weight(int type, int prd_order, int delta) {
 }
 
 int e2E(int e, int prd, int flag, int maxval) {
-	int E, th;
+    int E, th;
 
-	E = (e > 0)? e : -e;
-	th = (prd < ((maxval + 1) >> 1))? prd : maxval - prd;
+    E = (e > 0) ? e : -e;
+    th = (prd < ((maxval + 1) >> 1)) ? prd : maxval - prd;
 
-	if (E > th) {
-		E += th;
-	}
-	else if (flag) {
-		E = (e < 0)? (E << 1) - 1 : (E << 1);
-	}
-	else {
-		E = (e > 0)? (E << 1) - 1 : (E << 1);
-	}
+    if (E > th) {
+        E += th;
+    }
+    else if (flag) {
+        E = (e < 0) ? (E << 1) - 1 : (E << 1);
+    }
+    else {
+        E = (e > 0) ? (E << 1) - 1 : (E << 1);
+    }
 
-	return (E);
+    return (E);
 }
 
 int E2e(int E, int prd, int flag, int maxval) {
-	int e, th;
+    int e, th;
 
-	th = (prd < ((maxval + 1) >> 1))? prd : maxval - prd;
+    th = (prd < ((maxval + 1) >> 1)) ? prd : maxval - prd;
 
-	if (E > (th << 1)) {
-		e = (prd < ((maxval + 1) >> 1))? E - th : th - E;
-	} else if (flag) {
-		e = (E & 1)? -((E >> 1) + 1) : (E >> 1);
-	} else {
-		e = (E & 1)? (E >> 1) + 1 : -(E >> 1);
-	}
+    if (E > (th << 1)) {
+        e = (prd < ((maxval + 1) >> 1)) ? E - th : th - E;
+    }
+    else if (flag) {
+        e = (E & 1) ? -((E >> 1) + 1) : (E >> 1);
+    }
+    else {
+        e = (E & 1) ? (E >> 1) + 1 : -(E >> 1);
+    }
 
-	return (e);
+    return (e);
 }
 
-void mtf_classlabel(char **class, int *mtfbuf, int y, int x, int bsize, int width, int num_class) {
-	int i, j, k, ref[3];
+void mtf_classlabel(char ****class, int *mtfbuf, int v, int u, int t, int s, int bsize, int width, int num_class) {
+    int i, j, k, ref[5];
 
-	if (y == 0) {
-		if (x == 0) {
-			ref[0] = ref[1] = ref[2] = 0;
-		}
-		else {
-			ref[0] = ref[1] = ref[2] = class[y][x-1];
-		}
-	}
-	else {
-		ref[0] = class[y-1][x];
-		ref[1] = (x == 0)? class[y-1][x] : class[y][x-1];
-		ref[2] = (x + bsize >= width)? class[y-1][x] : class[y-1][x+bsize];
-		if (ref[1] == ref[2]) {
-			ref[2] = ref[0];
-			ref[0] = ref[1];
-		}
-	}
+    if (v == 0) {
+        if (u == 0) {
+            if (t == 0) {
+                if (s == 0) {
+                    ref[0] = ref[1] = ref[2] = ref[3] = ref[4] = 0;
+                }
+                else {
+                    ref[0] = ref[1] = ref[2] = ref[3] = ref[4] = class[v][u][t][s - 1];
+                }
+            }
+            else {
+                ref[0] = ref[3] = class[v][u][t - 1][s];
+                ref[1] = ref[4] = (s == 0) ? class[v][u][t - 1][s] : class[v][u][t][s - 1];
+                ref[2] = (s + bsize >= width) ? class[v][u][t - 1][s] : class[v][u][t - 1][s + bsize];
 
-	/* move to front */
-	for (k = 2; k >= 0; k--) {
-		if ((j = mtfbuf[ref[k]]) == 0) continue;
+                if (ref[1] == ref[2]) {
+                    ref[2] = ref[0];
+                    ref[0] = ref[1];
+                }
+            }
+        }
+        else {
+            ref[0] = (t == 0 && s == 0) ? class[v][u - 1][t][s] : (t == 0) ? class[v][u][t][s - 1] : class[v][u][t - 1][s];
+            ref[1] = (t == 0 && s == 0) ? class[v][u - 1][t][s] : (s == 0) ? class[v][u][t - 1][s] : class[v][u][t][s - 1];
+            ref[2] = (t == 0 || s + bsize >= width) ? class[v][u - 1][t][s] : class[v][u][t - 1][s + bsize];
+            ref[3] = ref[4] = class[v][u - 1][t][s];
 
-		for (i = 0; i < num_class; i++) {
-			if (mtfbuf[i] < j) {
-				mtfbuf[i]++;
-			}
-		}
+            if (ref[1] == ref[2]) {
+                ref[2] = ref[0];
+                ref[0] = ref[1];
+            }
+        }
+    }
+    else {
+        ref[0] = (t == 0 && s == 0) ? class[v - 1][u][t][s] : (t == 0) ? class[v][u][t][s - 1] : class[v][u][t - 1][s];
+        ref[1] = (t == 0 && s == 0) ? class[v - 1][u][t][s] : (s == 0) ? class[v][u][t - 1][s] : class[v][u][t][s - 1];
+        ref[2] = (t == 0 || s + bsize >= width) ? class[v - 1][u][t][s] : class[v][u][t - 1][s + bsize];
+        ref[3] = (u == 0) ? class[v - 1][u][t][s] : class[v][u - 1][t][s];
+        ref[4] = class[v - 1][u][t][s];
 
-		mtfbuf[ref[k]] = 0;
-	}
+        if (ref[1] == ref[2]) {
+            ref[2] = ref[0];
+            ref[0] = ref[1];
+        }
+    }
+
+    /* move to front */
+    for (k = 2; k >= 0; k--) {
+        if ((j = mtfbuf[ref[k]]) == 0) continue;
+
+        for (i = 0; i < num_class; i++) {
+            if (mtfbuf[i] < j) {
+                mtfbuf[i]++;
+            }
+        }
+
+        mtfbuf[ref[k]] = 0;
+    }
 }
 
 // Returns time
 double cpu_time(void) {
 #include <time.h>
 #ifndef HAVE_CLOCK
-#  include <sys/times.h>
+    #  include <sys/times.h>
 	struct tms t;
 #endif
 #ifndef CLK_TCK
 #  define CLK_TCK 60
 #endif
-	static clock_t prev = 0;
-	clock_t cur, dif;
+    static clock_t prev = 0;
+    clock_t cur, dif;
 
 #ifdef HAVE_CLOCK
-	cur = clock();
+    cur = clock();
 #else
-	times(&t);
+    times(&t);
 	cur = t.tms_utime + t.tms_stime;
 #endif
-	if (cur > prev) {
-		dif = cur - prev;
-	}
-	else {
-		dif = (unsigned)cur - prev;
-	}
-	prev = cur;
+    if (cur > prev) {
+        dif = cur - prev;
+    }
+    else {
+        dif = (unsigned) cur - prev;
+    }
+    prev = cur;
 
 #ifdef HAVE_CLOCK
-	return ((double)dif / CLOCKS_PER_SEC);
+    return ((double) dif / CLOCKS_PER_SEC);
 #else
-	return ((double)dif / CLK_TCK);
+    return ((double)dif / CLK_TCK);
 #endif
 }
 
@@ -1866,60 +2062,60 @@ int **copy_bref(int bframes, int bref_const[][5]) {
 int **select_bref(int bframes) {
     int **bref = NULL;
 
-	switch(bframes) {
-		case 2:
+    switch(bframes) {
+        case 2:
             bref = copy_bref(bframes, bref1);
-			break;
-		case 3:
+            break;
+        case 3:
             bref = copy_bref(bframes, bref2);
-			break;
-		case 4:
+            break;
+        case 4:
             bref = copy_bref(bframes, bref3);
-			break;
-		case 5:
+            break;
+        case 5:
             bref = copy_bref(bframes, bref4);
-			break;
-		case 6:
+            break;
+        case 6:
             bref = copy_bref(bframes, bref5);
-			break;
-		case 7:
+            break;
+        case 7:
             bref = copy_bref(bframes, bref6);
-			break;
-		case 8:
+            break;
+        case 8:
             bref = copy_bref(bframes, bref7);
-			break;
-		case 9:
+            break;
+        case 9:
             bref = copy_bref(bframes, bref8);
-			break;
-		case 10:
+            break;
+        case 10:
             bref = copy_bref(bframes, bref9);
-			break;
-		default:
+            break;
+        default:
             bref = copy_bref(bframes, bref3);
-			break;
-	}
+            break;
+    }
 
-	return bref;
+    return bref;
 }
 
 char* cat_str(char* str1, char* str2, int type) {
-	char *new_str = (char *) alloc_mem(sizeof(char) * (strlen(str1) + strlen(str2) + 1));
+    char *new_str = (char *) alloc_mem(sizeof(char) * (strlen(str1) + strlen(str2) + 1));
 
-	if(new_str != NULL){
-		new_str[0] = '\0';   // ensures the memory is an empty string
+    if(new_str != NULL){
+        new_str[0] = '\0';   // ensures the memory is an empty string
 
-		strcat(new_str, str1);
-		strcat(new_str, str2);
-	}
-	else {
-		printf("malloc failed!\n");
-		exit(-12);
-	}
+        strcat(new_str, str1);
+        strcat(new_str, str2);
+    }
+    else {
+        printf("malloc failed!\n");
+        exit(-12);
+    }
 
-	if (type == 1 ) safefree((void **) &str1);
-	safefree((void **) &str2);
+    if (type == 1 ) safefree((void **) &str1);
+    safefree((void **) &str2);
 
-	return new_str;
+    return new_str;
 }
 
 // buffer must have length >= sizeof(int) + 1

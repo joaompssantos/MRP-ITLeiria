@@ -14,12 +14,12 @@ set(PROJECT_NAME "MRP-Lenslet")
 project(${PROJECT_NAME})
 
 set(MRP_VERSION_MAJOR "1")
-set(MRP_VERSION_MINOR "0")
+set(MRP_VERSION_MINOR "1")
 set(MRP_VERSION_PATCH "0")
 set(MRP_VERSION "${MRP_VERSION_MAJOR}.${MRP_VERSION_MINOR}.${MRP_VERSION_PATCH}")
 set(MRP_VERSION_STRING "${MRP_VERSION}")
 
-set(MRP_VERSION_DATE "March 2018")
+set(MRP_VERSION_DATE "February 2019")
 
 ######################################################################################
 # Variables

@@ -35,7 +35,6 @@
 #define VLC_MAXLEN          32
 
 // MRP Common
-#define FRAMES              1
 #define DEPTH               8
 #define QUADTREE_DEPTH      4
 #define BASE_BSIZE          8
@@ -45,7 +44,6 @@
 #define NUM_CLASS           -1
 #define NUM_GROUP           16
 #define INTRA_PRD_ORDER     -1
-#define INTER_PRD_ORDER     1
 #define MI_PRD_ORDER        5
 #define COEF_PRECISION      6
 #define MAX_COEF            (2 << COEF_PRECISION)
@@ -55,13 +53,11 @@
 #define OPT_SIDEINFO
 
 #define INTRA_PRED          0
-#define BACK_PRED           1
-#define FOR_PRED            2
-#define MI_UP_PRED          3
-#define MI_LEFT_PRED        4
-#define MI_LDIAG_PRED       5
-#define MI_RDIAG_PRED       6
-#define MI_BORDERS_PRED     7
+#define MI_UP_PRED          1
+#define MI_LEFT_PRED        2
+#define MI_LDIAG_PRED       3
+#define MI_RDIAG_PRED       4
+#define MI_BORDERS_PRED     5
 
 #define UP                  0
 #define LEFT                1
@@ -107,13 +103,15 @@ typedef struct {
     range_t range;
 } RANGECODER;
 
-// Image
+// 4DLF
 typedef struct {
-    int height;
-    int width;
+    int t; // View height: t
+    int s; // View width: s
+    int v; // Views array height: v
+    int u; // Views array width: u
     int maxval;
-    img_t **val;
-} IMAGE;
+    img_t ****val;
+} LF4D;
 
 // Point
 typedef struct {
@@ -122,8 +120,9 @@ typedef struct {
 
 // Encoder
 typedef struct {
-    int height; // Image height
-    int width; // Image width
+    int ts[2]; // View dimensions
+    int vu[2]; // Views array dimensions
+
     int delta; // Distance between the reference frame and the current one
     int depth; // Bit depth of the input image/sequence
     int maxval; // Image maximum value
@@ -132,10 +131,6 @@ typedef struct {
 
     int full_prd_order;
     int prd_order; // Order of the predictors (number of pixels to use)
-    int back_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
-    int for_prd_order; // Order of the predictors (number of pixels to use) in the next frame
-
-    int mi_size[2]; // Size of micro images in lenslet images
     int mi_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
 
     int coef_precision; // Precision of the coefficients
@@ -147,15 +142,13 @@ typedef struct {
     int optimize_loop; // First or second optimization loop
     int **predictor; // Stores the prediction coefficients for all classes
     int **th; // Indicates the threshold values used to quantize the weighted sum of neighboring residues, to be used on the context coding.
-    int **upara; // Context for the residue encoding, without the quantization.
-    int **prd; // Prediction value for each pixel
-    int **encval; // Pointer to the error (in set_cost_model()) and later to the image real values (in set_cost_rate()).
-    int ***err; // Matrix that keeps residue values after the prediction.
-    int ***org; // Original video/image
+    int ****upara; // Context for the residue encoding, without the quantization.
+    int ****prd; // Prediction value for each pixel
+    int ****err; // Matrix that keeps residue values after the prediction.
+    int ****org; // Original video/image
+    int ****encval; // Pointer to the error (in set_cost_model()) and later to the image real values (in set_cost_rate()).
 
     int *intra_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *back_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *for_ctx_weight; // Keeps the weights used for the residue encoding context.
 
     int *mi_borders_ctx_weight; // Keeps the weights used for the residue encoding context.
     int *mi_up_ctx_weight; // Keeps the weights used for the residue encoding context.
@@ -163,19 +156,19 @@ typedef struct {
     int *mi_ldiag_ctx_weight; // Keeps the weights used for the residue encoding context.
     int *mi_rdiag_ctx_weight; // Keeps the weights used for the residue encoding context.
 
-    int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int ***back_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int ***for_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int *****intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
 
-    int ***mi_up_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int ***mi_left_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int ***mi_ldiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int ***mi_rdiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int *****mi_up_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int *****mi_left_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int *****mi_ldiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int *****mi_rdiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
 
     int qtctx[QUADTREE_DEPTH << 3]; // Frequency counter of the segmentation flag context for the whole image.
-    char **qtmap[QUADTREE_DEPTH]; // Segmentation flags for the quadtree partitioning of the image's prediction.
-    char **class; // Keeps the class of each pixel
-    char **group; // keeps the group, i.e. the quantized context used for residue entropy coding.
+    char ****qtmap[QUADTREE_DEPTH]; // Segmentation flags for the quadtree partitioning of the image's prediction.
+
+    char ****class; // Keeps the class of each pixel
+    char ****group; // keeps the group, i.e. the quantized context used for residue entropy coding.
+
     char **uquant; // Table used for the quantification of the context variable u.
     int etype; // Error type for the error conversion table
     int **econv; // Table used for the conversion of the error.
@@ -193,14 +186,16 @@ typedef struct {
     cost_t *th_cost; // Structure used to keep the cost of the thresholds.
     cost_t *class_cost; // Array with the cost of each class.
     cost_t qtflag_cost[QUADTREE_DEPTH << 3]; // Structure for the cost of the segmentation flags.
+
+    char *debug_path;
 } ENCODER;
 
 // Decoder
 typedef struct {
-    int height;
-    int width;
+    int ts[2]; // View dimensions
+    int vu[2]; // Views array dimensions
+
     int maxval;
-    int frames;
     int delta;
     int depth; // Bit depth of the input image/sequence
     int num_comp;
@@ -209,20 +204,14 @@ typedef struct {
 
     int full_prd_order;
     int prd_order;
-    int back_prd_order; // Order of the predictors (number of pixels to use) in the previous frame
-    int for_prd_order; // Order of the predictors (number of pixels to use) in the next frame
-
-    int mi_size[2]; // Size of micro images in lenslet images
     int mi_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
 
-    int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int ***back_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int ***for_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int *****intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
 
-    int ***mi_up_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int ***mi_left_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int ***mi_ldiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int ***mi_rdiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int *****mi_up_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int *****mi_left_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int *****mi_ldiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int *****mi_rdiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
 
     int num_pmodel;
     int pm_accuracy;
@@ -231,20 +220,18 @@ typedef struct {
     int f_huffman;
     int quadtree_depth;
     int **predictor;
-    int ***err;
+    int ****err;
 
     int *intra_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *back_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *for_ctx_weight; // Keeps the weights used for the residue encoding context.
-
     int *mi_borders_ctx_weight; // Keeps the weights used for the residue encoding context.
     int *mi_up_ctx_weight; // Keeps the weights used for the residue encoding context.
     int *mi_left_ctx_weight; // Keeps the weights used for the residue encoding context.
     int *mi_rdiag_ctx_weight; // Keeps the weights used for the residue encoding context.
     int *mi_ldiag_ctx_weight; // Keeps the weights used for the residue encoding context.
 
-    char **qtmap[QUADTREE_DEPTH];
-    char **class;
+    char ****qtmap[QUADTREE_DEPTH];
+    char ****class;
+
     char **uquant;
     int *pm_idx;
     PMODEL ***pmodels;
@@ -253,12 +240,14 @@ typedef struct {
     RANGECODER *rc;
     double *sigma;
     int *mtfbuf;
+
+    char *debug_path;
 } DECODER;
 
 /* common.c */
 void safefree(void **);
 
-void safefree_yuv(IMAGE **);
+void safefree_lf4d(LF4D **);
 
 FILE *fileopen(char *, char *);
 
@@ -268,19 +257,21 @@ void **alloc_2d_array(int, int, int);
 
 void ***alloc_3d_array(int, int, int, int);
 
-IMAGE *alloc_image(int, int, int);
+void ****alloc_4d_array(int, int, int, int, int);
 
-IMAGE *copy_yuv(IMAGE *);
+LF4D *alloc_lf4d(int, int, int, int, int);
+
+LF4D *copy_yuv(LF4D *);
 
 unsigned short reverse_endianness(unsigned short, int);
 
-void write_yuv(IMAGE *, char *, int, int);
+void write_yuv(LF4D *, char *, int, int);
 
-IMAGE *read_yuv(char *, int, int, int, int, int, int);
+LF4D *read_yuv(char *, int, int, int, int, int, int, int);
 
-int ***init_ref_offset(int, int, int, int, int[2]);
+int *****init_ref_offset(int[2], int[2], int, int);
 
-void free_ref_offset(int, int, int, int, int[2], int ***);
+void free_ref_offset(int[2], int[2], int, int, int *****);
 
 int *init_ctx_weight(int, int, int);
 
@@ -288,7 +279,7 @@ int e2E(int, int, int, int);
 
 int E2e(int, int, int, int);
 
-void mtf_classlabel(char **, int *, int, int, int, int, int);
+void mtf_classlabel(char ****, int *, int, int, int, int, int, int, int);
 
 double cpu_time(void);
 
