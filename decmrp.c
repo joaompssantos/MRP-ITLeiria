@@ -1205,7 +1205,7 @@ void debug_partition(DECODER *dec, LF4D *lf, int endianness) {
 
         // Write image to file
         for (k = 0; k < 3; k++) {
-            write_yuv(qt_lf[k], partition_img, dec->depth, endianness);
+            write_yuv(qt_lf[k], partition_img, dec->depth, endianness, SAI);
         }
 
         free(partition_img);
@@ -1254,6 +1254,8 @@ int main(int argc, char **argv) {
     int *backward_table = NULL;
     int prd_order = 0;
     int mi_prd_order[4] = {0, 0, 0, 0};
+    int format = SAI;
+    char *format_name = NULL;
     int debug = 0;
     char *debug_path = NULL;
 
@@ -1283,6 +1285,31 @@ int main(int argc, char **argv) {
 
                     break;
 
+                case 'r':
+                    format_name = argv[++i];
+
+                    if (strcmp(format_name, "MIA") == 0) {
+                        format = MIA;
+                        printf("\tMIA; --> Not yet implemented;\n");
+                        exit(-2);
+                    }
+                    else if (strcmp(format_name, "PVS") == 0) {
+                        format = PVS;
+                    }
+                    else if (strcmp(format_name, "SAI") == 0) {
+                        format = SAI;
+                    }
+                    else {
+                        printf("Light field format not recognised: %s.\n", format_name);
+                        printf("Supported formats:\n");
+                        printf("\tMIA; --> Not yet implemented;\n"
+                               "\tPVS;\n"
+                               "\tSAI.\n");
+                        exit(-2);
+                    }
+
+                    break;
+
                 default:
                     fprintf(stderr, "Unknown option: %s!\n", argv[i]);
                     exit(1);
@@ -1303,6 +1330,10 @@ int main(int argc, char **argv) {
         printf("usage: decmrp [options] infile outfile\n");
         printf("-E num		Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
         printf("-d  		Create extra debug output (coefficients, partitions, etc.)");
+        printf("-r str 		Light field file format [%s]. Supported formats:\n", "SAI");
+        printf("\tMIA; --> Not yet implemented\n"
+               "\tPVS;\n"
+               "\tSAI.\n");
         printf("infile:     Input file\n");
         printf("outfile:    Output file\n");
         exit(0);
@@ -1401,12 +1432,12 @@ int main(int argc, char **argv) {
     if (backward_table != NULL) {
         LF4D *unpacked = histogram_unpacking(lf, backward_table);
 
-        write_yuv(unpacked, outfile, depth, endianness);
+        write_yuv(unpacked, outfile, depth, endianness, format);
 
         safefree_lf4d(&unpacked);
     }
     else {
-        write_yuv(lf, outfile, depth, endianness);
+        write_yuv(lf, outfile, depth, endianness, format);
     }
 
     safefree_lf4d(&lf);

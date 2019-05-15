@@ -2113,7 +2113,7 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlv, int
                  int width, int level) {
     int i, cl, v, u, t, s, ctx, last_width;
     char ****qtmap;
-printf("%d %d %d %d -> %d\n", tlv, tlu, tlt, tls, blksize);
+
     if (tlv >= enc->vu[HEIGHT] || tlu >= enc->vu[WIDTH] || tlt >= enc->ts[HEIGHT] || tls >= enc->ts[WIDTH]) return;
 
     if (level > 0) {
@@ -2911,7 +2911,7 @@ double total_variation(LF4D *lf) {
  |
  |  Returns: double	--> Returns the sparseness index
  *-------------------------------------------------------------------------*/
-double sparseness_index(char *infile, int *mi_size, int *vu, int depth, int endianness, int chroma) {
+double sparseness_index(char *infile, int *mi_size, int *vu, int depth, int endianness, int chroma, int format) {
     int k, v, u, t, s, L = 0;
     unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int) pow(2, depth)));
     int max = 0, min = ((int) pow(2, depth) - 1);
@@ -2923,7 +2923,7 @@ double sparseness_index(char *infile, int *mi_size, int *vu, int depth, int endi
     }
 
     // Operations to obtain the lookup table
-    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma);
+    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma, format);
 
     for (v = 0; v < lf->v; v++) {
         for (u = 0; u < lf->u; u++) {
@@ -2968,7 +2968,7 @@ double sparseness_index(char *infile, int *mi_size, int *vu, int depth, int endi
  |
  |  Returns:  int*	--> Returns the lookup table
  *----------------------------------------------------------------------*/
-int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endianness, int chroma) {
+int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endianness, int chroma, int format) {
     int k, t, s, u, v;
     int used_values = 0;
     unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int) pow(2, depth)));
@@ -2984,7 +2984,7 @@ int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endiann
     }
 
     // Operations to obtain the lookup table
-    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma);
+    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma, format);
 
     for (v = 0; v < lf->v; v++) {
         for (u = 0; u < lf->u; u++) {
@@ -3020,7 +3020,7 @@ int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endiann
     }
 
     // Perform the histogram packing of the image
-    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma);
+    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma, format);
 
     for (v = 0; v < lf->v; v++) {
         for (u = 0; u < lf->u; u++) {
@@ -3363,7 +3363,7 @@ void debug_partition(ENCODER *enc, int endianness) {
 
         // Write image to file
         for (k = 0; k < 3; k++) {
-            write_yuv(qt_lf[k], partition_img, enc->depth, endianness);
+            write_yuv(qt_lf[k], partition_img, enc->depth, endianness, SAI);
         }
 
         free(partition_img);
@@ -3434,6 +3434,8 @@ int main(int argc, char **argv) {
     char *chroma_name = NULL;
     char *infile, *outfile;
     char resfile[1000];
+    int format = SAI;
+    char *format_name = NULL;
     int debug = 0;
     char *debug_path = NULL;
     FILE *fp, *res;
@@ -3633,6 +3635,31 @@ int main(int argc, char **argv) {
 
                     break;
 
+                case 'r':
+                    format_name = argv[++i];
+
+                    if (strcmp(format_name, "MIA") == 0) {
+                        format = MIA;
+                        printf("\tMIA; --> Not yet implemented;\n");
+                        exit(-2);
+                    }
+                    else if (strcmp(format_name, "PVS") == 0) {
+                        format = PVS;
+                    }
+                    else if (strcmp(format_name, "SAI") == 0) {
+                        format = SAI;
+                    }
+                    else {
+                        printf("Light field format not recognised: %s.\n", format_name);
+                        printf("Supported formats:\n");
+                        printf("\tMIA; --> Not yet implemented;\n"
+                               "\tPVS;\n"
+                               "\tSAI.\n");
+                        exit(-2);
+                    }
+
+                    break;
+
                 default:
                     fprintf(stderr, "Unknown option: %s!\n", argv[i]);
                     exit (1);
@@ -3682,6 +3709,10 @@ int main(int argc, char **argv) {
         printf("    -u      	Deactivate the histogram packing procedures\n");
         printf("    -o      	Further optimization of predictors (experimental)\n");
         printf("    -d  		Create extra debug output (coefficients, partitions, etc.)");
+        printf("    -r str 		Light field file format [%s]. Supported formats:\n", "SAI");
+        printf("\t\tMIA; --> Not yet implemented\n"
+               "\t\tPVS;\n"
+               "\t\tSAI.\n");
         printf("infile:     	Input file (must be in a raw YUV format)\n");
         printf("outfile:    	Output file\n");
         printf("\nNote: * stands for a mandatory option.\n");
@@ -3738,7 +3769,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (do_histogram_packing == 1) forward_table = histogram_check(infile, mi_size, vu, depth, endianness, chroma);
+    if (do_histogram_packing == 1) forward_table = histogram_check(infile, mi_size, vu, depth, endianness, chroma, format);
 
     printf("\nMRP-Video Encoder\n\n");
     // Print file characteristics to screen
@@ -3747,7 +3778,7 @@ int main(int argc, char **argv) {
     printf("M = %d, P = %d, V = %d, A = %d, D = %d\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta);
     // Print prediction parameters to screen
     if (forward_table != NULL) {
-        printf("Sparseness Index, S = %3.1f%%\n\n", sparseness_index(infile, mi_size, vu, depth, endianness, chroma));
+        printf("Sparseness Index, S = %3.1f%%\n\n", sparseness_index(infile, mi_size, vu, depth, endianness, chroma, format));
     }
 
     printf("Prediction order:\n\tFrame I: %d\n\n", prd_order);
@@ -3768,7 +3799,7 @@ int main(int argc, char **argv) {
 
     //// Start of the encoding process
     // Read input file
-    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma);
+    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma, format);
 
     // Perform histogram packing
     if (forward_table != NULL) histogram_packing(lf, forward_table, depth);
@@ -3968,38 +3999,6 @@ int main(int argc, char **argv) {
     free(class_save);
     free(prd_save);
     free(th_save);
-
-
-//        system("rm uenc_calculations.txt");
-//        FILE *fp1 = fileopen("uenc_calculations.txt", "w");
-//        for (int a = 0; a < enc->height; a++) {
-//            for (int b = 0; b < enc->width; b++) {
-//                int u = 0;
-//
-//                int *err_p = &enc->err[1][a][b];
-//                int *wt_p = enc->ctx_weight;
-//                int *intra_roff_p = NULL, *mi_roff_p = NULL, *back_roff_p = NULL, *for_roff_p = NULL;
-//                intra_roff_p = enc->intra_roff[a][b];
-//                u = 0;
-//
-//                for (k = 0; k < enc->prd_order; k++) {
-//                    u += err_p[*intra_roff_p++] * (*wt_p++);
-//                }
-//
-//                if (enc->mi_prd_order > 0) mi_roff_p = enc->mi_roff[a][b];
-//
-//                fprintf(fp1, "Pixel: %d %d\n\n", a, b);
-//                fprintf(fp1, "u = %d\n", u);
-//
-//                for (k = 0; k < enc->mi_prd_order; k++) {
-//                    u += err_p[mi_roff_p[k]] * (wt_p[k]);
-//                    fprintf(fp1, "u = %d --> %d %d %d\n", u, mi_roff_p[k], err_p[mi_roff_p[k]], wt_p[k]);
-//                }
-//                fprintf(fp1, "\n\n");
-//            }
-//        }
-//
-//        fclose(fp1);
 
     if (debug == 1) {
         debug_predictors(enc);

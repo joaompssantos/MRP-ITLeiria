@@ -127,15 +127,15 @@ int bref9[10][5] = {{10, -10, -1, 0, -1},
                     {1, -1, 1, 8, 10}
 };
 
-const int mask[9] = {0x00FF,
-                     0x01FF,
-                     0x03FF,
-                     0x07FF,
-                     0x0FFF,
-                     0x1FFF,
-                     0x3FFF,
-                     0x7FFF,
-                     0xFFFF
+const int unsigned mask[9] = {0x00FF,
+                              0x01FF,
+                              0x03FF,
+                              0x07FF,
+                              0x0FFF,
+                              0x1FFF,
+                              0x3FFF,
+                              0x7FFF,
+                              0xFFFF
 };
 
 double sigma_h[] = {0.85, 1.15, 1.50, 1.90, 2.55, 3.30, 4.25, 5.60, 7.15, 9.20, 12.05, 15.35, 19.95, 25.85, 32.95, 44.05};
@@ -339,7 +339,7 @@ unsigned short reverse_endianness (unsigned short s, int endianness) {
 }
 
 // Write YUV image to file
-void write_yuv(LF4D *lf, char *filename, int depth, int endianness) {
+void write_yuv(LF4D *lf, char *filename, int depth, int endianness, int format) {
     int v, u, t, s;
     unsigned short byte;
     FILE *fp;
@@ -348,27 +348,83 @@ void write_yuv(LF4D *lf, char *filename, int depth, int endianness) {
 
     int elements = lf->v * lf->u * lf->t * lf->s * (depth == 8 ? 1 : 2);
     unsigned char *stream_ptr, *stream = (unsigned char *) alloc_mem(elements * sizeof(unsigned char));
-
-    // TODO: the reading/writing of the image depends on how the data are arranged, should implement for array and PVS maybe?
     stream_ptr = stream;
 
-    for (v = 0; v < lf->v; v++) {
-        for (t = 0; t < lf->t; t++) {
-            for (u = 0; u < lf->u; u++) {
-                for (s = 0; s < lf->s; s++) {
-                    if (depth == 8) {
-                        *stream_ptr++ = lf->val[v][u][t][s];
-                    }
-                    else if (depth > 8) {
-                        byte = reverse_endianness(lf->val[v][u][t][s], endianness);
+    switch (format) {
+        case PVS:
+            for (v = 0; v < lf->v; v++) {
+                for (u = 0; u < lf->u; u++) {
+                    for (t = 0; t < lf->t; t++) {
+                        for (s = 0; s < lf->s; s++) {
+                            if (depth == 8) {
+                                *stream_ptr++ = lf->val[v][u][t][s];
+                            }
+                            else if (depth > 8) {
+                                byte = reverse_endianness(lf->val[v][u][t][s], endianness);
 
-                        *stream_ptr++ = (byte >> 8u) & 0x00FFu;
-                        *stream_ptr++ = byte & 0x00FFu;
+                                *stream_ptr++ = (byte >> 8u) & 0x00FFu;
+                                *stream_ptr++ = byte & 0x00FFu;
+                            }
+                        }
                     }
                 }
             }
-        }
+
+            break;
+
+        case SAI:
+        default:
+            for (v = 0; v < lf->v; v++) {
+                for (t = 0; t < lf->t; t++) {
+                    for (u = 0; u < lf->u; u++) {
+                        for (s = 0; s < lf->s; s++) {
+                            if (depth == 8) {
+                                *stream_ptr++ = lf->val[v][u][t][s];
+                            }
+                            else if (depth > 8) {
+                                byte = reverse_endianness(lf->val[v][u][t][s], endianness);
+
+                                *stream_ptr++ = (byte >> 8u) & 0x00FFu;
+                                *stream_ptr++ = byte & 0x00FFu;
+                            }
+                        }
+                    }
+                }
+            }
+
+            break;
     }
+
+//    int dimensions[2];
+//    int y
+//    int x;
+//    int* idx1;
+//    int* idx2;
+//
+//    if( loopyfirst )
+//    {
+//        idx0 = &y;
+//        idx1 = &x;
+//        dimensions[0] = height
+//        dimensions[1] = width
+//    }
+//    else
+//    {
+//        idx0 = &x;
+//        idx1 = &y;
+//        dimensions[0] = width
+//        dimensions[1] = height
+//    }
+//
+//    while( *idx1 < dimensions[0] )
+//    {
+//        while( *idx2 < dimensions[1] )
+//        {
+//            img[y][x] = input;
+//            *idx2++;
+//        }
+//        *idx1++;
+//    }
 
     fwrite(stream, sizeof(unsigned char), elements, fp);
 
@@ -388,15 +444,20 @@ void write_yuv(LF4D *lf, char *filename, int depth, int endianness) {
  |		frame		--> Frame of the video to copy (IN)
  |		depth		--> Image dynamic range (bpp) (IN)
  |		endianness	--> YUV endianness, for depth > 8 bpp (IN)
+ |		format      --> Light field file format (IN)
  |
  |  Returns:  IMAGE* --> returns a video type structure
  *-------------------------------------------------------------------*/
-LF4D *read_yuv(char *filename, int v, int u, int t, int s, int depth, int endianness, int chroma) {
+LF4D *read_yuv(char *filename, int v, int u, int t, int s, int depth, int endianness, int chroma, int format) {
     int i, j, k, l;
-    int shift_first, shift_second, first, second;
+    unsigned int shift_first, shift_second, first, second;
     double chroma_pass = (chroma == GRAY ? 1 : (chroma == S444 ? 3 : 1.5));
     LF4D *lf;
     FILE *fp;
+
+
+    int elements = v * u * t * s * (depth == 8 ? 1 : 2);
+    unsigned char *stream_ptr, *stream = (unsigned char *) alloc_mem(elements * sizeof(unsigned char));
 
     //Open file
     fp = fileopen(filename, "rb");
@@ -406,6 +467,9 @@ LF4D *read_yuv(char *filename, int v, int u, int t, int s, int depth, int endian
 //        fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
 //        exit(1);
 //    }
+
+    fread(stream, sizeof(unsigned char), elements, fp);
+    stream_ptr = stream;
 
     if (endianness == LITTLE_ENDIANNESS) {
         shift_first = 0;
@@ -419,45 +483,54 @@ LF4D *read_yuv(char *filename, int v, int u, int t, int s, int depth, int endian
     // Image allocation
     lf = alloc_lf4d(v, u, t, s, (int) (pow(2, depth) - 1));
 
-    for (i = 0; i < lf->v; i++) {
-        for (k = 0; k < lf->t; k++) {
-            for (j = 0; j < lf->u; j++) {
-                for (l = 0; l < lf->s; l++) {
-                    first = (img_t) fgetc(fp);
+    switch (format) {
+        case PVS:
+            for (i = 0; i < lf->v; i++) {
+                for (j = 0; j < lf->u; j++) {
+                    for (k = 0; k < lf->t; k++) {
+                        for (l = 0; l < lf->s; l++) {
+                            first = *stream_ptr++;
 
-                    if (depth > 8) {
-                        second = (img_t) fgetc(fp);
+                            if (depth > 8) {
+                                second = *stream_ptr++;
 
-                        lf->val[i][j][k][l] = (img_t) ((first << shift_first) + (second << shift_second));
-                        lf->val[i][j][k][l] = (img_t) (lf->val[i][j][k][l] & mask[depth - 8]);
-                    }
-                    else {
-                        lf->val[i][j][k][l] = (img_t) first;
+                                lf->val[i][j][k][l] = (img_t) ((first << shift_first) + (second << shift_second));
+                                lf->val[i][j][k][l] = (img_t) (lf->val[i][j][k][l] & mask[depth - 8]);
+                            }
+                            else {
+                                lf->val[i][j][k][l] = (img_t) first;
+                            }
+                        }
                     }
                 }
             }
-        }
-    }
 
-//    for (i = 0; i < lf->v; i++) {
-//        for (j = 0; j < lf->u; j++) {
-//            for (k = 0; k < lf->t; k++) {
-//                for (l = 0; l < lf->s; l++) {
-//                    first = (img_t) fgetc(fp);
-//
-//                    if (depth > 8) {
-//                        second = (img_t) fgetc(fp);
-//
-//                        lf->val[i][j][k][l] = (img_t) ((first << shift_first) + (second << shift_second));
-//                        lf->val[i][j][k][l] = (img_t) (lf->val[i][j][k][l] & mask[depth - 8]);
-//                    }
-//                    else {
-//                        lf->val[i][j][k][l] = (img_t) first;
-//                    }
-//                }
-//            }
-//        }
-//    }
+            break;
+
+        case SAI:
+        default:
+            for (i = 0; i < lf->v; i++) {
+                for (k = 0; k < lf->t; k++) {
+                    for (j = 0; j < lf->u; j++) {
+                        for (l = 0; l < lf->s; l++) {
+                            first = *stream_ptr++;
+
+                            if (depth > 8) {
+                                second = *stream_ptr++;
+
+                                lf->val[i][j][k][l] = (img_t) ((first << shift_first) + (second << shift_second));
+                                lf->val[i][j][k][l] = (img_t) (lf->val[i][j][k][l] & mask[depth - 8]);
+                            }
+                            else {
+                                lf->val[i][j][k][l] = (img_t) first;
+                            }
+                        }
+                    }
+                }
+            }
+
+            break;
+    }
 
     fclose(fp);
 

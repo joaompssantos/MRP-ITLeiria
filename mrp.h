@@ -78,6 +78,11 @@
 #define S411                3
 #define S420                4
 
+// Data format
+#define MIA                 0
+#define PVS                 1
+#define SAI                 2
+
 // Entropy coding
 typedef struct {
     int size;
@@ -265,9 +270,9 @@ LF4D *copy_yuv(LF4D *);
 
 unsigned short reverse_endianness(unsigned short, int);
 
-void write_yuv(LF4D *, char *, int, int);
+void write_yuv(LF4D *, char *, int, int, int);
 
-LF4D *read_yuv(char *, int, int, int, int, int, int, int);
+LF4D *read_yuv(char *, int, int, int, int, int, int, int, int);
 
 int *****init_ref_offset(int[2], int[2], int, int);
 
