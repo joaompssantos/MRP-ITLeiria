@@ -1720,7 +1720,7 @@ cost_t optimize_class(ENCODER *enc) {
     for (v = 0; v < enc->vu[HEIGHT]; v += blksize) {
         for (u = 0; u < enc->vu[WIDTH]; u += blksize) {
             for (t = 0; t < enc->ts[HEIGHT]; t += blksize) {
-                for (s = 0; s < enc->ts[HEIGHT]; s += blksize) {
+                for (s = 0; s < enc->ts[WIDTH]; s += blksize) {
                     // Calculates and stores the prediction and residue for all classes for a given block
                     set_prdbuf(enc, prdbuf, errbuf, v, u, t, s, blksize);
                     // Determines the variable size block partition
