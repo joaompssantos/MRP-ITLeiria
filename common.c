@@ -620,7 +620,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                         for (k = 0; k < prd_order; k++) {
                                             // Points to a line filled with 128 (if max_val = 256)
-                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                         }
                                     }
                                     else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
@@ -694,7 +694,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                     for (k = 0; k < prd_order; k++) {
                                         // Points to a line filled with 128 (if max_val = 256)
-                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                     }
                                 }
                                 else {
@@ -710,7 +710,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                     for (k = 0; k < prd_order; k++) {
                                         // Points to a line filled with 128 (if max_val = 256)
-                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                     }
                                 }
                                 else {
@@ -762,7 +762,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                         for (k = 0; k < prd_order; k++) {
                                             // Points to a line filled with 128 (if max_val = 256)
-                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                         }
                                     }
                                     else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
@@ -835,7 +835,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                     for (k = 0; k < prd_order; k++) {
                                         // Points to a line filled with 128 (if max_val = 256)
-                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                     }
                                 }
                                 else {
@@ -999,7 +999,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                         for (k = 0; k < prd_order; k++) {
                                             // Points to a line filled with 128 (if max_val = 256)
-                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                         }
                                     }
                                     else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
@@ -1072,7 +1072,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                     for (k = 0; k < prd_order; k++) {
                                         // Points to a line filled with 128 (if max_val = 256)
-                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                     }
                                 }
                                 else {
@@ -1214,7 +1214,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                         for (k = 0; k < prd_order; k++) {
                                             // Points to a line filled with 128 (if max_val = 256)
-                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                         }
                                     }
                                     else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
@@ -1287,7 +1287,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                     for (k = 0; k < prd_order; k++) {
                                         // Points to a line filled with 128 (if max_val = 256)
-                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                     }
                                 }
                                 else {
@@ -1303,7 +1303,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                     for (k = 0; k < prd_order; k++) {
                                         // Points to a line filled with 128 (if max_val = 256)
-                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                     }
                                 }
                                 else {
@@ -1467,7 +1467,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                         for (k = 0; k < prd_order; k++) {
                                             // Points to a line filled with 128 (if max_val = 256)
-                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                            *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                         }
                                     }
                                     else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
@@ -1540,7 +1540,7 @@ int *****init_ref_offset(int vu[2], int ts[2], int type, int prd_order) {
 
                                     for (k = 0; k < prd_order; k++) {
                                         // Points to a line filled with 128 (if max_val = 256)
-                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - vu[HEIGHT] * v - u) + ds;
+                                        *ptr++ = dt * ts[WIDTH] * (vu[HEIGHT] * vu[WIDTH] - v * vu[WIDTH] - u) + ds;
                                     }
                                 }
                                 else {
