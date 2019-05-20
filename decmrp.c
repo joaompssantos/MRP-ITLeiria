@@ -800,7 +800,7 @@ LF4D *decode_image(FILE *fp, DECODER *dec) {
     // TODO: consider add org to decoder
     img_t ****org = (img_t ****) alloc_4d_array(dec->vu[HEIGHT] + 1, dec->vu[WIDTH], dec->ts[HEIGHT], dec->ts[WIDTH],
                                                 sizeof(img_t));
-    org[dec->vu[HEIGHT]][0][0][0] = (unsigned short) (dec->maxval + 1) >> 1;
+    org[dec->vu[HEIGHT]][0][0][0] = (img_t) (dec->maxval + 1) >> 1;
 
     if (dec->f_huffman == 1) {
         VLC *vlc;
@@ -1068,7 +1068,7 @@ LF4D *histogram_unpacking(LF4D *lf, const int *backward_table) {
         for (u = 0; u < lf->u; u++) {
             for (t = 0; t < lf->t; t++) {
                 for (s = 0; s < lf->s; s++) {
-                    u_lf->val[v][u][t][s] = (img_t) backward_table[u_lf->val[v][u][t][s]];
+                    u_lf->val[v][u][t][s] = (img_t) backward_table[lf->val[v][u][t][s]];
                 }
             }
         }
