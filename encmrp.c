@@ -2901,30 +2901,22 @@ double total_variation(LF4D *lf) {
  |  Purpose: Calculates the percentage of used values in the dynamic range
  |
  |  Parameters:
- |		infile		--> Image/Sequence to analyse (IN)
- |		height		--> Height of the video (IN)
- |		width		--> Width of the video (IN)
- |		frame		--> Frame of the video to copy (IN)
+ |		lf    		--> Image/Sequence to analyse (IN)
  |		depth		--> Image dynamic range (bpp) (IN)
- |		endianness	--> YUV endianness, for depth > 8 bpp (IN)
- |		chroma  	--> YUV chroma type (IN)
  |
  |  Returns: double	--> Returns the sparseness index
  *-------------------------------------------------------------------------*/
-double sparseness_index(char *infile, int *mi_size, int *vu, int depth, int endianness, int chroma, int format) {
+double sparseness_index(LF4D *lf, int depth) { // TODO: Maybe include in histogram_check function
     int k, v, u, t, s, L = 0;
     unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int) pow(2, depth)));
     int max = 0, min = ((int) pow(2, depth) - 1);
     char *extra_info = NULL;
-    LF4D *lf = NULL;
 
     for (k = 0; k < (int) pow(2, depth); k++) {
         hist[k] = 0;
     }
 
     // Operations to obtain the lookup table
-    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma, format);
-
     for (v = 0; v < lf->v; v++) {
         for (u = 0; u < lf->u; u++) {
             for (t = 0; t < lf->t; t++) {
@@ -2934,8 +2926,6 @@ double sparseness_index(char *infile, int *mi_size, int *vu, int depth, int endi
             }
         }
     }
-
-    safefree_lf4d(&lf);
 
     for (k = 0; k < (int) pow(2, depth); k++) {
         if (hist[k] != 0) {
@@ -2958,17 +2948,12 @@ double sparseness_index(char *infile, int *mi_size, int *vu, int depth, int endi
  |  Purpose: Checks the image histogram and decide if histogram packing is used
  |
  |  Parameters:
- |		infile		--> Image/Sequence to analyse (IN)
- |		height		--> Height of the video (IN)
- |		width		--> Width of the video (IN)
- |		frame		--> Frame of the video to copy (IN)
+ |		lf  		--> Image/Sequence to analyse (IN)
  |		depth		--> Image dynamic range (bpp) (IN)
- |		endianness	--> YUV endianness, for depth > 8 bpp (IN)
- |		chroma  	--> YUV chroma type (IN)
  |
  |  Returns:  int*	--> Returns the lookup table
  *----------------------------------------------------------------------*/
-int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endianness, int chroma, int format) {
+int* histogram_check(LF4D *lf, int depth) {
     int k, t, s, u, v;
     int used_values = 0;
     unsigned long int *hist = (unsigned long int *) alloc_mem(sizeof(unsigned long int) * ((unsigned long int) pow(2, depth)));
@@ -2976,7 +2961,7 @@ int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endiann
     int *table = (int *) alloc_mem(sizeof(int) * (int) pow(2, depth));
     double tv_original = 0.0, tv_packed = 0.0;
     char *extra_info = NULL;
-    LF4D *aux_lf, *lf = NULL;
+    LF4D *aux_lf = NULL;
 
     for (k = 0; k < (int) pow(2, depth); k++) {
         hist[k] = 0;
@@ -2984,8 +2969,6 @@ int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endiann
     }
 
     // Operations to obtain the lookup table
-    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma, format);
-
     for (v = 0; v < lf->v; v++) {
         for (u = 0; u < lf->u; u++) {
             for (t = 0; t < lf->t; t++) {
@@ -2996,8 +2979,6 @@ int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endiann
         }
     }
 
-    safefree_lf4d(&lf);
-
     for (k = 0; k < (int) pow(2, depth); k++) {
         if (hist[k] != 0) {
             forward_table[k] = 1;
@@ -3006,7 +2987,7 @@ int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endiann
 
     free(hist);
 
-    aux_lf = alloc_lf4d(vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], (int) (pow(2, depth) - 1));
+    aux_lf = alloc_lf4d(lf->v, lf->u, lf->t, lf->s, lf->maxval);
 
     // Produces the actual forward table
     for (k = 0; k < (int) pow(2, depth); k++) {
@@ -3020,8 +3001,6 @@ int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endiann
     }
 
     // Perform the histogram packing of the image
-    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma, format);
-
     for (v = 0; v < lf->v; v++) {
         for (u = 0; u < lf->u; u++) {
             for (t = 0; t < lf->t; t++) {
@@ -3035,7 +3014,6 @@ int* histogram_check(char *infile, int *mi_size, int *vu, int depth, int endiann
     tv_original += total_variation(lf);
     tv_packed += total_variation(aux_lf);
 
-    safefree_lf4d(&lf);
     safefree_lf4d(&aux_lf);
 
     // Check if the histogram packing lowers the total variation
@@ -3769,7 +3747,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (do_histogram_packing == 1) forward_table = histogram_check(infile, mi_size, vu, depth, endianness, chroma, format);
+    // Read input file
+    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma, format);
+    // Perform histogram packing if appropriate
+    if (do_histogram_packing == 1) forward_table = histogram_check(lf, depth);
 
     printf("\nMRP-Video Encoder\n\n");
     // Print file characteristics to screen
@@ -3778,7 +3759,7 @@ int main(int argc, char **argv) {
     printf("M = %d, P = %d, V = %d, A = %d, D = %d\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta);
     // Print prediction parameters to screen
     if (forward_table != NULL) {
-        printf("Sparseness Index, S = %3.1f%%\n\n", sparseness_index(infile, mi_size, vu, depth, endianness, chroma, format));
+        printf("Sparseness Index, S = %3.1f%%\n\n", sparseness_index(lf, depth));
     }
 
     printf("Prediction order:\n\tFrame I: %d\n\n", prd_order);
@@ -3798,9 +3779,6 @@ int main(int argc, char **argv) {
     fprintf(res, "---------------------------------------------\n");
 
     //// Start of the encoding process
-    // Read input file
-    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma, format);
-
     // Perform histogram packing
     if (forward_table != NULL) histogram_packing(lf, forward_table, depth);
 
