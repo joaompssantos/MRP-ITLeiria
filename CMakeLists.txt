@@ -10,7 +10,7 @@ cmake_minimum_required(VERSION 3.10)
 ######################################################################################
 # Project Definition
 ######################################################################################
-set(PROJECT_NAME "MRP-Lenslet")
+set(PROJECT_NAME "4D-MRP")
 project(${PROJECT_NAME})
 
 set(MRP_VERSION_MAJOR "1")
