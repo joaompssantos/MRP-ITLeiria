@@ -196,10 +196,10 @@ void *alloc_mem(size_t size) {
 }
 
 // Image matrix allocation
-void **alloc_2d_array(int height, int width, int size) {
+void **alloc_2d_array(size_t height, size_t width, size_t size) {
     void **mat;
     char *ptr;
-    int k;
+    size_t k;
 
     mat = (void **) alloc_mem(sizeof(void *) * height + height * width * size);
     ptr = (char *) (mat + height);
@@ -213,7 +213,7 @@ void **alloc_2d_array(int height, int width, int size) {
 }
 
 // Image matrix allocation
-void ***alloc_3d_array(int height, int width, int frames, int size) {
+void ***alloc_3d_array(size_t height, size_t width, size_t frames, size_t size) {
     void ***mat;
     int i, j;
 
@@ -236,7 +236,7 @@ void ***alloc_3d_array(int height, int width, int frames, int size) {
 }
 
 // 4D matrix allocation
-void ****alloc_4d_array(int v, int u, int t, int s, int size) {
+void ****alloc_4d_array(size_t v, size_t u, size_t t, size_t s, size_t size) {
     void ****mat;
     int i, j, k;
 

@@ -258,11 +258,11 @@ FILE *fileopen(char *, char *);
 
 void *alloc_mem(size_t);
 
-void **alloc_2d_array(int, int, int);
+void **alloc_2d_array(size_t, size_t, size_t);
 
-void ***alloc_3d_array(int, int, int, int);
+void ***alloc_3d_array(size_t, size_t, size_t, size_t);
 
-void ****alloc_4d_array(int, int, int, int, int);
+void ****alloc_4d_array(size_t, size_t, size_t, size_t, size_t);
 
 LF4D *alloc_lf4d(int, int, int, int, int);
 
