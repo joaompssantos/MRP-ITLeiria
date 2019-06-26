@@ -156,7 +156,7 @@ void safefree_yuv(IMAGE **pp) {
     /* in debug mode, abort if pp is NULL */
     assert(pp);
     if (pp != NULL) {               /* safety check */
-    	free((*pp)->val);
+        free((*pp)->val);
         free(*pp);                  /* deallocate chunk, note that free(NULL) is valid */
         *pp = NULL;                 /* reset original pointer */
     }
@@ -174,101 +174,102 @@ void safefree_yuv(IMAGE **pp) {
  |  Returns:  fp* --> returns a file type structure
  *-------------------------------------------------------------------*/
 FILE *fileopen(char *filename, char *mode) {
-	FILE *fp;
-	fp = fopen(filename, mode);
-	if (fp == NULL) {
-		fprintf(stderr, "Can\'t open %s!\n", filename);
-		exit(1);
-	}
-	return (fp);
+    FILE *fp;
+    fp = fopen(filename, mode);
+    if (fp == NULL) {
+        fprintf(stderr, "Can\'t open %s!\n", filename);
+        exit(1);
+    }
+    return (fp);
 }
 
 // Memory allocation
 void *alloc_mem(size_t size) {
-	void *ptr;
+    void *ptr;
 
-	// Check if memory was allocated
-	if ((ptr = malloc(size)) == NULL) {
-		fprintf(stderr, "Can\'t allocate memory (size = %d)!\n", (int)size);
-		exit(1);
-	}
-	return (ptr);
+    // Check if memory was allocated
+    if ((ptr = malloc(size)) == NULL) {
+        fprintf(stderr, "Can\'t allocate memory (size = %d)!\n", (int) size);
+        exit(1);
+    }
+    return (ptr);
 }
 
 // Image matrix allocation
 void **alloc_2d_array(int height, int width, int size) {
-	void **mat;
-	char *ptr;
-	int k;
+    void **mat;
+    char *ptr;
+    int k;
 
-	mat = (void **) alloc_mem(sizeof(void **) * height + height * width * size);
-	ptr = (char *) (mat + height);
+    mat = (void **) alloc_mem(sizeof(void **) * height + height * width * size);
+    ptr = (char *) (mat + height);
 
-	for (k = 0; k < height; k++) {
-		mat[k] =  ptr;
-		ptr += width * size;
-	}
+    for (k = 0; k < height; k++) {
+        mat[k] = ptr;
+        ptr += width * size;
+    }
 
-	return (mat);
+    return (mat);
 }
 
 // Image matrix allocation
 void ***alloc_3d_array(int height, int width, int frames, int size) {
-	void ***mat;
-	int i, j;
+    void ***mat;
+    int i, j;
 
-	mat = (void ***) alloc_mem(sizeof(void ***) * frames + sizeof(void **) * frames * height + size * frames  * height * width);
+    mat = (void ***) alloc_mem(
+            sizeof(void ***) * frames + sizeof(void **) * frames * height + size * frames * height * width);
 
-	void** hei = (void**)(mat + frames);
-	char* wid = (char*)(hei + frames * height);
+    void **hei = (void **) (mat + frames);
+    char *wid = (char *) (hei + frames * height);
 
-	for (i = 0; i < frames; i++) {
-		mat[i] = &hei[i * height];
-	}
+    for (i = 0; i < frames; i++) {
+        mat[i] = &hei[i * height];
+    }
 
-	for (i = 0; i < frames; i++) {
-		for (j = 0; j < height; j++) {
-			hei[i * height + j] = &wid[i * height * width * size + j * width * size];
-		}
-	}
+    for (i = 0; i < frames; i++) {
+        for (j = 0; j < height; j++) {
+            hei[i * height + j] = &wid[i * height * width * size + j * width * size];
+        }
+    }
 
-	return (mat);
+    return (mat);
 }
 
 // Function to alloc image
 IMAGE *alloc_image(int width, int height, int maxval) {
-	// Image struct vector
-	IMAGE *img;
+    // Image struct vector
+    IMAGE *img;
 
-	// Image struct memory allocation
-	img = (IMAGE *)alloc_mem(sizeof(IMAGE));
+    // Image struct memory allocation
+    img = (IMAGE *) alloc_mem(sizeof(IMAGE));
 
-	// Set image values
-	img->width = width;
-	img->height = height;
-	img->maxval = maxval;
+    // Set image values
+    img->width = width;
+    img->height = height;
+    img->maxval = maxval;
 
-	img->val = (img_t **) alloc_2d_array(img->height, img->width, sizeof(img_t));
-	return (img);
+    img->val = (img_t **) alloc_2d_array(img->height, img->width, sizeof(img_t));
+    return (img);
 }
 
 // Function to copy YUV image
 IMAGE *copy_yuv(IMAGE *img) {
-	int i, j;
+    int i, j;
 
-	IMAGE *new_img = alloc_image(img->width, img->height, img->maxval);
+    IMAGE *new_img = alloc_image(img->width, img->height, img->maxval);
 
-	for (i = 0; i < new_img->height; i++) {
-		for (j = 0; j < new_img->width; j++) {
-			new_img->val[i][j] = img->val[i][j];
-		}
-	}
+    for (i = 0; i < new_img->height; i++) {
+        for (j = 0; j < new_img->width; j++) {
+            new_img->val[i][j] = img->val[i][j];
+        }
+    }
 
-	return(new_img);
+    return (new_img);
 }
 
 // Function to reverse the endianness of a unsigned short
-unsigned short reverse_endianness (unsigned short s, int endianness) {
+unsigned short reverse_endianness(unsigned short s, int endianness) {
     unsigned char c1, c2;
 
     if (endianness == BIG_ENDIANNESS) {
@@ -284,25 +285,25 @@ unsigned short reverse_endianness (unsigned short s, int endianness) {
 
 // Write YUV image to file
 void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
-	int i, j;
-	unsigned short byte;
-	FILE *fp;
+    int i, j;
+    unsigned short byte;
+    FILE *fp;
 
-	fp = fileopen(filename, "ab");
+    fp = fileopen(filename, "ab");
 
-	for (i = 0; i < img->height; i++) {
-		for (j = 0; j < img->width; j++) {
-			if (depth == 8) {
-				putc(img->val[i][j], fp);
-			}
-			else if (depth > 8) {
-				byte = reverse_endianness(img->val[i][j], endianness);
+    for (i = 0; i < img->height; i++) {
+        for (j = 0; j < img->width; j++) {
+            if (depth == 8) {
+                putc(img->val[i][j], fp);
+            }
+            else if (depth > 8) {
+                byte = reverse_endianness(img->val[i][j], endianness);
 
-				putc((byte >> 8) & 0x00FF, fp);
-				putc(byte & 0x00FF, fp);
-			}
-		}
-	}
+                putc((byte >> 8) & 0x00FF, fp);
+                putc(byte & 0x00FF, fp);
+            }
+        }
+    }
 
 /*	for (i = 0; i < img->height / 2; i++) {
 		for (j = 0; j < img->width / 2; j++) {
@@ -332,7 +333,7 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
 		}
 	}*/
 
-	fclose(fp);
+    fclose(fp);
 }
 
 /*------------------------------- read_yuv --------------------------*
@@ -351,56 +352,56 @@ void write_yuv(IMAGE *img, char *filename, int depth, int endianness) {
  |  Returns:  IMAGE* --> returns a video type structure
  *-------------------------------------------------------------------*/
 IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int endianness, int chroma) {
-	int i, j, shift_first, shift_second, first, second;
+    int i, j, shift_first, shift_second, first, second;
     double chroma_pass = (chroma == GRAY ? 1 : (chroma == S444 ? 3 : 1.5));
-	IMAGE *img;
-	FILE *fp;
+    IMAGE *img;
+    FILE *fp;
 
-	//Open file
-	fp = fileopen(filename, "rb");
+    //Open file
+    fp = fileopen(filename, "rb");
 
-	// Check if image dimensions are correct (It has to be multiple of BASE_BSIZE)
-	if ((width % BASE_BSIZE) || (height % BASE_BSIZE)) {
-		fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
-		exit(1);
-	}
+    // Check if image dimensions are correct (It has to be multiple of BASE_BSIZE)
+    if ((width % BASE_BSIZE) || (height % BASE_BSIZE)) {
+        fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
+        exit(1);
+    }
 
-	if( endianness == LITTLE_ENDIANNESS ) {
-		shift_first = 0;
-		shift_second = 8;
-	}
-	else {
-		shift_first = 8;
-		shift_second = 0;
-	}
+    if (endianness == LITTLE_ENDIANNESS) {
+        shift_first = 0;
+        shift_second = 8;
+    }
+    else {
+        shift_first = 8;
+        shift_second = 0;
+    }
 
-	// Image allocation
-	img = alloc_image(width, height, (int) (pow(2, depth) - 1));
+    // Image allocation
+    img = alloc_image(width, height, (int) (pow(2, depth) - 1));
 
-	if (frame > 0) {
-		if (depth > 8) {
-			fseek(fp, (long) (img->height * img->width * 2 * chroma_pass * frame), SEEK_SET);
-		}
-		else {
-			fseek(fp, (long) (img->height * img->width * chroma_pass * frame), SEEK_SET);
-		}
-	}
+    if (frame > 0) {
+        if (depth > 8) {
+            fseek(fp, (long) (img->height * img->width * 2 * chroma_pass * frame), SEEK_SET);
+        }
+        else {
+            fseek(fp, (long) (img->height * img->width * chroma_pass * frame), SEEK_SET);
+        }
+    }
 
-	for (i = 0; i < img->height; i++) {
-		for (j = 0; j < img->width; j++) {
-			first = (img_t) fgetc(fp);
+    for (i = 0; i < img->height; i++) {
+        for (j = 0; j < img->width; j++) {
+            first = (img_t) fgetc(fp);
 
-			if (depth > 8) {
-				second = (img_t) fgetc(fp);
+            if (depth > 8) {
+                second = (img_t) fgetc(fp);
 
-				img->val[i][j] = (img_t) ((first << shift_first) + (second << shift_second));
-				img->val[i][j] = (img_t) (img->val[i][j] & mask[depth - 8]);
-			}
-			else {
-				img->val[i][j] = (img_t) first;
-			}
-		}
-	}
+                img->val[i][j] = (img_t) ((first << shift_first) + (second << shift_second));
+                img->val[i][j] = (img_t) (img->val[i][j] & mask[depth - 8]);
+            }
+            else {
+                img->val[i][j] = (img_t) first;
+            }
+        }
+    }
 
 /*	for (i = 0; i < img->height / 2; i++) {
 		for (j = 0; j < img->width / 2; j++) {
@@ -422,8 +423,8 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
 		}
 	}*/
 
-	fclose(fp);
-	return (img);
+    fclose(fp);
+    return (img);
 }
 
 // TODO: fix functions headers
@@ -1589,8 +1590,10 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
                     }
                     else {
                         //Conditions to check which references are available for each pixel
-                        if ((y == 0 && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width)) ||
-                            (y + mmin_dy <= 0 && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width))) {
+                        if ((y == 0 &&
+                             (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width)) ||
+                            (y + mmin_dy <= 0 &&
+                             (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width))) {
                             free(roff[y][x]);
                         }
                     }
@@ -1632,8 +1635,10 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
                     }
                     else {
                         //Conditions to check which references are available for each pixel
-                        if ((y == mi_size[HEIGHT] && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width)) ||
-                            (y + mmin_dy <= mi_size[HEIGHT] && (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width))) {
+                        if ((y == mi_size[HEIGHT] &&
+                             (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width)) ||
+                            (y + mmin_dy <= mi_size[HEIGHT] &&
+                             (x == mi_size[WIDTH] || x + mmin_dx <= mi_size[WIDTH] || x + mmax_dx >= width))) {
                             free(roff[y][x]);
                         }
                     }
@@ -1674,8 +1679,10 @@ void free_ref_offset(int height, int width, int type, int prd_order, int mi_size
                     }
                     else {
                         //Conditions to check which references are available for each pixel
-                        if ((y == mi_size[HEIGHT] && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH])) ||
-                            (y + mmin_dy <= mi_size[HEIGHT] && (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH]))) {
+                        if ((y == mi_size[HEIGHT] &&
+                             (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH])) ||
+                            (y + mmin_dy <= mi_size[HEIGHT] &&
+                             (x == 0 || x + mmin_dx <= 0 || x + mmax_dx >= width - mi_size[WIDTH]))) {
                             free(roff[y][x]);
                         }
                     }
@@ -1746,106 +1753,109 @@ int *init_ctx_weight(int type, int prd_order, int delta) {
 }
 
 int e2E(int e, int prd, int flag, int maxval) {
-	int E, th;
+    int E, th;
 
-	E = (e > 0)? e : -e;
-	th = (prd < ((maxval + 1) >> 1))? prd : maxval - prd;
+    E = (e > 0) ? e : -e;
+    th = (prd < ((maxval + 1) >> 1)) ? prd : maxval - prd;
 
-	if (E > th) {
-		E += th;
-	}
-	else if (flag) {
-		E = (e < 0)? (E << 1) - 1 : (E << 1);
-	}
-	else {
-		E = (e > 0)? (E << 1) - 1 : (E << 1);
-	}
+    if (E > th) {
+        E += th;
+    }
+    else if (flag) {
+        E = (e < 0) ? (E << 1) - 1 : (E << 1);
+    }
+    else {
+        E = (e > 0) ? (E << 1) - 1 : (E << 1);
+    }
 
-	return (E);
+    return (E);
 }
 
 int E2e(int E, int prd, int flag, int maxval) {
-	int e, th;
+    int e, th;
 
-	th = (prd < ((maxval + 1) >> 1))? prd : maxval - prd;
+    th = (prd < ((maxval + 1) >> 1)) ? prd : maxval - prd;
 
-	if (E > (th << 1)) {
-		e = (prd < ((maxval + 1) >> 1))? E - th : th - E;
-	} else if (flag) {
-		e = (E & 1)? -((E >> 1) + 1) : (E >> 1);
-	} else {
-		e = (E & 1)? (E >> 1) + 1 : -(E >> 1);
-	}
+    if (E > (th << 1)) {
+        e = (prd < ((maxval + 1) >> 1)) ? E - th : th - E;
+    }
+    else if (flag) {
+        e = (E & 1) ? -((E >> 1) + 1) : (E >> 1);
+    }
+    else {
+        e = (E & 1) ? (E >> 1) + 1 : -(E >> 1);
+    }
 
-	return (e);
+    return (e);
 }
 
 void mtf_classlabel(char **class, int *mtfbuf, int y, int x, int bsize, int width, int num_class) {
-	int i, j, k, ref[3];
+    int i, j, k, ref[3];
 
-	if (y == 0) {
-		if (x == 0) {
-			ref[0] = ref[1] = ref[2] = 0;
-		}
-		else {
-			ref[0] = ref[1] = ref[2] = class[y][x-1];
-		}
-	}
-	else {
-		ref[0] = class[y-1][x];
-		ref[1] = (x == 0)? class[y-1][x] : class[y][x-1];
-		ref[2] = (x + bsize >= width)? class[y-1][x] : class[y-1][x+bsize];
-		if (ref[1] == ref[2]) {
-			ref[2] = ref[0];
-			ref[0] = ref[1];
-		}
-	}
+    if (y == 0) {
+        if (x == 0) {
+            ref[0] = ref[1] = ref[2] = 0;
+        }
+        else {
+            ref[0] = ref[1] = ref[2] = class[y][x - 1];
+        }
+    }
+    else {
+        ref[0] = class[y - 1][x];
+        ref[1] = (x == 0) ? class[y - 1][x] : class[y][x - 1];
+        ref[2] = (x + bsize >= width) ? class[y - 1][x] : class[y - 1][x + bsize];
+        if (ref[1] == ref[2]) {
+            ref[2] = ref[0];
+            ref[0] = ref[1];
+        }
+    }
 
-	/* move to front */
-	for (k = 2; k >= 0; k--) {
-		if ((j = mtfbuf[ref[k]]) == 0) continue;
+    /* move to front */
+    for (k = 2; k >= 0; k--) {
+        if ((j = mtfbuf[ref[k]]) == 0) continue;
 
-		for (i = 0; i < num_class; i++) {
-			if (mtfbuf[i] < j) {
-				mtfbuf[i]++;
-			}
-		}
+        for (i = 0; i < num_class; i++) {
+            if (mtfbuf[i] < j) {
+                mtfbuf[i]++;
+            }
+        }
 
-		mtfbuf[ref[k]] = 0;
-	}
+        mtfbuf[ref[k]] = 0;
+    }
 }
 
 // Returns time
 double cpu_time(void) {
 #include <time.h>
+
 #ifndef HAVE_CLOCK
 #  include <sys/times.h>
-	struct tms t;
+    struct tms t;
 #endif
 #ifndef CLK_TCK
 #  define CLK_TCK 60
 #endif
-	static clock_t prev = 0;
-	clock_t cur, dif;
+    static clock_t prev = 0;
+    clock_t cur, dif;
 
 #ifdef HAVE_CLOCK
-	cur = clock();
+    cur = clock();
 #else
-	times(&t);
-	cur = t.tms_utime + t.tms_stime;
+    times(&t);
+    cur = t.tms_utime + t.tms_stime;
 #endif
-	if (cur > prev) {
-		dif = cur - prev;
-	}
-	else {
-		dif = (unsigned)cur - prev;
-	}
-	prev = cur;
+    if (cur > prev) {
+        dif = cur - prev;
+    }
+    else {
+        dif = (unsigned) cur - prev;
+    }
+    prev = cur;
 
 #ifdef HAVE_CLOCK
-	return ((double)dif / CLOCKS_PER_SEC);
+    return ((double) dif / CLOCKS_PER_SEC);
 #else
-	return ((double)dif / CLK_TCK);
+    return ((double)dif / CLK_TCK);
 #endif
 }
 
@@ -1866,60 +1876,60 @@ int **copy_bref(int bframes, int bref_const[][5]) {
 int **select_bref(int bframes) {
     int **bref = NULL;
 
-	switch(bframes) {
-		case 2:
+    switch (bframes) {
+        case 2:
             bref = copy_bref(bframes, bref1);
-			break;
-		case 3:
+            break;
+        case 3:
             bref = copy_bref(bframes, bref2);
-			break;
-		case 4:
+            break;
+        case 4:
             bref = copy_bref(bframes, bref3);
-			break;
-		case 5:
+            break;
+        case 5:
             bref = copy_bref(bframes, bref4);
-			break;
-		case 6:
+            break;
+        case 6:
             bref = copy_bref(bframes, bref5);
-			break;
-		case 7:
+            break;
+        case 7:
             bref = copy_bref(bframes, bref6);
-			break;
-		case 8:
+            break;
+        case 8:
             bref = copy_bref(bframes, bref7);
-			break;
-		case 9:
+            break;
+        case 9:
             bref = copy_bref(bframes, bref8);
-			break;
-		case 10:
+            break;
+        case 10:
             bref = copy_bref(bframes, bref9);
-			break;
-		default:
+            break;
+        default:
             bref = copy_bref(bframes, bref3);
-			break;
-	}
+            break;
+    }
 
-	return bref;
+    return bref;
 }
 
-char* cat_str(char* str1, char* str2, int type) {
-	char *new_str = (char *) alloc_mem(sizeof(char) * (strlen(str1) + strlen(str2) + 1));
+char *cat_str(char *str1, char *str2, int type) {
+    char *new_str = (char *) alloc_mem(sizeof(char) * (strlen(str1) + strlen(str2) + 1));
 
-	if(new_str != NULL){
-		new_str[0] = '\0';   // ensures the memory is an empty string
+    if (new_str != NULL) {
+        new_str[0] = '\0';   // ensures the memory is an empty string
 
-		strcat(new_str, str1);
-		strcat(new_str, str2);
-	}
-	else {
-		printf("malloc failed!\n");
-		exit(-12);
-	}
+        strcat(new_str, str1);
+        strcat(new_str, str2);
+    }
+    else {
+        printf("malloc failed!\n");
+        exit(-12);
+    }
 
-	if (type == 1 ) safefree((void **) &str1);
-	safefree((void **) &str2);
+    if (type == 1) safefree((void **) &str1);
+    safefree((void **) &str2);
 
-	return new_str;
+    return new_str;
 }
 
 // buffer must have length >= sizeof(int) + 1
@@ -1927,7 +1937,7 @@ char* cat_str(char* str1, char* str2, int type) {
 // is in the correct order i.e.  the LSB is on the far right
 // instead of the far left of the printed string
 char *int2bin(int a, int buf_size) {
-    char *buffer = (char *)alloc_mem(sizeof(char) * (buf_size + 1));
+    char *buffer = (char *) alloc_mem(sizeof(char) * (buf_size + 1));
     buffer[buf_size] = '\0';
 
     for (int i = buf_size - 1; i >= 0; i--) {

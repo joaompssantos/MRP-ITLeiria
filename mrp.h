@@ -193,6 +193,8 @@ typedef struct {
     cost_t *th_cost; // Structure used to keep the cost of the thresholds.
     cost_t *class_cost; // Array with the cost of each class.
     cost_t qtflag_cost[QUADTREE_DEPTH << 3]; // Structure for the cost of the segmentation flags.
+
+    char *debug_path;
 } ENCODER;
 
 // Decoder
@@ -232,6 +234,7 @@ typedef struct {
     int quadtree_depth;
     int **predictor;
     int ***err;
+    int **err_debug;
 
     int *intra_ctx_weight; // Keeps the weights used for the residue encoding context.
     int *back_ctx_weight; // Keeps the weights used for the residue encoding context.
@@ -253,6 +256,8 @@ typedef struct {
     RANGECODER *rc;
     double *sigma;
     int *mtfbuf;
+
+    char *debug_path;
 } DECODER;
 
 /* common.c */

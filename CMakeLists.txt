@@ -56,7 +56,7 @@ if (USE_WERROR)
 endif ()
 
 # Add optimisation flags for DEBUG and RELEASE
-set(CMAKE_C_FLAGS_DEBUG "-g -O0")
+set(CMAKE_C_FLAGS_DEBUG "-g -O0 -fno-inline")
 set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 # Configure a header file to pass some of the CMake settings to the source code
