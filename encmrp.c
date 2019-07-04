@@ -3658,31 +3658,31 @@ int main(int argc, char **argv) {
         printf("    -J 2 * num  Views dimensions (in pixels) [%c %c]\n", 'H', 'W');
         printf("    -K 2 * num  Dimensions of the array of views [%c %c]\n", 'H', 'W');
         printf("    -L 5 * num  Prediction order (1 * Intra, 4 * Inter) [%d %d %d %d %d]\n", INTRA_PRD_ORDER, mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG], mi_prd_order[RDIAG]);
-        printf("    -b num  	Bit depth [%d]\n", depth);
-        printf("    -E num  	Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
-        printf("    -C str  	Chroma format [%s]. Supported formats:\n", "GRAY");
-        printf("\t\tGRAY;\n"
-               "\t\t444;\n"
-               "\t\t422; --> Not yet implemented\n"
-               "\t\t411; --> Not yet implemented\n"
-               "\t\t420.\n"
-               "\t\t(Notice: Currently MRP is a Luma only encoder. Thus this step is used only to skip the Chromas.)\n");
-        printf("    -D num  	Distance between views [%d]*\n", delta);
-        printf("    -M num  	Number of predictors [%d]\n", num_class);
-        printf("    -P num  	Precision of prediction coefficients (fractional bits) [%d]\n", coef_precision);
-        printf("    -V num  	Number of probability models [%d]\n", num_pmodel);
-        printf("    -A num  	Accuracy of probability models [%d]\n", pm_accuracy);
-        printf("    -I num  	Maximum number of iterations [%d]\n", max_iteration);
-        printf("    -m      	Use MMSE predictors\n");
-        printf("    -h      	Use Huffman coding\n");
-        printf("    -f      	Fixed block-size for adaptive prediction\n");
-        printf("    -u      	Deactivate the histogram packing procedures\n");
-        printf("    -o      	Further optimization of predictors (experimental)\n");
-        printf("    -d  		Create extra debug output (coefficients, partitions, etc.)");
-        printf("    -r str 		Light field file format [%s]. Supported formats:\n", "SAI");
-        printf("\t\tMIA; --> Not yet implemented\n"
-               "\t\tPVS;\n"
-               "\t\tSAI.\n");
+        printf("    -b num      Bit depth [%d]\n", depth);
+        printf("    -E num      Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
+        printf("    -C str      Chroma format [%s]. Supported formats:\n", "GRAY");
+        printf("                    GRAY;\n"
+               "                    444;\n"
+               "                    422; --> Not yet implemented\n"
+               "                    411; --> Not yet implemented\n"
+               "                    420.\n"
+               "                    (Notice: Currently MRP is a Luma only encoder. Thus this step is used only to skip the Chromas.)\n");
+        printf("    -D num      Distance between views [%d]*\n", delta);
+        printf("    -M num      Number of predictors [%d]\n", num_class);
+        printf("    -P num      Precision of prediction coefficients (fractional bits) [%d]\n", coef_precision);
+        printf("    -V num      Number of probability models [%d]\n", num_pmodel);
+        printf("    -A num      Accuracy of probability models [%d]\n", pm_accuracy);
+        printf("    -I num      Maximum number of iterations [%d]\n", max_iteration);
+        printf("    -m          Use MMSE predictors\n");
+        printf("    -h          Use Huffman coding\n");
+        printf("    -f          Fixed block-size for adaptive prediction\n");
+        printf("    -u          Deactivate the histogram packing procedures\n");
+        printf("    -o          Further optimization of predictors (experimental)\n");
+        printf("    -d          Create extra debug output (coefficients, partitions, etc.)\n");
+        printf("    -r str      Light field file format [%s]. Supported formats:\n", "SAI");
+        printf("                    MIA; --> Not yet implemented\n"
+               "                    PVS;\n"
+               "                    SAI.\n");
         printf("infile:     	Input file (must be in a raw YUV format)\n");
         printf("outfile:    	Output file\n");
         printf("\nNote: * stands for a mandatory option.\n");

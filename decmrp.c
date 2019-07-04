@@ -1326,12 +1326,12 @@ int main(int argc, char **argv) {
     if (infile == NULL || outfile == NULL) {
         printf(BANNER"\n", MRP_VERSION, MRP_VERSION_DATE);
         printf("usage: decmrp [options] infile outfile\n");
-        printf("-E num		Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
-        printf("-d  		Create extra debug output (coefficients, partitions, etc.)");
-        printf("-r str 		Light field file format [%s]. Supported formats:\n", "SAI");
-        printf("\tMIA; --> Not yet implemented\n"
-               "\tPVS;\n"
-               "\tSAI.\n");
+        printf("-E num      Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
+        printf("-d          Create extra debug output (coefficients, partitions, etc.)\n");
+        printf("-r str      Light field file format [%s]. Supported formats:\n", "SAI");
+        printf("                MIA; --> Not yet implemented\n"
+               "                PVS;\n"
+               "                SAI.\n");
         printf("infile:     Input file\n");
         printf("outfile:    Output file\n");
         exit(0);
