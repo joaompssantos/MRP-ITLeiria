@@ -3465,7 +3465,7 @@ int main(int argc, char **argv) {
                     for (j = 0; j < 4; j++) {
                         mi_prd_order[j] = (int) strtol(argv[++i], NULL, 10);
 
-                        if ((mi_prd_order[j] > 0 && mi_prd_order[j] < 2) || mi_prd_order[j] > 72) {
+                        if (mi_prd_order[j] < 0 || mi_prd_order[j] > 41) {
                             mi_prd_order[j] = MI_PRD_ORDER;
                         }
                     }

@@ -37,14 +37,14 @@
 // MRP Common
 #define DEPTH               8
 #define QUADTREE_DEPTH      4
-#define BASE_BSIZE          8
+#define BASE_BSIZE          4
 #define MAX_BSIZE           32
 #define MIN_BSIZE           (MAX_BSIZE >> QUADTREE_DEPTH)
 #define MAX_CLASS           63
 #define NUM_CLASS           -1
 #define NUM_GROUP           16
 #define INTRA_PRD_ORDER     -1
-#define MI_PRD_ORDER        5
+#define MI_PRD_ORDER        1
 #define COEF_PRECISION      6
 #define MAX_COEF            (2 << COEF_PRECISION)
 #define MAX_UPARA           512
