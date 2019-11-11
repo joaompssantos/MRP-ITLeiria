@@ -1199,7 +1199,7 @@ IMAGE *histogram_unpacking(IMAGE *img, const int *backward_table) {
 void debug_predictors(DECODER *dec) {
     if (dec->debug_path != NULL) {
         char *predictor_file = (char *) alloc_mem(
-                (strlen(dec->debug_path) + strlen("/predictors.txt\0")) * sizeof(char));
+                (strlen(dec->debug_path) + strlen("/predictors.txt") + 1) * sizeof(char));
 
         sprintf(predictor_file, "%s/predictors.txt", dec->debug_path);
 
@@ -1226,7 +1226,7 @@ void debug_partition(DECODER *dec, IMAGE *img, int endianness) {
 
     if (dec->debug_path != NULL) {
         char *partition_img = (char *) alloc_mem(
-                (strlen(dec->debug_path) + strlen("/partition_0000x0000_10bpp_LE_YUV444p.yuv\0")) * sizeof(char));
+                (strlen(dec->debug_path) + strlen("/partition_0000x0000_10bpp_LE_YUV444p.yuv") + 1) * sizeof(char));
 
         img_t ***qt_img = (img_t ***) alloc_3d_array(dec->height, dec->width, 3, sizeof(img_t));
 
@@ -1363,7 +1363,7 @@ void debug_residuals(DECODER *dec) {
         unsigned char *ptr, *err_stream = (unsigned char *) alloc_mem(elements * sizeof(unsigned char));
 
         char *err_img = (char *) alloc_mem(
-                (strlen(dec->debug_path) + strlen("/residuals_SAI_0000x0000_10bpp_LE_GRAY_Y.yuv\0")) * sizeof(char));
+                (strlen(dec->debug_path) + strlen("/residuals_SAI_0000x0000_10bpp_LE_GRAY_Y.yuv") + 1) * sizeof(char));
 
         // Write SAI
         ptr = err_stream;

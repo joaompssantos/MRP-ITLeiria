@@ -421,6 +421,7 @@ void free_encoder(ENCODER *enc) {
     else {
         num_subpm = 1 << enc->pm_accuracy;
     }
+
     for (gr = 0; gr < enc->num_group; gr++) {
         for (i = 0; i < enc->num_pmodel; i++) {
             for (j = 0; j < num_subpm; j++) {
@@ -474,9 +475,10 @@ void free_encoder(ENCODER *enc) {
 void init_class(ENCODER *enc) {
     int k, x, y, i, j, v, cl, sum, num_block;
     int *var, *tmp, **ptr;
+    int block_height = 0, block_width = 0;
 
     // Number of blocks in the frame
-    num_block = enc->height * enc->width / (BASE_BSIZE * BASE_BSIZE);
+    num_block = (int) (ceil((double) enc->height / BASE_BSIZE) * ceil((double) enc->width / BASE_BSIZE));
 
     var = (int *) alloc_mem(num_block * sizeof(int));
     ptr = (int **) alloc_mem(num_block * sizeof(int *));
@@ -489,9 +491,13 @@ void init_class(ENCODER *enc) {
 
         var[k] = sum = 0;
 
+        // Check the correct limits due to the image not being multiple of BASE_BSIZE
+        block_height = (y + BASE_BSIZE > enc->height) ? enc->height - y : BASE_BSIZE;
+        block_width = (x + BASE_BSIZE > enc->width) ? enc->width - x : BASE_BSIZE;
+
         // Run each pixel in a block
-        for (i = 0; i < BASE_BSIZE; i++) {
-            for (j = 0; j < BASE_BSIZE; j++) {
+        for (i = 0; i < block_height; i++) {
+            for (j = 0; j < block_width; j++) {
                 v = enc->org[1][y + i][x + j];
                 sum += v;
                 var[k] += v * v;
@@ -499,7 +505,7 @@ void init_class(ENCODER *enc) {
         }
 
         // Final result of the variance for one block
-        var[k] -= sum * sum / (BASE_BSIZE * BASE_BSIZE);
+        var[k] -= sum * sum / (block_height * block_width);
         ptr[k] = &(var[k]);
     }
 
@@ -524,9 +530,13 @@ void init_class(ENCODER *enc) {
         y = (v / (enc->width / BASE_BSIZE)) * BASE_BSIZE;
         x = (v % (enc->width / BASE_BSIZE)) * BASE_BSIZE;
 
+        // Check the correct limits due to the image not being multiple of BASE_BSIZE
+        block_height = (y + BASE_BSIZE > enc->height) ? enc->height - y : BASE_BSIZE;
+        block_width = (x + BASE_BSIZE > enc->width) ? enc->width - x : BASE_BSIZE;
+
         // Sets the class number for each pixel
-        for (i = 0; i < BASE_BSIZE; i++) {
-            for (j = 0; j < BASE_BSIZE; j++) {
+        for (i = 0; i < block_height; i++) {
+            for (j = 0; j < block_width; j++) {
                 enc->class[y + i][x + j] = (char) cl;
             }
         }
@@ -3147,7 +3157,7 @@ int encode_lookuptable(FILE *fp, const int *forward_table, int size) {
 void debug_predictors(ENCODER *enc) {
     if (enc->debug_path != NULL) {
         char *predictor_file = (char *) alloc_mem(
-                (strlen(enc->debug_path) + strlen("/predictors.txt\0")) * sizeof(char));
+                (strlen(enc->debug_path) + strlen("/predictors.txt") + 1) * sizeof(char));
 
         sprintf(predictor_file, "%s/predictors.txt", enc->debug_path);
 
@@ -3174,7 +3184,7 @@ void debug_partition(ENCODER *enc, int endianness) {
 
     if (enc->debug_path != NULL) {
         char *partition_img = (char *) alloc_mem(
-                (strlen(enc->debug_path) + strlen("/partition_0000x0000_10bpp_LE_YUV444p.yuv\0")) * sizeof(char));
+                (strlen(enc->debug_path) + strlen("/partition_0000x0000_10bpp_LE_YUV444p.yuv") + 1) * sizeof(char));
 
         img_t ***qt_img = (img_t ***) alloc_3d_array(enc->height, enc->width, 3, sizeof(img_t));
 
@@ -3310,7 +3320,7 @@ void debug_residuals(ENCODER *enc) {
         int elements = enc->height * enc->width * (enc->depth == 8 ? 1 : 2);
         unsigned char *ptr, *err_stream = (unsigned char *) alloc_mem(elements * sizeof(unsigned char));
 
-        char *err_img = (char *) alloc_mem((strlen(enc->debug_path) + strlen("/residuals_SAI_0000x0000_10bpp_LE_GRAY_Y.yuv\0")) * sizeof(char));
+        char *err_img = (char *) alloc_mem((strlen(enc->debug_path) + strlen("/residuals_SAI_0000x0000_10bpp_LE_GRAY_Y.yuv") + 1) * sizeof(char));
 
         // Write SAI
         ptr = err_stream;

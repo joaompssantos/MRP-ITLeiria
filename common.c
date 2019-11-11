@@ -360,12 +360,6 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
     //Open file
     fp = fileopen(filename, "rb");
 
-    // Check if image dimensions are correct (It has to be multiple of BASE_BSIZE)
-    if ((width % BASE_BSIZE) || (height % BASE_BSIZE)) {
-        fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
-        exit(1);
-    }
-
     if (endianness == LITTLE_ENDIANNESS) {
         shift_first = 0;
         shift_second = 8;
@@ -403,25 +397,25 @@ IMAGE *read_yuv(char *filename, int height, int width, int frame, int depth, int
         }
     }
 
-/*	for (i = 0; i < img->height / 2; i++) {
-		for (j = 0; j < img->width / 2; j++) {
-			fgetc(fp);
-
-			if (depth > 8) {
-				fgetc(fp);
-			}
-		}
-	}
-
-	for (i = 0; i < img->height / 2; i++) {
-		for (j = 0; j < img->width / 2; j++) {
-			fgetc(fp);
-
-			if (depth > 8) {
-				fgetc(fp);
-			}
-		}
-	}*/
+//	for (i = 0; i < img->height / 2; i++) {
+//		for (j = 0; j < img->width / 2; j++) {
+//			fgetc(fp);
+//
+//			if (depth > 8) {
+//				fgetc(fp);
+//			}
+//		}
+//	}
+//
+//	for (i = 0; i < img->height / 2; i++) {
+//		for (j = 0; j < img->width / 2; j++) {
+//			fgetc(fp);
+//
+//			if (depth > 8) {
+//				fgetc(fp);
+//			}
+//		}
+//	}
 
     fclose(fp);
     return (img);
