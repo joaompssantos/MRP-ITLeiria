@@ -3254,15 +3254,18 @@ void debug_partition(ENCODER *enc, int endianness) {
             }
         }
 
-        if (enc->depth > 8) {
-            ptr = qt_stream;
-            for (k = 0; k < 3; k++) {
-                for (i = 0; i < enc->height; i++) {
-                    for (j = 0; j < enc->width; j++) {
+        ptr = qt_stream;
+        for (k = 0; k < 3; k++) {
+            for (i = 0; i < enc->height; i++) {
+                for (j = 0; j < enc->width; j++) {
+                    if (enc->depth > 8) {
                         byte = reverse_endianness(qt_img[k][i][j], LITTLE_ENDIANNESS);
 
                         *ptr++ = (byte >> 8u) & 0x00FFu;
                         *ptr++ = byte & 0x00FFu;
+                    }
+                    else {
+                        *ptr++ = qt_img[k][i][j];
                     }
                 }
             }
@@ -3317,7 +3320,7 @@ void debug_residuals(ENCODER *enc) {
         int i, j, k, l, shift = (int) pow(2, enc->depth) - 1;
         unsigned short byte;
 
-        int elements = enc->height * enc->width * (enc->depth == 8 ? 1 : 2);
+        int elements = enc->height * enc->width * (enc->depth + 1 == 8 ? 1 : 2);
         unsigned char *ptr, *err_stream = (unsigned char *) alloc_mem(elements * sizeof(unsigned char));
 
         char *err_img = (char *) alloc_mem((strlen(enc->debug_path) + strlen("/residuals_SAI_0000x0000_10bpp_LE_GRAY_Y.yuv") + 1) * sizeof(char));
@@ -4038,6 +4041,7 @@ int main(int argc, char **argv) {
             else {
                 if (i > j) break;
             }
+
             elapse += cpu_time();
         }
 

@@ -1296,15 +1296,18 @@ void debug_partition(DECODER *dec, IMAGE *img, int endianness) {
             }
         }
 
-        if (dec->depth > 8) {
-            ptr = qt_stream;
-            for (k = 0; k < 3; k++) {
-                for (i = 0; i < img->height; i++) {
-                    for (j = 0; j < img->width; j++) {
+        ptr = qt_stream;
+        for (k = 0; k < 3; k++) {
+            for (i = 0; i < img->height; i++) {
+                for (j = 0; j < img->width; j++) {
+                    if (dec->depth > 8) {
                         byte = reverse_endianness(qt_img[k][i][j], LITTLE_ENDIANNESS);
 
                         *ptr++ = (byte >> 8u) & 0x00FFu;
                         *ptr++ = byte & 0x00FFu;
+                    }
+                    else {
+                        *ptr++ = qt_img[k][i][j];
                     }
                 }
             }
@@ -1359,7 +1362,7 @@ void debug_residuals(DECODER *dec) {
         int i, j, k, l, shift = (int) pow(2, dec->depth) - 1;
         unsigned short byte;
 
-        int elements = dec->height * dec->width * (dec->depth == 8 ? 1 : 2);
+        int elements = dec->height * dec->width * (dec->depth + 1 == 8 ? 1 : 2);
         unsigned char *ptr, *err_stream = (unsigned char *) alloc_mem(elements * sizeof(unsigned char));
 
         char *err_img = (char *) alloc_mem(
@@ -1391,7 +1394,7 @@ void debug_residuals(DECODER *dec) {
 
         // Write SAI as PGM
         ptr = err_stream;
-        
+
         for (i = 0; i < dec->height; i++) {
             for (j = 0; j < dec->width; j++) {
                 if (dec->depth + 1 > 8) {
