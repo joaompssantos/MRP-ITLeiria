@@ -3410,8 +3410,9 @@ void debug_residuals(ENCODER *enc) {
 int main(int argc, char **argv) {
     // Variable declaration
     cost_t cost, min_cost, side_cost = 0;
-    int i, j, f, k, x, y, cl, **prd_save, **th_save, **error = NULL;
-    char **class_save;
+    int i, j, f, k, x, y, cl, **predictor_save, **prd_save, **th_save, **encval_save, **error = NULL;
+    char **class_save, **qtmap_save[QUADTREE_DEPTH], **group_save;
+    PMODEL **pmlist_save = NULL;
     IMAGE *video[3] = {NULL, NULL, NULL};
     ENCODER *enc = NULL;
     double elapse = 0.0;
@@ -3935,7 +3936,7 @@ int main(int argc, char **argv) {
         init_class(enc);
 
         // Auxiliary variables
-        prd_save = (int **) alloc_2d_array(enc->num_class, enc->full_prd_order, sizeof(int));
+        predictor_save = (int **) alloc_2d_array(enc->num_class, enc->full_prd_order, sizeof(int));
         th_save = (int **) alloc_2d_array(enc->num_class, enc->num_group, sizeof(int));
         class_save = (char **) alloc_2d_array(enc->height, enc->width, sizeof(char));
 
@@ -3961,7 +3962,7 @@ int main(int argc, char **argv) {
 
                 for (cl = 0; cl < enc->num_class; cl++) {
                     for (k = 0; k < enc->full_prd_order; k++) {
-                        prd_save[cl][k] = enc->predictor[cl][k];
+                        predictor_save[cl][k] = enc->predictor[cl][k];
                     }
 
                     for (k = 0; k < enc->num_group; k++) {
@@ -3983,7 +3984,7 @@ int main(int argc, char **argv) {
 
         for (cl = 0; cl < enc->num_class; cl++) {
             for (k = 0; k < enc->full_prd_order; k++) {
-                enc->predictor[cl][k] = prd_save[cl][k];
+                enc->predictor[cl][k] = predictor_save[cl][k];
             }
             for (k = 0; k < enc->num_group; k++) {
                 enc->th[cl][k] = th_save[cl][k];
@@ -3996,7 +3997,25 @@ int main(int argc, char **argv) {
 
         printf("Frame: %d\n\t1st optimization --> Cost: %d\n", f, (int) cost);
 
-        /* 2nd loop */
+        // Backup variables
+        prd_save = (int **) alloc_2d_array(enc->height, enc->width, sizeof(int));
+        encval_save = (int **) alloc_2d_array(enc->height, enc->width, sizeof(int));
+        group_save = (char **) alloc_2d_array(enc->height, enc->width, sizeof(char));
+        pmlist_save = (PMODEL **) alloc_mem(enc->num_group * sizeof(PMODEL *));
+
+        // Quadtree map save allocation
+        if (enc->quadtree_depth > 0) {
+            y = (enc->height + MAX_BSIZE - 1) / MAX_BSIZE;
+            x = (enc->width + MAX_BSIZE - 1) / MAX_BSIZE;
+
+            for (i = enc->quadtree_depth - 1; i >= 0; i--) {
+                qtmap_save[i] = (char **) alloc_2d_array(y, x, sizeof(char));
+
+                y <<= 1;
+                x <<= 1;
+            }
+        }
+
         // Loop type
         enc->optimize_loop = 2;
         min_cost = INT_MAX;
@@ -4013,27 +4032,57 @@ int main(int argc, char **argv) {
             side_cost += encode_class(NULL, enc);
             cost += side_cost;
 
+//            printf("(%02d) Cost: %d (%d), %4.3f bpp", i, (int) cost, (int) side_cost, cost / enc->height / enc->width);
+
             if (cost < min_cost) {
+//                printf("*");
+
                 min_cost = cost;
                 j = i;
 
-                if (f_optpred) {
-                    for (y = 0; y < enc->height; y++) {
-                        for (x = 0; x < enc->width; x++) {
-                            class_save[y][x] = enc->class[y][x];
+                // Save variables for the optimal case
+                for (y = 0; y < enc->height; y++) {
+                    for (x = 0; x < enc->width; x++) {
+                        class_save[y][x] = enc->class[y][x];
+                        group_save[y][x] = enc->group[y][x];
+                        prd_save[y][x] = enc->prd[y][x];
+                        encval_save[y][x] = enc->encval[y][x];
+                    }
+                }
+
+                for (cl = 0; cl < enc->num_class; cl++) {
+                    if (f_optpred) {
+                        for (k = 0; k < enc->full_prd_order; k++) {
+                            predictor_save[cl][k] = enc->predictor[cl][k];
                         }
                     }
 
-                    for (cl = 0; cl < enc->num_class; cl++) {
-                        for (k = 0; k < enc->full_prd_order; k++) {
-                            prd_save[cl][k] = enc->predictor[cl][k];
+                    for (k = 0; k < enc->num_group; k++) {
+                        th_save[cl][k] = enc->th[cl][k];
+                        pmlist_save[k] = enc->pmlist[k];
+                    }
+                }
+
+                if (enc->quadtree_depth > 0) {
+                    int yy, xx;
+
+                    yy = (enc->height + MAX_BSIZE - 1) / MAX_BSIZE;
+                    xx = (enc->width + MAX_BSIZE - 1) / MAX_BSIZE;
+
+                    for (k = enc->quadtree_depth - 1; k >= 0; k--) {
+                        for (y = 0; y < yy; y++) {
+                            for (x = 0; x < xx; x++) {
+                                qtmap_save[k][y][x] = enc->qtmap[k][y][x];
+                            }
                         }
-                        for (k = 0; k < enc->num_group; k++) {
-                            th_save[cl][k] = enc->th[cl][k];
-                        }
+
+                        yy <<= 1;
+                        xx <<= 1;
                     }
                 }
             }
+
+//            printf("\n");
 
             if (f_optpred) {
                 if (i - j >= EXTRA_ITERATION) break;
@@ -4045,28 +4094,55 @@ int main(int argc, char **argv) {
             elapse += cpu_time();
         }
 
-        if (f_optpred) {
-            for (y = 0; y < enc->height; y++) {
-                for (x = 0; x < enc->width; x++) {
-                    enc->class[y][x] = class_save[y][x];
+        // Recover optimal values
+        for (y = 0; y < enc->height; y++) {
+            for (x = 0; x < enc->width; x++) {
+                enc->class[y][x] = class_save[y][x];
+                enc->group[y][x] = group_save[y][x];
+                enc->prd[y][x] = prd_save[y][x];
+                enc->encval[y][x] = encval_save[y][x];
+            }
+        }
+
+        for (cl = 0; cl < enc->num_class; cl++) {
+            if (f_optpred) {
+                for (k = 0; k < enc->full_prd_order; k++) {
+                    enc->predictor[cl][k] = predictor_save[cl][k];
                 }
             }
 
-            for (cl = 0; cl < enc->num_class; cl++) {
-                for (k = 0; k < enc->full_prd_order; k++) {
-                    enc->predictor[cl][k] = prd_save[cl][k];
+            i = 0;
+
+            for (k = 0; k < enc->num_group; k++) {
+                enc->th[cl][k] = th_save[cl][k];
+
+                enc->pmlist[k] = pmlist_save[k];
+
+                for (; i < enc->th[cl][k]; i++) {
+                    enc->uquant[cl][i] = (char) k;
                 }
+            }
+        }
 
-                i = 0;
+        if (enc->quadtree_depth > 0) {
+            int yy, xx;
 
-                for (k = 0; k < enc->num_group; k++) {
-                    enc->th[cl][k] = th_save[cl][k];
-                    for (; i < enc->th[cl][k]; i++) {
-                        enc->uquant[cl][i] = (char) k;
+            yy = (enc->height + MAX_BSIZE - 1) / MAX_BSIZE;
+            xx = (enc->width + MAX_BSIZE - 1) / MAX_BSIZE;
+
+            for (i = enc->quadtree_depth - 1; i >= 0; i--) {
+                for (y = 0; y < yy; y++) {
+                    for (x = 0; x < xx; x++) {
+                        enc->qtmap[i][y][x] = qtmap_save[i][y][x];
                     }
                 }
-            }
 
+                yy <<= 1;
+                xx <<= 1;
+            }
+        }
+
+        if (f_optpred) {
             predict_region(enc, 0, 0, enc->height, enc->width);
             calc_cost(enc, 0, 0, enc->height, enc->width);
             optimize_class(enc);
