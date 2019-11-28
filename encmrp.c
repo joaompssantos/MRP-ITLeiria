@@ -486,8 +486,8 @@ void init_class(ENCODER *enc) {
     // Variance calculation for each block
     for (k = 0; k < num_block; k++) {
         // Gives the position of the top right pixel of each block
-        y = (k / (enc->width / BASE_BSIZE)) * BASE_BSIZE;
-        x = (k % (enc->width / BASE_BSIZE)) * BASE_BSIZE;
+        y = (k / (int) ceil((double) enc->width / BASE_BSIZE)) * BASE_BSIZE;
+        x = (k % (int) ceil((double) enc->width / BASE_BSIZE)) * BASE_BSIZE;
 
         var[k] = sum = 0;
 
@@ -527,8 +527,8 @@ void init_class(ENCODER *enc) {
         v = (int) (ptr[k] - var);
 
         // Gives the position of the top right pixel of each of the sorted blocks
-        y = (v / (enc->width / BASE_BSIZE)) * BASE_BSIZE;
-        x = (v % (enc->width / BASE_BSIZE)) * BASE_BSIZE;
+        y = (v / (int) ceil((double) enc->width / BASE_BSIZE)) * BASE_BSIZE;
+        x = (v % (int) ceil((double) enc->width / BASE_BSIZE)) * BASE_BSIZE;
 
         // Check the correct limits due to the image not being multiple of BASE_BSIZE
         block_height = (y + BASE_BSIZE > enc->height) ? enc->height - y : BASE_BSIZE;
