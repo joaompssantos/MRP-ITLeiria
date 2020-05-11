@@ -10,16 +10,16 @@ cmake_minimum_required(VERSION 3.10)
 ######################################################################################
 # Project Definition
 ######################################################################################
-set(PROJECT_NAME "4D-MRP")
+set(PROJECT_NAME "4D-MRP-DUAL-QUADTREE")
 project(${PROJECT_NAME})
 
 set(MRP_VERSION_MAJOR "1")
-set(MRP_VERSION_MINOR "1")
+set(MRP_VERSION_MINOR "2")
 set(MRP_VERSION_PATCH "0")
 set(MRP_VERSION "${MRP_VERSION_MAJOR}.${MRP_VERSION_MINOR}.${MRP_VERSION_PATCH}")
 set(MRP_VERSION_STRING "${MRP_VERSION}")
 
-set(MRP_VERSION_DATE "February 2019")
+set(MRP_VERSION_DATE "May 2020")
 
 ######################################################################################
 # Variables

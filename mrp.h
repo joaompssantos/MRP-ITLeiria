@@ -39,12 +39,13 @@
 #define QUADTREE_DEPTH      4
 #define BASE_BSIZE          4
 #define MAX_BSIZE           32
-#define MIN_BSIZE           (MAX_BSIZE >> QUADTREE_DEPTH)
+#define MIN_BSIZE_TS        (MAX_BSIZE >> QUADTREE_DEPTH)
+#define MIN_BSIZE_VU        1
 #define MAX_CLASS           63
 #define NUM_CLASS           -1
 #define NUM_GROUP           16
 #define INTRA_PRD_ORDER     -1
-#define MI_PRD_ORDER        1
+#define MI_PRD_ORDER        5
 #define COEF_PRECISION      6
 #define MAX_COEF            (2 << COEF_PRECISION)
 #define MAX_UPARA           512
@@ -82,6 +83,17 @@
 #define MIA                 0
 #define PVS                 1
 #define SAI                 2
+
+// Partition list
+typedef struct leaf LEAF;
+struct leaf {
+    char split;
+
+    LEAF *tl;
+    LEAF *tr;
+    LEAF *bl;
+    LEAF *br;
+};
 
 // Entropy coding
 typedef struct {
@@ -168,8 +180,9 @@ typedef struct {
     int *****mi_ldiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
     int *****mi_rdiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
 
-    int qtctx[QUADTREE_DEPTH << 3]; // Frequency counter of the segmentation flag context for the whole image.
-    char ****qtmap[QUADTREE_DEPTH]; // Segmentation flags for the quadtree partitioning of the image's prediction.
+    int qtctx[3]; // Frequency counter of the segmentation flag context for the whole image.
+    // char ****qtmap[QUADTREE_DEPTH]; // Segmentation flags for the quadtree partitioning of the image's prediction.
+    LEAF *****partition_tree;
 
     char ****class; // Keeps the class of each pixel
     char ****group; // keeps the group, i.e. the quantized context used for residue entropy coding.
@@ -190,7 +203,8 @@ typedef struct {
     cost_t **coef_cost; // Structure used to keep the cost of the coefficients.
     cost_t *th_cost; // Structure used to keep the cost of the thresholds.
     cost_t *class_cost; // Array with the cost of each class.
-    cost_t qtflag_cost[QUADTREE_DEPTH << 3]; // Structure for the cost of the segmentation flags.
+
+    cost_t qtflag_cost[3]; // Structure for the cost of the segmentation flags.
 
     char *debug_path;
 } ENCODER;
@@ -234,7 +248,6 @@ typedef struct {
     int *mi_rdiag_ctx_weight; // Keeps the weights used for the residue encoding context.
     int *mi_ldiag_ctx_weight; // Keeps the weights used for the residue encoding context.
 
-    char ****qtmap[QUADTREE_DEPTH];
     char ****class;
 
     char **uquant;

@@ -134,35 +134,6 @@ DECODER *init_decoder(FILE *fp, const int *vu, const int *ts, int maxval, int nu
         rc_startdec(fp, dec->rc);
     }
 
-    // Quadtree map
-    if (dec->quadtree_depth > 0) {
-        int v, u, t, s, vv, uu, tt, ss;
-
-        vv = (dec->vu[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
-        uu = (dec->vu[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
-        tt = (dec->ts[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
-        ss = (dec->ts[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
-
-        for (i = dec->quadtree_depth - 1; i >= 0; i--) {
-            dec->qtmap[i] = (char ****) alloc_4d_array(vv, uu, tt, ss, sizeof(char));
-
-            for (v = 0; v < vv; v++) {
-                for (u = 0; u < uu; u++) {
-                    for (t = 0; t < tt; t++) {
-                        for (s = 0; s < ss; s++) {
-                            dec->qtmap[i][v][u][t][s] = 0;
-                        }
-                    }
-                }
-            }
-
-            vv <<= 1;
-            uu <<= 1;
-            tt <<= 1;
-            ss <<= 1;
-        }
-    }
-
     // Class and uquant arrays
     dec->class = (char ****) alloc_4d_array(dec->vu[HEIGHT], dec->vu[WIDTH], dec->ts[HEIGHT], dec->ts[WIDTH], sizeof(char));
 
@@ -224,13 +195,6 @@ void free_decoder(DECODER *dec) {
         dec->mi_prd_order[RDIAG] > 0)
         free(dec->mi_borders_ctx_weight);
 
-
-    if (dec->quadtree_depth > 0) {
-        for (i = dec->quadtree_depth - 1; i >= 0; i--) {
-            free(dec->qtmap[i]);
-        }
-    }
-
     free(dec->class);
     free(dec->uquant);
 
@@ -261,6 +225,10 @@ void free_decoder(DECODER *dec) {
 
     if (dec->f_huffman == 0) {
         free(dec->rc);
+    }
+
+    if (dec->debug_path != NULL) {
+        free(dec->debug_path);
     }
 
     free(dec);
@@ -469,90 +437,93 @@ void decode_threshold(FILE *fp, DECODER *dec) {
     }
 }
 
-void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tlv, int tlu, int tlt, int tls, int blksize,
-                    int width, int level) {
-    int i, cl, v, u, t, s, brv, bru, brt, brs, ctx;
-    char ****qtmap;
+void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tlv, int tlu, int tlt, int tls, int vu_blksize[2],
+                    int ts_blksize, int width, int ts_level) {
+    int i, cl, v, u, t, s, brv, bru, brt, brs, vu_blksize_part[4][2];
     PMODEL *pm;
 
-    brv = (tlv + blksize < dec->vu[HEIGHT]) ? (tlv + blksize) : dec->vu[HEIGHT];
-    bru = (tlu + blksize < dec->vu[WIDTH]) ? (tlu + blksize) : dec->vu[WIDTH];
-    brt = (tlt + blksize < dec->ts[HEIGHT]) ? (tlt + blksize) : dec->ts[HEIGHT];
-    brs = (tls + blksize < dec->ts[WIDTH]) ? (tls + blksize) : dec->ts[WIDTH];
+    brv = (tlv + vu_blksize[HEIGHT] < dec->vu[HEIGHT]) ? (tlv + vu_blksize[HEIGHT]) : dec->vu[HEIGHT];
+    bru = (tlu + vu_blksize[WIDTH] < dec->vu[WIDTH]) ? (tlu + vu_blksize[WIDTH]) : dec->vu[WIDTH];
+    brt = (tlt + ts_blksize < dec->ts[HEIGHT]) ? (tlt + ts_blksize) : dec->ts[HEIGHT];
+    brs = (tls + ts_blksize < dec->ts[WIDTH]) ? (tls + ts_blksize) : dec->ts[WIDTH];
 
     if (tlv >= brv || tlu >= bru || tlt >= brt || tls >= brs) return;
 
-    if (level > 0) {
-        ctx = 0;
-        qtmap = dec->qtmap[level - 1];
-
-        v = (tlv / MIN_BSIZE) >> level;
-        u = (tlu / MIN_BSIZE) >> level;
-        t = (tlt / MIN_BSIZE) >> level;
-        s = (tls / MIN_BSIZE) >> level;
-
-        if (v > 0 && qtmap[v - 1][u][t][s] == 1) ctx++;
-
-        if (u > 0 && qtmap[v][u - 1][t][s] == 1) ctx++;
-
-        if (t > 0) {
-            if (qtmap[v][u][t - 1][s] == 1) ctx++;
-            if (brs < width && qtmap[v][u][t - 1][s + 1] == 1) ctx++;
-        }
-
-        if (s > 0 && qtmap[v][u][t][s - 1] == 1) ctx++;
-
-        ctx = ((level - 1) * 4 + ctx) << 1;
-
+    if (vu_blksize[HEIGHT] > MIN_BSIZE_VU || vu_blksize[WIDTH] > MIN_BSIZE_VU || ts_level > 0) {
         if (dec->f_huffman == 1) {
             i = getbits(fp, 1);
         }
         else {
             pm = &dec->spm;
-            i = rc_decode(fp, dec->rc, pm, ctx, ctx + 2) - ctx;
+            i = rc_decode(fp, dec->rc, pm, 0, pm->size);
         }
 
-        if (i == 1) {
-            qtmap[v][u][t][s] = 1;
+        switch (i) {
+            case 1:
+                ts_blksize >>= 1;
 
-            blksize >>= 1;
+                // v and u
+                decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt, tls, vu_blksize, ts_blksize, width, ts_level - 1);
+                decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt, tls + ts_blksize, vu_blksize, ts_blksize, width, ts_level - 1);
+                decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt + ts_blksize, tls, vu_blksize, ts_blksize, width, ts_level - 1);
+                decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt + ts_blksize, tls + ts_blksize, vu_blksize, ts_blksize, brs, ts_level - 1);
 
-            // v and u
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt, tls + blksize, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt + blksize, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt + blksize, tls + blksize, blksize, brs, level - 1);
+                return;
+                break;
 
-            // v and u + blksize
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu + blksize, tlt, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu + blksize, tlt, tls + blksize, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu + blksize, tlt + blksize, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu + blksize, tlt + blksize, tls + blksize, blksize, brs, level - 1);
+            case 2:
+                if (vu_blksize[HEIGHT] > MIN_BSIZE_VU && vu_blksize[WIDTH] > MIN_BSIZE_VU) {
+                    // v and u partition
+                    vu_blksize_part[0][HEIGHT] = vu_blksize[HEIGHT] >> 1;
+                    vu_blksize_part[0][WIDTH] = vu_blksize[WIDTH] >> 1;
 
-            // v + blksize and u
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu, tlt, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu, tlt, tls + blksize, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu, tlt + blksize, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu, tlt + blksize, tls + blksize, blksize, brs, level - 1);
+                    vu_blksize_part[3][HEIGHT] = vu_blksize[HEIGHT] - vu_blksize_part[0][HEIGHT];
+                    vu_blksize_part[3][WIDTH] = vu_blksize[WIDTH] - vu_blksize_part[0][WIDTH];
 
-            // v + blksize and u + blksize
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu + blksize, tlt, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu + blksize, tlt, tls + blksize, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu + blksize, tlt + blksize, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu + blksize, tlt + blksize, tls + blksize, blksize, brs, level - 1);
+                    vu_blksize_part[1][HEIGHT] = vu_blksize_part[0][HEIGHT];
+                    vu_blksize_part[1][WIDTH] = vu_blksize_part[3][WIDTH];
 
-            return;
+                    vu_blksize_part[2][HEIGHT] = vu_blksize_part[3][HEIGHT];
+                    vu_blksize_part[2][WIDTH] = vu_blksize_part[0][WIDTH];
+
+                    decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt, tls, vu_blksize_part[0], ts_blksize, width, ts_level);
+                    decode_qtindex(fp, dec, vlc, cpm, tlv, tlu + vu_blksize_part[0][WIDTH], tlt, tls, vu_blksize_part[1], ts_blksize, width, ts_level);
+                    decode_qtindex(fp, dec, vlc, cpm, tlv + vu_blksize_part[0][HEIGHT], tlu, tlt, tls, vu_blksize_part[2], ts_blksize, width, ts_level);
+                    decode_qtindex(fp, dec, vlc, cpm, tlv + vu_blksize_part[0][HEIGHT], tlu + vu_blksize_part[0][WIDTH], tlt, tls, vu_blksize_part[3], ts_blksize, brs, ts_level);
+                }
+                else if (vu_blksize[HEIGHT] > MIN_BSIZE_VU && vu_blksize[WIDTH] <= MIN_BSIZE_VU) {
+                    // v and u partition
+                    vu_blksize_part[0][HEIGHT] = vu_blksize[HEIGHT] >> 1;
+                    vu_blksize_part[0][WIDTH] = vu_blksize[WIDTH];
+
+                    vu_blksize_part[3][HEIGHT] = vu_blksize[HEIGHT] - vu_blksize_part[0][HEIGHT];
+                    vu_blksize_part[3][WIDTH] = vu_blksize[WIDTH];
+
+                    decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt, tls, vu_blksize_part[0], ts_blksize, width, ts_level);
+                    decode_qtindex(fp, dec, vlc, cpm, tlv + vu_blksize_part[0][HEIGHT], tlu, tlt, tls, vu_blksize_part[3], ts_blksize, brs, ts_level);
+                }
+                else if (vu_blksize[HEIGHT] <= MIN_BSIZE_VU && vu_blksize[WIDTH] > MIN_BSIZE_VU) {
+                    // v and u partition
+                    vu_blksize_part[0][HEIGHT] = vu_blksize[HEIGHT];
+                    vu_blksize_part[0][WIDTH] = vu_blksize[WIDTH] >> 1;
+
+                    vu_blksize_part[3][HEIGHT] = vu_blksize[HEIGHT];
+                    vu_blksize_part[3][WIDTH] = vu_blksize[WIDTH] - vu_blksize_part[0][WIDTH];
+
+                    decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt, tls, vu_blksize_part[0], ts_blksize, width, ts_level);
+                    decode_qtindex(fp, dec, vlc, cpm, tlv, tlu + vu_blksize_part[0][WIDTH], tlt, tls, vu_blksize_part[3], ts_blksize, brs, ts_level);
+                }
+
+                return;
+                break;
+
+            default:
+                break;
         }
     }
 
-    if (dec->f_huffman == 1) {
-        i = decode_vlc(fp, vlc);
-    }
-    else {
-        i = rc_decode(fp, dec->rc, cpm, 0, cpm->size);
-    }
-
-    mtf_classlabel(dec->class, dec->mtfbuf, tlv, tlu, tlt, tls, blksize, width, dec->num_class);
+    i = rc_decode(fp, dec->rc, cpm, 0, cpm->size);
+    mtf_classlabel(dec->class, dec->mtfbuf, tlv, tlu, tlt, tls, ts_blksize, width, dec->num_class);
 
     for (cl = 0; cl < dec->num_class; cl++) {
         if (dec->mtfbuf[cl] == i) break;
@@ -570,17 +541,25 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tlv, int 
 }
 
 void decode_class(FILE *fp, DECODER *dec) {
-    int i, j, v, u, t, s, blksize, level;
+    int i, j, v, u, t, s, vu_blksize[2], ts_blksize, ts_level;
     VLC *vlc;
     PMODEL *pm, cpm[1];
 
     if (dec->quadtree_depth >= 0) {
-        level = dec->quadtree_depth;
-        blksize = MAX_BSIZE;
+        ts_level = dec->quadtree_depth;
+
+        vu_blksize[HEIGHT] = MAX_BSIZE > dec->vu[HEIGHT] ? dec->vu[HEIGHT] : MAX_BSIZE;
+        vu_blksize[WIDTH] = MAX_BSIZE > dec->vu[WIDTH] ? dec->vu[WIDTH] : MAX_BSIZE;
+
+        ts_blksize = MAX_BSIZE; // 32
     }
     else {
-        level = 0;
-        blksize = BASE_BSIZE;
+        ts_level = 0;
+
+        vu_blksize[HEIGHT] = BASE_BSIZE > dec->vu[HEIGHT] ? dec->vu[HEIGHT] : BASE_BSIZE;
+        vu_blksize[WIDTH] = BASE_BSIZE > dec->vu[WIDTH] ? dec->vu[WIDTH] : BASE_BSIZE;
+
+        ts_blksize = BASE_BSIZE; // 8
     }
 
     if (dec->f_huffman == 1) {
@@ -596,15 +575,15 @@ void decode_class(FILE *fp, DECODER *dec) {
         gen_huffcode(vlc);
     }
     else {
-        double p;
+        double p, pp;
         int ctx;
-        int qtree_code[QUADTREE_DEPTH << 2], mtf_code[MAX_CLASS];
+        int qtree_code[2], mtf_code[MAX_CLASS];
 
         pm = &dec->spm;
         if (dec->quadtree_depth > 0) {
             set_spmodel(pm, 7, -1);
 
-            for (ctx = 0; ctx < QUADTREE_DEPTH << 2; ctx++) {
+            for (ctx = 0; ctx < 2; ctx++) {
                 qtree_code[ctx] = rc_decode(fp, dec->rc, pm, 0, pm->size);
             }
         }
@@ -631,16 +610,15 @@ void decode_class(FILE *fp, DECODER *dec) {
         }
 
         /* set prob. models */
-        if (level > 0) {
-            pm->size = QUADTREE_DEPTH << 3;
+        if (vu_blksize[HEIGHT] > MIN_BSIZE_VU || vu_blksize[WIDTH] > MIN_BSIZE_VU || ts_level > 0) {
+            pm->size = 3;
 
-            for (ctx = 0; ctx < QUADTREE_DEPTH << 2; ctx++) {
-                i = qtree_code[ctx];
-                p = qtree_prob[i];
-                pm->freq[(ctx << 1) + 1] = (uint) (p * (1 << 10));
-                p = 1.0 - p;
-                pm->freq[(ctx << 1)] = (uint) (p * (1 << 10));
-            }
+            p = qtree_prob[qtree_code[0]];
+            pm->freq[0] = (uint) (p * (1 << 10));
+            pp = qtree_prob[qtree_code[1]] * (1 - p);
+            pm->freq[1] = (uint) (pp * (1 << 10));
+            pp = (1 - qtree_prob[qtree_code[1]]) * (1 - p);
+            pm->freq[2] = (uint) (pp * (1 << 10));
 
             for (i = 0; i < pm->size; i++) {
                 pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
@@ -668,11 +646,11 @@ void decode_class(FILE *fp, DECODER *dec) {
         dec->mtfbuf[i] = i;
     }
 
-    for (v = 0; v < dec->vu[HEIGHT]; v += blksize) {
-        for (u = 0; u < dec->vu[WIDTH]; u += blksize) {
-            for (t = 0; t < dec->ts[HEIGHT]; t += blksize) {
-                for (s = 0; s < dec->ts[WIDTH]; s += blksize) {
-                    decode_qtindex(fp, dec, vlc, cpm, v, u, t, s, blksize, dec->ts[WIDTH], level);
+    for (v = 0; v < dec->vu[HEIGHT]; v += vu_blksize[HEIGHT]) {
+        for (u = 0; u < dec->vu[WIDTH]; u += vu_blksize[WIDTH]) {
+            for (t = 0; t < dec->ts[HEIGHT]; t += ts_blksize) {
+                for (s = 0; s < dec->ts[WIDTH]; s += ts_blksize) {
+                    decode_qtindex(fp, dec, vlc, cpm, v, u, t, s, vu_blksize, ts_blksize, dec->ts[WIDTH], ts_level);
                 }
             }
         }
@@ -1100,149 +1078,175 @@ void debug_predictors(DECODER *dec) {
         free(predictor_file);
     }
 }
+// Write classes to file
+void debug_class(DECODER *dec) {
+    if (dec->debug_path != NULL) {
+        char *classes_file = (char *) alloc_mem(
+                (strlen(dec->debug_path) + strlen("/classes.txt\0") + 1) * sizeof(char));
+
+        sprintf(classes_file, "%s/classes.txt", dec->debug_path);
+
+        FILE *debug_fp = fopen(classes_file, "w");
+
+        fprintf(debug_fp, "#Pixel\t\t\tClass");
+
+        for (int v = 0; v < dec->vu[HEIGHT]; v++) {
+            for (int u = 0; u < dec->vu[WIDTH]; u++) {
+                for (int t = 0; t < dec->ts[HEIGHT]; t++) {
+                    for (int s = 0; s < dec->ts[WIDTH]; s++) {
+                        fprintf(debug_fp, "%02d,%02d,%03d,%03d:\t\t%3d\n", v, u, t, s, dec->class[v][u][t][s]);
+                    }
+                }
+            }
+        }
+
+        fclose(debug_fp);
+        free(classes_file);
+    }
+}
 
 // Write partition to file
 void debug_partition(DECODER *dec, LF4D *lf, int endianness) {
-    int d, i, j, k, l, v, u, t, s;
-
-    img_t *qt_lf_ptr[3];
-
-    if (dec->debug_path != NULL) {
-        char *partition_img = (char *) alloc_mem(
-                (strlen(dec->debug_path) + strlen("/partition_0000x0000_10bpp_LE_YUV444p.yuv\0")) * sizeof(char));
-
-        LF4D *qt_lf[3];
-        for (k = 0; k < 3; k++) {
-            qt_lf[k] = alloc_lf4d(dec->vu[HEIGHT], dec->vu[WIDTH], dec->ts[HEIGHT], dec->ts[WIDTH], (int) pow(2, dec->depth) - 1);
-            qt_lf_ptr[k] = &qt_lf[k]->val[0][0][0][0];
-        }
-
-        uint scale = (uint) floor(pow(2, dec->depth) / dec->num_class);
-
-        for (v = 0; v < dec->vu[HEIGHT]; v++) {
-            for (u = 0; u < dec->vu[WIDTH]; u++) {
-                for (t = 0; t < dec->ts[HEIGHT]; t++) {
-                    for (s = 0; s < dec->ts[WIDTH]; s++) {
-                        *qt_lf_ptr[0]++ = lf->val[v][u][t][s];
-
-                        *qt_lf_ptr[1]++ = dec->class[v][u][t][s] * scale;
-                        *qt_lf_ptr[2]++ = dec->class[v][u][t][s] * scale;
-                    }
-                }
-            }
-        }
-
-        if (dec->quadtree_depth > 0) {
-            uint blksize = MAX_BSIZE;
-
-            // TODO: Rever e tentar fazer bonito
-            for (d = dec->quadtree_depth - 1; d >= 0; d--) {
-                for (v = 0; v < dec->vu[HEIGHT]; v += blksize) {
-                    for (u = 0; u < dec->vu[WIDTH]; u += blksize) {
-                        for (t = 0; t < dec->ts[HEIGHT]; t += blksize) {
-                            for (s = 0; s < dec->ts[WIDTH]; s += blksize) {
-                                for (k = v; k < (v + blksize < dec->vu[HEIGHT] ? v + blksize : dec->vu[HEIGHT]); k++) {
-                                    for (l = u;
-                                         l < (u + blksize < dec->vu[WIDTH] ? u + blksize : dec->vu[WIDTH]); l++) {
-                                        if ((dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
-                                             d == dec->quadtree_depth - 1) ||
-                                            (dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
-                                             d < dec->quadtree_depth - 1 &&
-                                             dec->qtmap[d + 1][v / (blksize * 2)][u / (blksize * 2)][t / (blksize * 2)][
-                                                     s / (blksize * 2)] == 1)) {
-                                            if (t + blksize - 1 < dec->ts[HEIGHT]) {
-                                                for (j = s; j < (s + blksize < dec->ts[WIDTH] ? s + blksize
-                                                                                              : dec->ts[WIDTH]); j++) {
-                                                    qt_lf[0]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (s + blksize - 1 < dec->ts[WIDTH]) {
-                                                for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize
-                                                                                               : dec->ts[HEIGHT]); i++) {
-                                                    qt_lf[0]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                        }
-                                        if (d == 0 &&
-                                            dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 1) {
-                                            if (t + blksize / 2 - 1 < dec->ts[HEIGHT]) {
-                                                for (j = s; j < (s + blksize < dec->ts[WIDTH] ? s + blksize
-                                                                                              : dec->ts[WIDTH]); j++) {
-                                                    qt_lf[0]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (t + blksize - 1 < dec->ts[HEIGHT]) {
-                                                for (j = s; j < (s + blksize < dec->ts[WIDTH] ? s + blksize
-                                                                                              : dec->ts[WIDTH]); j++) {
-                                                    qt_lf[0]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (s + blksize / 2 - 1 < dec->ts[WIDTH]) {
-                                                for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize
-                                                                                               : dec->ts[HEIGHT]); i++) {
-                                                    qt_lf[0]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (s + blksize - 1 < dec->ts[WIDTH]) {
-                                                for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize
-                                                                                               : dec->ts[HEIGHT]); i++) {
-                                                    qt_lf[0]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                blksize >>= 1u;
-            }
-
-            for (v = 0; v < dec->vu[HEIGHT]; v++) {
-                for (u = 0; u < dec->vu[WIDTH]; u++) {
-                    for (t = 0; t < dec->ts[HEIGHT]; t++) {
-                        qt_lf[0]->val[v][u][t][dec->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[1]->val[v][u][t][dec->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[2]->val[v][u][t][dec->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
-                    }
-                    for (s = 0; s < dec->ts[WIDTH]; s++) {
-                        qt_lf[0]->val[v][u][dec->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[1]->val[v][u][dec->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[2]->val[v][u][dec->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
-                    }
-                }
-            }
-        }
-
-        // Quadtree partition image name
-        sprintf(partition_img, "%s/partition_%dx%d_%dbpp_LE_YUV444p.yuv", dec->debug_path,
-                dec->vu[WIDTH] * dec->ts[WIDTH], dec->vu[HEIGHT] * dec->ts[HEIGHT], dec->depth);
-
-        // Write image to file
-        for (k = 0; k < 3; k++) {
-            write_yuv(qt_lf[k], partition_img, dec->depth, endianness, SAI);
-        }
-
-        free(partition_img);
-
-        for (k = 0; k < 3; k++) {
-            safefree_lf4d(&qt_lf[k]);
-        }
-    }
+//    int d, i, j, k, l, v, u, t, s;
+//
+//    img_t *qt_lf_ptr[3];
+//
+//    if (dec->debug_path != NULL) {
+//        char *partition_img = (char *) alloc_mem(
+//                (strlen(dec->debug_path) + strlen("/partition_0000x0000_10bpp_LE_YUV444p.yuv\0")) * sizeof(char));
+//
+//        LF4D *qt_lf[3];
+//        for (k = 0; k < 3; k++) {
+//            qt_lf[k] = alloc_lf4d(dec->vu[HEIGHT], dec->vu[WIDTH], dec->ts[HEIGHT], dec->ts[WIDTH], (int) pow(2, dec->depth) - 1);
+//            qt_lf_ptr[k] = &qt_lf[k]->val[0][0][0][0];
+//        }
+//
+//        uint scale = (uint) floor(pow(2, dec->depth) / dec->num_class);
+//
+//        for (v = 0; v < dec->vu[HEIGHT]; v++) {
+//            for (u = 0; u < dec->vu[WIDTH]; u++) {
+//                for (t = 0; t < dec->ts[HEIGHT]; t++) {
+//                    for (s = 0; s < dec->ts[WIDTH]; s++) {
+//                        *qt_lf_ptr[0]++ = lf->val[v][u][t][s];
+//
+//                        *qt_lf_ptr[1]++ = dec->class[v][u][t][s] * scale;
+//                        *qt_lf_ptr[2]++ = dec->class[v][u][t][s] * scale;
+//                    }
+//                }
+//            }
+//        }
+//
+//        if (dec->quadtree_depth > 0) {
+//            uint blksize = MAX_BSIZE;
+//
+//            // TODO: Rever e tentar fazer bonito
+//            for (d = dec->quadtree_depth - 1; d >= 0; d--) {
+//                for (v = 0; v < dec->vu[HEIGHT]; v += blksize) {
+//                    for (u = 0; u < dec->vu[WIDTH]; u += blksize) {
+//                        for (t = 0; t < dec->ts[HEIGHT]; t += blksize) {
+//                            for (s = 0; s < dec->ts[WIDTH]; s += blksize) {
+//                                for (k = v; k < (v + blksize < dec->vu[HEIGHT] ? v + blksize : dec->vu[HEIGHT]); k++) {
+//                                    for (l = u;
+//                                         l < (u + blksize < dec->vu[WIDTH] ? u + blksize : dec->vu[WIDTH]); l++) {
+//                                        if ((dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
+//                                             d == dec->quadtree_depth - 1) ||
+//                                            (dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
+//                                             d < dec->quadtree_depth - 1 &&
+//                                             dec->qtmap[d + 1][v / (blksize * 2)][u / (blksize * 2)][t / (blksize * 2)][
+//                                                     s / (blksize * 2)] == 1)) {
+//                                            if (t + blksize - 1 < dec->ts[HEIGHT]) {
+//                                                for (j = s; j < (s + blksize < dec->ts[WIDTH] ? s + blksize
+//                                                                                              : dec->ts[WIDTH]); j++) {
+//                                                    qt_lf[0]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[1]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[2]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                }
+//                                            }
+//                                            if (s + blksize - 1 < dec->ts[WIDTH]) {
+//                                                for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize
+//                                                                                               : dec->ts[HEIGHT]); i++) {
+//                                                    qt_lf[0]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[1]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[2]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                }
+//                                            }
+//                                        }
+//                                        if (d == 0 &&
+//                                            dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 1) {
+//                                            if (t + blksize / 2 - 1 < dec->ts[HEIGHT]) {
+//                                                for (j = s; j < (s + blksize < dec->ts[WIDTH] ? s + blksize
+//                                                                                              : dec->ts[WIDTH]); j++) {
+//                                                    qt_lf[0]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[1]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[2]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                }
+//                                            }
+//                                            if (t + blksize - 1 < dec->ts[HEIGHT]) {
+//                                                for (j = s; j < (s + blksize < dec->ts[WIDTH] ? s + blksize
+//                                                                                              : dec->ts[WIDTH]); j++) {
+//                                                    qt_lf[0]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[1]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[2]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                }
+//                                            }
+//                                            if (s + blksize / 2 - 1 < dec->ts[WIDTH]) {
+//                                                for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize
+//                                                                                               : dec->ts[HEIGHT]); i++) {
+//                                                    qt_lf[0]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[1]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[2]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
+//                                                }
+//                                            }
+//                                            if (s + blksize - 1 < dec->ts[WIDTH]) {
+//                                                for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize
+//                                                                                               : dec->ts[HEIGHT]); i++) {
+//                                                    qt_lf[0]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[1]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                    qt_lf[2]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                }
+//                                            }
+//                                        }
+//                                    }
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//
+//                blksize >>= 1u;
+//            }
+//
+//            for (v = 0; v < dec->vu[HEIGHT]; v++) {
+//                for (u = 0; u < dec->vu[WIDTH]; u++) {
+//                    for (t = 0; t < dec->ts[HEIGHT]; t++) {
+//                        qt_lf[0]->val[v][u][t][dec->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
+//                        qt_lf[1]->val[v][u][t][dec->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
+//                        qt_lf[2]->val[v][u][t][dec->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
+//                    }
+//                    for (s = 0; s < dec->ts[WIDTH]; s++) {
+//                        qt_lf[0]->val[v][u][dec->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
+//                        qt_lf[1]->val[v][u][dec->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
+//                        qt_lf[2]->val[v][u][dec->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
+//                    }
+//                }
+//            }
+//        }
+//
+//        // Quadtree partition image name
+//        sprintf(partition_img, "%s/partition_%dx%d_%dbpp_LE_YUV444p.yuv", dec->debug_path,
+//                dec->vu[WIDTH] * dec->ts[WIDTH], dec->vu[HEIGHT] * dec->ts[HEIGHT], dec->depth);
+//
+//        // Write image to file
+//        for (k = 0; k < 3; k++) {
+//            write_yuv(qt_lf[k], partition_img, dec->depth, endianness, SAI);
+//        }
+//
+//        free(partition_img);
+//
+//        for (k = 0; k < 3; k++) {
+//            safefree_lf4d(&qt_lf[k]);
+//        }
+//    }
 }
 
 int main(int argc, char **argv) {
@@ -1391,7 +1395,7 @@ int main(int argc, char **argv) {
            mi_prd_order[RDIAG]);
     printf("(4DLF dimensions: %d x %d x %d x %d)\n\n", vu[HEIGHT], vu[WIDTH], ts[HEIGHT], ts[WIDTH]);
 
-    //// Start of the encoding process
+    //// Start of the decoding process
     printf("Process started");
 
     // Creates new DECODER structure
@@ -1404,6 +1408,7 @@ int main(int argc, char **argv) {
 
     if (debug == 1) {
         debug_predictors(dec);
+        debug_class(dec);
     }
 
     decode_threshold(fp, dec);
