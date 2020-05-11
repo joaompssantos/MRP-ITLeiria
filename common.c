@@ -2073,7 +2073,7 @@ void mtf_classlabel(char ****class, int *mtfbuf, int v, int u, int t, int s, int
     }
 
     /* move to front */
-    for (k = 2; k >= 0; k--) {
+    for (k = 4; k >= 0; k--) {
         if ((j = mtfbuf[ref[k]]) == 0) continue;
 
         for (i = 0; i < num_class; i++) {

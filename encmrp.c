@@ -2212,7 +2212,6 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlv, int
  *---------------------------------------------------------------------*/
 int encode_class(FILE *fp, ENCODER *enc) {
     int i, j, k, numidx, blksize, level, v, u, t, s, ctx, bits, *index;
-    int vu[2], ts[2];
     uint *hist;
     cost_t cost;
 
@@ -2225,16 +2224,10 @@ int encode_class(FILE *fp, ENCODER *enc) {
         numidx = 0;
 
         // Calculates the next multiple of BASE_BSIZE to correctly calculate the number of blocks
-        vu[HEIGHT] = (int) ceil((double) enc->vu[HEIGHT] / BASE_BSIZE) * BASE_BSIZE;
-        vu[WIDTH] = (int) ceil((double) enc->vu[WIDTH] / BASE_BSIZE) * BASE_BSIZE;
-
-        ts[HEIGHT] = (int) ceil((double) enc->ts[HEIGHT] / BASE_BSIZE) * BASE_BSIZE;
-        ts[WIDTH] = (int) ceil((double) enc->ts[WIDTH] / BASE_BSIZE) * BASE_BSIZE;
-
-        v = vu[HEIGHT] / MIN_BSIZE;
-        u = vu[WIDTH] / MIN_BSIZE;
-        t = ts[HEIGHT] / MIN_BSIZE;
-        s = ts[WIDTH] / MIN_BSIZE;
+        v = (int) ceil((double) enc->vu[HEIGHT] / MIN_BSIZE);
+        u = (int) ceil((double) enc->vu[WIDTH] / MIN_BSIZE);
+        t = (int) ceil((double) enc->ts[HEIGHT] / MIN_BSIZE);
+        s = (int) ceil((double) enc->ts[WIDTH] / MIN_BSIZE);
 
         for (k = 0; k <= level; k++) {
             numidx += v * u * t * s;
