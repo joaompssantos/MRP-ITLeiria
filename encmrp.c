@@ -2501,8 +2501,8 @@ int encode_class(FILE *fp, ENCODER *enc) {
             }
 
             p = qtree_prob[qtree_code[1] = k];
-            enc->qtflag_cost[1] = -log(p * qtree_prob[qtree_code[0]]) / log(2.0);
-            enc->qtflag_cost[2] = -log(1.0 - (p * qtree_prob[qtree_code[0]])) / log(2.0);
+            enc->qtflag_cost[1] = -log(p * (1 - qtree_prob[qtree_code[0]])) / log(2.0);
+            enc->qtflag_cost[2] = -log((1.0 - p) * (1 - qtree_prob[qtree_code[0]])) / log(2.0);
         }
 
         /* quantization of log-transformed probability */
