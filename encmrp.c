@@ -479,11 +479,11 @@ void init_class(ENCODER *enc) {
         s = (z % (ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
 
         // Check the correct limits due to the image not being multiple of BASE_BSIZE
-	bsize_vu[HEIGHT] = (v + BASE_BSIZE > enc->vu[HEIGHT]) ? enc->vu[HEIGHT] - v : BASE_BSIZE;
-	bsize_vu[WIDTH] = (u + BASE_BSIZE > enc->vu[WIDTH]) ? enc->vu[WIDTH] - u : BASE_BSIZE;
+        bsize_vu[HEIGHT] = (v + BASE_BSIZE > enc->vu[HEIGHT]) ? enc->vu[HEIGHT] - v : BASE_BSIZE;
+        bsize_vu[WIDTH] = (u + BASE_BSIZE > enc->vu[WIDTH]) ? enc->vu[WIDTH] - u : BASE_BSIZE;
 
-	bsize_ts[HEIGHT] = (t + BASE_BSIZE > enc->ts[HEIGHT]) ? enc->ts[HEIGHT] - t : BASE_BSIZE;
-	bsize_ts[WIDTH] = (s + BASE_BSIZE > enc->ts[WIDTH]) ? enc->ts[WIDTH] - s : BASE_BSIZE;
+        bsize_ts[HEIGHT] = (t + BASE_BSIZE > enc->ts[HEIGHT]) ? enc->ts[HEIGHT] - t : BASE_BSIZE;
+        bsize_ts[WIDTH] = (s + BASE_BSIZE > enc->ts[WIDTH]) ? enc->ts[WIDTH] - s : BASE_BSIZE;
 
         // Sets the class number for each pixel
         for (g = 0; g < bsize_vu[HEIGHT]; g++) {
