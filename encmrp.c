@@ -3738,7 +3738,7 @@ int main(int argc, char **argv) {
         printf("    -f      	Fixed block-size for adaptive prediction\n");
         printf("    -u      	Deactivate the histogram packing procedures\n");
         printf("    -o      	Further optimization of predictors (experimental)\n");
-        printf("    -d  		Create extra debug output (coefficients, partitions, etc.)");
+        printf("    -d      	Create extra debug output (coefficients, partitions, etc.)\n");
         printf("infile:     	Input file (must be in a raw YUV format)\n");
         printf("outfile:    	Output file\n");
         printf("\nNote: * stands for a mandatory option.\n");
