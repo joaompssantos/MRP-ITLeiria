@@ -1,25 +1,25 @@
 ###
-### CMakeLists for Minimum Rate Predictos
+### CMakeLists for Hierarchical Minimum Rate Predictors
 ###
 
 ######################################################################################
 # CMake  functions
 ######################################################################################
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16)
 
 ######################################################################################
 # Project Definition
 ######################################################################################
-set(PROJECT_NAME "4D-MRP")
+set(PROJECT_NAME "HiMRP")
 project(${PROJECT_NAME})
 
-set(MRP_VERSION_MAJOR "1")
+set(MRP_VERSION_MAJOR "0")
 set(MRP_VERSION_MINOR "1")
 set(MRP_VERSION_PATCH "0")
 set(MRP_VERSION "${MRP_VERSION_MAJOR}.${MRP_VERSION_MINOR}.${MRP_VERSION_PATCH}")
 set(MRP_VERSION_STRING "${MRP_VERSION}")
 
-set(MRP_VERSION_DATE "February 2019")
+set(MRP_VERSION_DATE "December 2020")
 
 ######################################################################################
 # Variables
@@ -44,7 +44,7 @@ endif ()
 # Set compile flags
 set(CMAKE_C_FLAGS "-funroll-loops -Wall -Wextra" CACHE STRING "compile flags" FORCE)
 
-# Set extra warnigns
+# Set extra warnings
 if (USE_EXTRA_WARNINGS)
     string(CONCAT CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wfloat-equal -Wundef -Wshadow -Wpointer-arith -Wcast-align "
             "-Wstrict-prototypes -Wswitch-default -Wswitch-enum -Wconversion -Wunreachable-code")
