@@ -5,6 +5,8 @@
 #include <math.h>
 #include <limits.h>
 #include <sys/stat.h>
+#include <ctype.h>
+#include <stdbool.h>
 #include "mrp.h"
 #include "mrp_config.h"
 
@@ -13,6 +15,12 @@ extern POINT idyx[];
 extern POINT tridyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
+
+// Convert the frame number to coordinates in VxU
+void frame2coordinates(int *coordinates, int frame, const int U) {
+    coordinates[0] = frame / U;
+    coordinates[1] = frame % U;
+}
 
 // TODO: fix functions headers
 /*---------------------------- init_encoder ------------------------*
@@ -43,36 +51,36 @@ extern double qtree_prob[];
  |  Returns:  ENCODER* --> returns a encoder type structure
  *-------------------------------------------------------------------*/
 ENCODER *
-init_encoder(LF4D *lf, int num_class, int num_group, int prd_order, const int mi_prd_order[4], int coef_precision,
-             int f_huffman, int quadtree_depth, int num_pmodel, int pm_accuracy, int delta, int depth,
-             char *debug_path) {
+init_encoder(int frame, LF4D *lf, int num_class, int num_group, int prd_order, const int sai_prd_order[4], int coef_precision,
+             int f_huffman, int quadtree_depth, int num_pmodel, int pm_accuracy, int delta, LF4D *save_err, int no_refsai,
+             int *reference_list, int depth, char *debug_path) {
     //Declare new encoder struct
     ENCODER *enc;
-    int i, j, v, u, t, s;
+    int i, j, t, s;
+    int sai_coord[2] = {0, 0};
+    frame2coordinates(sai_coord, frame, lf->u);
     double c;
 
     //Allocation of the memory for the encoder struct
     enc = (ENCODER *) alloc_mem(sizeof(ENCODER));
 
     //Copy of the video/image properties to encoder
-    enc->vu[HEIGHT] = lf->v;
-    enc->vu[WIDTH] = lf->u;
     enc->ts[HEIGHT] = lf->t;
     enc->ts[WIDTH] = lf->s;
     enc->maxval = lf->maxval;
+    enc->no_refsai = no_refsai;
 
     // Copy of the encoding parameters
     enc->num_class = num_class; // M
     enc->num_group = num_group; // 16
 
+    // Copy the values prediction order to the encoder structure
     enc->prd_order = prd_order; // K
-    enc->mi_prd_order[UP] = mi_prd_order[UP];
-    enc->mi_prd_order[LEFT] = mi_prd_order[LEFT];
-    enc->mi_prd_order[LDIAG] = mi_prd_order[LDIAG];
-    enc->mi_prd_order[RDIAG] = mi_prd_order[RDIAG];
-
-    enc->full_prd_order = enc->prd_order + enc->mi_prd_order[UP] + enc->mi_prd_order[LEFT] + enc->mi_prd_order[LDIAG] +
-                          enc->mi_prd_order[RDIAG];
+    enc->full_prd_order = enc->prd_order;
+    for (i = 0; i < SAI_REFERENCES; i++) {
+        enc->sai_prd_order[i] = sai_prd_order[i];
+        enc->full_prd_order += enc->sai_prd_order[i];
+    }
 
     enc->coef_precision = coef_precision; // P
     enc->f_huffman = f_huffman; // h
@@ -107,90 +115,67 @@ init_encoder(LF4D *lf, int num_class, int num_group, int prd_order, const int mi
     }
 
     // More memory allocation
-    enc->upara = (int ****) alloc_4d_array(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(int));
-    enc->prd = (int ****) alloc_4d_array(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(int));
+    enc->upara = (int **) alloc_2d_array(enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(int));
+    enc->prd = (int **) alloc_2d_array(enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(int));
     // Memory allocation for the original image
-    enc->org = (int ****) alloc_4d_array(enc->vu[HEIGHT] + 1, enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(int));
-    // Memory allocation for the error image
-    enc->err = (int ****) alloc_4d_array(enc->vu[HEIGHT] + 1, enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(int));
+    enc->org = (int ***) alloc_3d_array(enc->no_refsai + 1, enc->ts[HEIGHT] + 1, enc->ts[WIDTH], sizeof(int));
+    // Memory allocation for the error structure
+    enc->err = (int ***) alloc_3d_array(enc->no_refsai + 1, enc->ts[HEIGHT] + 1, enc->ts[WIDTH], sizeof(int));
 
     // Quadtree map
     if (enc->quadtree_depth > 0) {
-        v = (enc->vu[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
-        u = (enc->vu[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
         t = (enc->ts[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
         s = (enc->ts[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
 
         for (i = enc->quadtree_depth - 1; i >= 0; i--) {
-            enc->qtmap[i] = (char ****) alloc_4d_array(v, u, t, s, sizeof(char));
+            enc->qtmap[i] = (char **) alloc_2d_array(t, s, sizeof(char));
 
-            v <<= 1;
-            u <<= 1;
             t <<= 1;
             s <<= 1;
         }
     }
 
     //Initiation of the reference offset
-    enc->intra_roff = init_ref_offset(enc->vu, enc->ts, INTRA_PRED, enc->prd_order);
+    enc->intra_roff = init_ref_offset(enc->ts, 0, enc->prd_order);
 
     // Keeps the weights used for the residue encoding context
-    enc->intra_ctx_weight = init_ctx_weight(INTRA_PRED, enc->prd_order, enc->delta);
+    enc->intra_ctx_weight = init_ctx_weight(0, enc->prd_order, enc->delta);
 
-    if (enc->mi_prd_order[UP] > 0) {
-        enc->mi_up_roff = init_ref_offset(enc->vu, enc->ts, MI_UP_PRED, enc->mi_prd_order[UP]);
-        enc->mi_up_ctx_weight = init_ctx_weight(MI_UP_PRED, enc->mi_prd_order[UP], enc->delta);
-
-        enc->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, enc->mi_prd_order[UP], enc->delta);
+    for (i = 0; i < enc->no_refsai; i++) {
+        enc->sai_ref_roff[i] = init_ref_offset(enc->ts, i + 1, enc->sai_prd_order[i]);
+        enc->sai_ref_ctx_weight[i] = init_ctx_weight(i + 1, enc->sai_prd_order[i], enc->delta);
     }
-
-    if (enc->mi_prd_order[LEFT] > 0) {
-        enc->mi_left_roff = init_ref_offset(enc->vu, enc->ts, MI_LEFT_PRED, enc->mi_prd_order[LEFT]);
-        enc->mi_left_ctx_weight = init_ctx_weight(MI_LEFT_PRED, enc->mi_prd_order[LEFT], enc->delta);
-
-        if (enc->mi_prd_order[LEFT] > enc->mi_prd_order[UP]) {
-            enc->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, enc->mi_prd_order[LEFT], enc->delta);
-        }
-    }
-
-    if (enc->mi_prd_order[LDIAG] > 0) {
-        enc->mi_ldiag_roff = init_ref_offset(enc->vu, enc->ts, MI_LDIAG_PRED, enc->mi_prd_order[LDIAG]);
-        enc->mi_ldiag_ctx_weight = init_ctx_weight(MI_LDIAG_PRED, enc->mi_prd_order[LDIAG], enc->delta);
-
-        if (enc->mi_prd_order[LDIAG] > enc->mi_prd_order[UP] && enc->mi_prd_order[LDIAG] > enc->mi_prd_order[LEFT]) {
-            enc->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, enc->mi_prd_order[LDIAG], enc->delta);
-        }
-    }
-
-    if (enc->mi_prd_order[RDIAG] > 0) {
-        enc->mi_rdiag_roff = init_ref_offset(enc->vu, enc->ts, MI_RDIAG_PRED, enc->mi_prd_order[RDIAG]);
-        enc->mi_rdiag_ctx_weight = init_ctx_weight(MI_RDIAG_PRED, enc->mi_prd_order[RDIAG], enc->delta);
-
-        if (enc->mi_prd_order[RDIAG] > enc->mi_prd_order[UP] && enc->mi_prd_order[RDIAG] > enc->mi_prd_order[LEFT] &&
-            enc->mi_prd_order[RDIAG] > enc->mi_prd_order[LDIAG]) {
-            enc->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, enc->mi_prd_order[RDIAG], enc->delta);
-        }
-    }
-
     // Class and group arrays
-    enc->class = (char ****) alloc_4d_array(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
-    enc->group = (char ****) alloc_4d_array(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
+    enc->class = (char **) alloc_2d_array(enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
+    enc->group = (char **) alloc_2d_array(enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
 
     // Copy original images to encoder struct, initialize group array
-    for (v = 0; v < enc->vu[HEIGHT]; v++) {
-        for (u = 0; u < enc->vu[WIDTH]; u++) {
-            for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                for (s = 0; s < enc->ts[WIDTH]; s++) {
-                    enc->group[v][u][t][s] = 0;
-                    enc->org[v][u][t][s] = lf->val[v][u][t][s];
-                }
-            }
+    for (t = 0; t < enc->ts[HEIGHT]; t++) {
+        for (s = 0; s < enc->ts[WIDTH]; s++) {
+            enc->group[t][s] = 0;
+            enc->org[0][t][s] = lf->val[sai_coord[0]][sai_coord[1]][t][s];
         }
     }
 
     // Auxiliary values
-    enc->org[enc->vu[HEIGHT]][0][0][0] = (enc->maxval + 1) >> 1;
-    enc->err[enc->vu[HEIGHT]][0][0][0] = (enc->maxval + 1) >> 2;
+    enc->org[0][enc->ts[HEIGHT]][0] = (enc->maxval + 1) >> 1;
+    enc->err[0][enc->ts[HEIGHT]][0] = (enc->maxval + 1) >> 2;
+
+    // Copy reference images to encoder struct, initialize group array
+    for (i = 0; i < enc->no_refsai; i++) {
+        for (t = 0; t < enc->ts[HEIGHT]; t++) {
+            for (s = 0; s < enc->ts[WIDTH]; s++) {
+                frame2coordinates(sai_coord, reference_list[i], lf->u);
+
+                enc->org[i + 1][t][s] = lf->val[sai_coord[0]][sai_coord[1]][t][s];
+                enc->org[i + 1][t][s] = save_err->val[sai_coord[0]][sai_coord[1]][t][s];
+            }
+        }
+
+        // Auxiliary values
+        enc->org[i][enc->ts[HEIGHT]][0] = (enc->maxval + 1) >> 1;
+        enc->err[i][enc->ts[HEIGHT]][0] = (enc->maxval + 1) >> 2;
+    }
 
     // Table used for the quantization of the context variable
     enc->uquant = (char **) alloc_2d_array(enc->num_class, MAX_UPARA + 1, sizeof(char));
@@ -334,12 +319,11 @@ void free_encoder(ENCODER *enc) {
     free(enc->class_cost);
 
     free(enc->intra_ctx_weight);
-
-    if(enc->mi_prd_order[UP] > 0) free(enc->mi_up_ctx_weight);
-    if(enc->mi_prd_order[LEFT] > 0) free(enc->mi_left_ctx_weight);
-    if(enc->mi_prd_order[LDIAG] > 0) free(enc->mi_ldiag_ctx_weight);
-    if(enc->mi_prd_order[RDIAG] > 0) free(enc->mi_rdiag_ctx_weight);
-    if(enc->mi_prd_order[UP] > 0 || enc->mi_prd_order[LEFT] > 0 || enc->mi_prd_order[LDIAG] > 0 || enc->mi_prd_order[RDIAG] > 0) free(enc->mi_borders_ctx_weight);
+    free_ref_offset(enc->ts, 0, enc->prd_order, enc->intra_roff);
+    for (i = 0; i < enc->no_refsai; i++) {
+        free_ref_offset(enc->ts, i + 1, enc->sai_prd_order[i], enc->sai_ref_roff[i]);
+        free(enc->sai_ref_ctx_weight[i + 1]);
+    }
 
     if (enc->f_huffman == 0) {
         free(enc->rc);
@@ -377,15 +361,7 @@ void free_encoder(ENCODER *enc) {
         free(enc->vlcs);
     }
 
-    free_ref_offset(enc->vu, enc->ts, INTRA_PRED, enc->prd_order, enc->intra_roff);
-
-    if (enc->mi_prd_order[UP] > 0) free_ref_offset(enc->vu, enc->ts, MI_UP_PRED, enc->mi_prd_order[UP], enc->mi_up_roff);
-    if (enc->mi_prd_order[LEFT] > 0) free_ref_offset(enc->vu, enc->ts, MI_LEFT_PRED, enc->mi_prd_order[LEFT], enc->mi_left_roff);
-    if (enc->mi_prd_order[LDIAG] > 0) free_ref_offset(enc->vu, enc->ts, MI_LDIAG_PRED, enc->mi_prd_order[LDIAG], enc->mi_ldiag_roff);
-    if (enc->mi_prd_order[RDIAG] > 0) free_ref_offset(enc->vu, enc->ts, MI_RDIAG_PRED, enc->mi_prd_order[RDIAG], enc->mi_rdiag_roff);
-
     free(enc->debug_path);
-
     free(enc);
 }
 
@@ -400,20 +376,17 @@ void free_encoder(ENCODER *enc) {
  |  Returns:  void
  *-------------------------------------------------------------------*/
 void init_class(ENCODER *enc) {
-    int k, v, u, t, s, g, h, i, j, z, cl, sum, num_block;
+    int k, t, s, i, j, z, cl, sum, num_block;
     int *var, *tmp, **ptr;
 
-    int vu[2], ts[2], bsize_vu[2], bsize_ts[2];
+    int ts[2], bsize_ts[2];
 
     // Calculates the next multiple of BASE_BSIZE to correctly calculate the number of blocks
-    vu[HEIGHT] = (int) ceil((double) enc->vu[HEIGHT] / BASE_BSIZE) * BASE_BSIZE;
-    vu[WIDTH] = (int) ceil((double) enc->vu[WIDTH] / BASE_BSIZE) * BASE_BSIZE;
-
     ts[HEIGHT] = (int) ceil((double) enc->ts[HEIGHT] / BASE_BSIZE) * BASE_BSIZE;
     ts[WIDTH] = (int) ceil((double) enc->ts[WIDTH] / BASE_BSIZE) * BASE_BSIZE;
 
     // Number of blocks in the frame
-    num_block = vu[HEIGHT] * vu[WIDTH] * ts[HEIGHT] * ts[WIDTH] / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE * BASE_BSIZE);
+    num_block = ts[HEIGHT] * ts[WIDTH] / (BASE_BSIZE * BASE_BSIZE);
 
     var = (int *) alloc_mem(num_block * sizeof(int));
     ptr = (int **) alloc_mem(num_block * sizeof(int *));
@@ -421,36 +394,28 @@ void init_class(ENCODER *enc) {
     // Variance calculation for each block
     for (k = 0; k < num_block; k++) {
         // Gives the position of the top right pixel of each block
-        v = (k / ((vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
-        u = ((k % ((vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) / ((ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
-
         t = ((k % ((ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) / (ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
         s = (k % (ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
+
+        printf("k: %d -> %d %d\n", k, t, s);
 
         var[k] = sum = 0;
 
         // Check the correct limits due to the image not being multiple of BASE_BSIZE
-        bsize_vu[HEIGHT] = (v + BASE_BSIZE > enc->vu[HEIGHT]) ? enc->vu[HEIGHT] - v : BASE_BSIZE;
-        bsize_vu[WIDTH] = (u + BASE_BSIZE > enc->vu[WIDTH]) ? enc->vu[WIDTH] - u : BASE_BSIZE;
-
         bsize_ts[HEIGHT] = (t + BASE_BSIZE > enc->ts[HEIGHT]) ? enc->ts[HEIGHT] - t : BASE_BSIZE;
         bsize_ts[WIDTH] = (s + BASE_BSIZE > enc->ts[WIDTH]) ? enc->ts[WIDTH] - s : BASE_BSIZE;
 
         // Run each pixel in a block
-        for (g = 0; g < bsize_vu[HEIGHT]; g++) {
-            for (h = 0; h < bsize_vu[WIDTH]; h++) {
-                for (i = 0; i < bsize_ts[HEIGHT]; i++) {
-                    for (j = 0; j < bsize_ts[WIDTH]; j++) {
-                        z = enc->org[v + g][u + h][t + i][s + j];
-                        sum += z;
-                        var[k] += z * z;
-                    }
-                }
+        for (i = 0; i < bsize_ts[HEIGHT]; i++) {
+            for (j = 0; j < bsize_ts[WIDTH]; j++) {
+                z = enc->org[0][t + i][s + j];
+                sum += z;
+                var[k] += z * z;
             }
         }
 
         // Final result of the variance for one block
-        var[k] -= sum * sum / (bsize_vu[HEIGHT] * bsize_vu[WIDTH] * bsize_vu[HEIGHT] * bsize_ts[WIDTH]);
+        var[k] -= sum * sum / (bsize_ts[HEIGHT] * bsize_ts[WIDTH]);
         ptr[k] = &(var[k]);
     }
 
@@ -472,27 +437,17 @@ void init_class(ENCODER *enc) {
         z = (int) (ptr[k] - var);
 
         // Gives the position of the top right pixel of each of the sorted blocks
-        v = (z / ((vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
-        u = ((z % ((vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE))) / ((ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) * BASE_BSIZE;
-
         t = ((z % ((ts[HEIGHT] * ts[WIDTH]) / (BASE_BSIZE * BASE_BSIZE))) / (ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
         s = (z % (ts[WIDTH] / BASE_BSIZE)) * BASE_BSIZE;
 
         // Check the correct limits due to the image not being multiple of BASE_BSIZE
-        bsize_vu[HEIGHT] = (v + BASE_BSIZE > enc->vu[HEIGHT]) ? enc->vu[HEIGHT] - v : BASE_BSIZE;
-        bsize_vu[WIDTH] = (u + BASE_BSIZE > enc->vu[WIDTH]) ? enc->vu[WIDTH] - u : BASE_BSIZE;
-
         bsize_ts[HEIGHT] = (t + BASE_BSIZE > enc->ts[HEIGHT]) ? enc->ts[HEIGHT] - t : BASE_BSIZE;
         bsize_ts[WIDTH] = (s + BASE_BSIZE > enc->ts[WIDTH]) ? enc->ts[WIDTH] - s : BASE_BSIZE;
 
         // Sets the class number for each pixel
-        for (g = 0; g < bsize_vu[HEIGHT]; g++) {
-            for (h = 0; h < bsize_vu[WIDTH]; h++) {
-                for (i = 0; i < bsize_ts[HEIGHT]; i++) {
-                    for (j = 0; j < bsize_ts[WIDTH]; j++) {
-                        enc->class[v + g][u + h][t + i][s + j] = (char) cl;
-                    }
-                }
+        for (i = 0; i < bsize_ts[HEIGHT]; i++) {
+            for (j = 0; j < bsize_ts[WIDTH]; j++) {
+                enc->class[t + i][s + j] = (char) cl;
             }
         }
     }
@@ -538,7 +493,7 @@ void set_cost_model(ENCODER *enc, int f_mmse) {
         }
     }
 
-    enc->encval = enc->err;
+    enc->encval = enc->err[0];
 
     for (gr = 0; gr < enc->num_group; gr++) {
         var = enc->sigma[gr] * enc->sigma[gr];
@@ -599,7 +554,7 @@ void set_cost_rate(ENCODER *enc) {
         num_spm = 1;
     }
     else {
-        enc->encval = enc->org;
+        enc->encval = enc->org[0];
         mask = (1 << enc->pm_accuracy) - 1;
         shift = enc->coef_precision - enc->pm_accuracy;
 
@@ -669,86 +624,71 @@ void set_cost_rate(ENCODER *enc) {
  |
  |  Returns:  void
  *-------------------------------------------------------------------*/
-void predict_region(ENCODER *enc, int tlv, int tlu, int tlt, int tls, int brv, int bru, int brt, int brs) {
-    int v, u, t, s, k, cl, prd, org;
+void predict_region(ENCODER *enc, int tlt, int tls, int brt, int brs) {
+    int t, s, k, r, cl, prd, org;
     int *coef_p;
     int *prd_p;
 
     int *intra_roff_p = NULL, **intra_roff_pp = NULL;
+    int *sai_roff_p[SAI_REFERENCES], **sai_roff_pp[SAI_REFERENCES];
 
-    int *mi_up_roff_p = NULL, **mi_up_roff_pp = NULL;
-    int *mi_left_roff_p = NULL, **mi_left_roff_pp = NULL;
-    int *mi_ldiag_roff_p = NULL, **mi_ldiag_roff_pp = NULL;
-    int *mi_rdiag_roff_p = NULL, **mi_rdiag_roff_pp = NULL;
+    for (int r = 0; r < enc->no_refsai; r++) {
+        sai_roff_p[r] = NULL;
+        sai_roff_pp[r] = NULL;
+    }
 
     int *err_p, *org_p;
     char *class_p;
 
     //Runs all the pixels in a frame (due to the used boundaries)
-    for (v = tlv; v < brv; v++) {
-        for (u = tlu; u < bru; u++) {
-            for (t = tlt; t < brt; t++) {
-                class_p = &enc->class[v][u][t][tls];
-                org_p = &enc->org[v][u][t][tls];
-                err_p = &enc->err[v][u][t][tls];
-                prd_p = &enc->prd[v][u][t][tls];
+    for (t = tlt; t < brt; t++) {
+        class_p = &enc->class[t][tls];
+        org_p = &enc->org[0][t][tls];
+        err_p = &enc->err[0][t][tls];
+        prd_p = &enc->prd[t][tls];
 
-                intra_roff_pp = &enc->intra_roff[v][u][t][tls];
+        intra_roff_pp = &enc->intra_roff[t][tls];
 
-                if (enc->mi_prd_order[UP] > 0) mi_up_roff_pp = &enc->mi_up_roff[v][u][t][tls];
-                if (enc->mi_prd_order[LEFT] > 0) mi_left_roff_pp = &enc->mi_left_roff[v][u][t][tls];
-                if (enc->mi_prd_order[LDIAG] > 0) mi_ldiag_roff_pp = &enc->mi_ldiag_roff[v][u][t][tls];
-                if (enc->mi_prd_order[RDIAG] > 0) mi_rdiag_roff_pp = &enc->mi_rdiag_roff[v][u][t][tls];
+        for (r = 0; r < enc->no_refsai; r++) {
+            sai_roff_pp[r] = &enc->sai_ref_roff[r][t][tls];
+        }
 
-                for (s = tls; s < brs; s++) {
-                    cl = *class_p++;
-                    coef_p = enc->predictor[cl];
+        for (s = tls; s < brs; s++) {
+            cl = *class_p++;
+            coef_p = enc->predictor[cl];
 
-                    intra_roff_p = *intra_roff_pp++;
+            intra_roff_p = *intra_roff_pp++;
 
-                    if (enc->mi_prd_order[UP] > 0) mi_up_roff_p = *mi_up_roff_pp++;
-                    if (enc->mi_prd_order[LEFT] > 0) mi_left_roff_p = *mi_left_roff_pp++;
-                    if (enc->mi_prd_order[LDIAG] > 0) mi_ldiag_roff_p = *mi_ldiag_roff_pp++;
-                    if (enc->mi_prd_order[RDIAG] > 0) mi_rdiag_roff_p = *mi_rdiag_roff_pp++;
+            for (r = 0; r < enc->no_refsai; r++) {
+                sai_roff_p[r] = *sai_roff_pp[r]++;
+            }
 
-                    prd = 0;
+            prd = 0;
 
-                    for (k = 0; k < enc->prd_order; k++) {
-                        prd += org_p[*intra_roff_p++] * (*coef_p++);
-                    }
+            for (k = 0; k < enc->prd_order; k++) {
+                prd += org_p[*intra_roff_p++] * (*coef_p++);
+            }
 
-                    for (k = 0; k < enc->mi_prd_order[UP]; k++) {
-                        prd += org_p[*mi_up_roff_p++] * (*coef_p++);
-                    }
-
-                    for (k = 0; k < enc->mi_prd_order[LEFT]; k++) {
-                        prd += org_p[*mi_left_roff_p++] * (*coef_p++);
-                    }
-
-                    for (k = 0; k < enc->mi_prd_order[LDIAG]; k++) {
-                        prd += org_p[*mi_ldiag_roff_p++] * (*coef_p++);
-                    }
-
-                    for (k = 0; k < enc->mi_prd_order[RDIAG]; k++) {
-                        prd += org_p[*mi_rdiag_roff_p++] * (*coef_p++);
-                    }
-
-                    org = *org_p++;
-                    *prd_p++ = prd;
-
-                    //Boundaries of the predicted values
-                    if (prd < 0) prd = 0;
-                    else if (prd > enc->maxprd) prd = enc->maxprd;
-
-                    prd >>= (enc->coef_precision - 1);
-
-                    if (enc->depth <= 8) {
-                        *err_p++ = enc->econv[org][prd];
-                    }
-                    else {
-                        *err_p++ = error_conversion(org, prd, enc->maxval, enc->etype);
-                    }
+            for (r = 0; r < enc->no_refsai; r++) {
+                for (k = 0; k < enc->sai_prd_order[r]; k++) {
+                    prd += org_p[*sai_roff_p[r]++] * (*coef_p++);
                 }
+            }
+
+            org = *org_p++;
+            *prd_p++ = prd;
+
+            //Boundaries of the predicted values
+            if (prd < 0) prd = 0;
+            else if (prd > enc->maxprd) prd = enc->maxprd;
+
+            prd >>= (enc->coef_precision - 1);
+
+            if (enc->depth <= 8) {
+                *err_p++ = enc->econv[org][prd];
+            }
+            else {
+                *err_p++ = error_conversion(org, prd, enc->maxval, enc->etype);
             }
         }
     }
@@ -769,40 +709,23 @@ void predict_region(ENCODER *enc, int tlv, int tlu, int tlt, int tls, int brv, i
  |
  |  Returns:  int		--> Returns the context value
  *-------------------------------------------------------------------*/
-int calc_uenc(ENCODER *enc, int v, int u, int t, int s) {
-    int uenc, k, *err_p;
+int calc_uenc(ENCODER *enc, int t, int s) {
+    int uenc, k, r, *err_p;
     int *intra_wt_p;
-    int *mi_up_wt_p = NULL, *mi_left_wt_p = NULL, *mi_ldiag_wt_p = NULL, *mi_rdiag_wt_p = NULL;
+    int *sai_wt_p[SAI_REFERENCES];
     int *intra_roff_p = NULL;
-    int *mi_up_roff_p = NULL, *mi_left_roff_p = NULL, *mi_ldiag_roff_p = NULL, *mi_rdiag_roff_p = NULL;
+    int *sai_roff_p[SAI_REFERENCES];
 
-    intra_roff_p = enc->intra_roff[v][u][t][s];
+    intra_roff_p = enc->intra_roff[t][s];
     intra_wt_p = enc->intra_ctx_weight;
 
-    if (enc->mi_prd_order[UP] > 0) {
-        mi_up_roff_p = enc->mi_up_roff[v][u][t][s];
+    for (r = 0; r < enc->no_refsai; r++) {
+        sai_roff_p[r] = enc->sai_ref_roff[r][t][s];
 
-        mi_up_wt_p = (v < 1) ? enc->mi_borders_ctx_weight : enc->mi_up_ctx_weight;
+        sai_wt_p[r] = enc->sai_ref_ctx_weight[r];
     }
 
-    if (enc->mi_prd_order[LEFT] > 0) {
-        mi_left_roff_p = enc->mi_left_roff[v][u][t][s];
-
-        mi_left_wt_p = (u < 1) ? enc->mi_borders_ctx_weight : enc->mi_left_ctx_weight;
-    }
-
-    if (enc->mi_prd_order[LDIAG] > 0) {
-        mi_ldiag_roff_p = enc->mi_ldiag_roff[v][u][t][s];
-
-        mi_ldiag_wt_p = (v < 1 || u < 1) ? enc->mi_borders_ctx_weight : enc->mi_ldiag_ctx_weight;
-    }
-
-    if (enc->mi_prd_order[RDIAG] > 0) {
-        mi_rdiag_roff_p = enc->mi_rdiag_roff[v][u][t][s];
-        mi_rdiag_wt_p = (v < 1 || u > enc->vu[WIDTH] - 1) ? enc->mi_borders_ctx_weight : enc->mi_rdiag_ctx_weight;
-    }
-
-    err_p = &enc->err[v][u][t][s];
+    err_p = &enc->err[0][t][s];
 
     uenc = 0;
 
@@ -810,20 +733,10 @@ int calc_uenc(ENCODER *enc, int v, int u, int t, int s) {
         uenc += err_p[*intra_roff_p++] * (*intra_wt_p++);
     }
 
-    for (k = 0; k < enc->mi_prd_order[UP]; k++) {
-        uenc += err_p[*mi_up_roff_p++] * (*mi_up_wt_p++);
-    }
-
-    for (k = 0; k < enc->mi_prd_order[LEFT]; k++) {
-        uenc += err_p[*mi_left_roff_p++] * (*mi_left_wt_p++);
-    }
-
-    for (k = 0; k < enc->mi_prd_order[LDIAG]; k++) {
-        uenc += err_p[*mi_ldiag_roff_p++] * (*mi_ldiag_wt_p++);
-    }
-
-    for (k = 0; k < enc->mi_prd_order[RDIAG]; k++) {
-        uenc += err_p[*mi_rdiag_roff_p++] * (*mi_rdiag_wt_p++);
+    for (r = 0; r < enc->no_refsai; r++) {
+        for (k = 0; k < enc->sai_prd_order[r]; k++) {
+            uenc += err_p[*sai_roff_p[r]++] * (*sai_wt_p[r]++);
+        }
     }
 
     uenc >>= 6;
@@ -841,58 +754,48 @@ int calc_uenc(ENCODER *enc, int v, int u, int t, int s) {
  |
  |  Parameters:
  |		enc				--> Encoder structure (IN / OUT)
- |		tlv				--> Top left V boundary (IN)
- |		tlu				--> Top left U boundary (IN)
  |		tlt				--> Top left T boundary (IN)
  |		tls				--> Top left S boundary (IN)
- |		brv				--> Bottom right V boundary (IN)
- |		bru				--> Bottom right U boundary (IN)
  |		brt				--> Bottom right T boundary (IN)
  |		brs				--> Bottom right S boundary (IN)
  |
  |  Returns:  cost_t	--> Returns the cost
  *-------------------------------------------------------------------*/
-cost_t calc_cost(ENCODER *enc, int tlv, int tlu, int tlt, int tls, int brv, int bru, int brt, int brs) {
+cost_t calc_cost(ENCODER *enc, int tlt, int tls, int brt, int brs) {
     cost_t cost;
-    int v, u, t, s, uenc, cl, gr, prd, e, base, frac;
+    int t, s, uenc, cl, gr, prd, e, base, frac;
     int *upara_p, *prd_p, *encval_p;
     char *class_p, *group_p;
     PMODEL *pm;
 
-    if (brv > enc->vu[HEIGHT]) brv = enc->vu[HEIGHT];
-    if (bru > enc->vu[WIDTH]) bru = enc->vu[WIDTH];
     if (brt > enc->ts[HEIGHT]) brt = enc->ts[HEIGHT];
     if (tls < 0) tls = 0;
     if (brs > enc->ts[WIDTH]) brs = enc->ts[WIDTH];
 
     cost = 0;
 
-    for (v = tlv; v < brv; v++) {
-        for (u = tlu; u < bru; u++) {
-            for (t = tlt; t < brt; t++) {
-                class_p = &enc->class[v][u][t][tls];
-                group_p = &enc->group[v][u][t][tls];
-                upara_p = &enc->upara[v][u][t][tls];
-                encval_p = &enc->encval[v][u][t][tls];
-                prd_p = &enc->prd[v][u][t][tls];
+    for (t = tlt; t < brt; t++) {
+        class_p = &enc->class[t][tls];
+        group_p = &enc->group[t][tls];
+        upara_p = &enc->upara[t][tls];
+        encval_p = &enc->encval[t][tls];
+        prd_p = &enc->prd[t][tls];
 
-                for (s = tls; s < brs; s++) {
-                    cl = *class_p++;
-                    *upara_p++ = uenc = calc_uenc(enc, v, u, t, s);
-                    gr = enc->uquant[cl][uenc];
-                    *group_p++ = (char) gr;
-                    e = *encval_p++;
-                    prd = *prd_p++;
+        for (s = tls; s < brs; s++) {
+            cl = *class_p++;
+            *upara_p++ = uenc = calc_uenc(enc, t, s);
+            gr = enc->uquant[cl][uenc];
+            *group_p++ = (char) gr;
+            e = *encval_p++;
+            prd = *prd_p++;
 
-                    if (prd < 0) prd = 0;
-                    else if (prd > enc->maxprd) prd = enc->maxprd;
+            if (prd < 0) prd = 0;
+            else if (prd > enc->maxprd) prd = enc->maxprd;
 
-                    base = enc->bconv[prd];
-                    frac = enc->fconv[prd];
-                    pm = enc->pmlist[gr] + frac;
-                    cost += pm->cost[base + e] + pm->subcost[base];
-                }
-            }
+            base = enc->bconv[prd];
+            frac = enc->fconv[prd];
+            pm = enc->pmlist[gr] + frac;
+            cost += pm->cost[base + e] + pm->subcost[base];
         }
     }
 
@@ -912,7 +815,7 @@ cost_t calc_cost(ENCODER *enc, int tlv, int tlu, int tlt, int tls, int brv, int 
  *-------------------------------------------------------------------*/
 cost_t design_predictor(ENCODER *enc, int f_mmse) {
     double **mat, *weight, w, e, d, pivot;
-    int v, u, t, s, i, j, k, cl, gr, pivpos, *index, *org_p;
+    int t, s, i, j, k, r, cl, gr, pivpos, *index, *org_p;
     int *roff_p = NULL;
 
     mat = (double **) alloc_2d_array(enc->full_prd_order, enc->full_prd_order + 1, sizeof(double));
@@ -939,57 +842,41 @@ cost_t design_predictor(ENCODER *enc, int f_mmse) {
         }
 
         // Run each pixel
-        for (v = 0; v < enc->vu[HEIGHT]; v++) {
-            for (u = 0; u < enc->vu[WIDTH]; u++) {
-                for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                    for (s = 0; s < enc->ts[WIDTH]; s++) {
-                        if (enc->class[v][u][t][s] != cl) { //Check if the pixel is member of the current class
-                            s += BASE_BSIZE - 1;
-                            continue;
-                        }
+        for (t = 0; t < enc->ts[HEIGHT]; t++) {
+            for (s = 0; s < enc->ts[WIDTH]; s++) {
+                if (enc->class[t][s] != cl) { //Check if the pixel is member of the current class
+                    s += BASE_BSIZE - 1;
+                    continue;
+                }
 
-                        gr = enc->group[v][u][t][s];
-                        org_p = &enc->org[v][u][t][s];
+                gr = enc->group[t][s];
+                org_p = &enc->org[0][t][s];
 
-                        roff_p = (int *) alloc_mem(sizeof(int) * enc->full_prd_order);
+                roff_p = (int *) alloc_mem(sizeof(int) * enc->full_prd_order);
 
-                        for (i = 0; i < enc->prd_order; i++) {
-                            roff_p[i] = enc->intra_roff[v][u][t][s][i];
-                        }
+                for (i = 0; i < enc->prd_order; i++) {
+                    roff_p[i] = enc->intra_roff[t][s][i];
+                }
 
-                        for (i = 0; i < enc->mi_prd_order[UP]; i++) {
-                            roff_p[i + enc->prd_order] = enc->mi_up_roff[v][u][t][s][i];
-                        }
-
-                        for (i = 0; i < enc->mi_prd_order[LEFT]; i++) {
-                            roff_p[i + enc->prd_order + enc->mi_prd_order[UP]] = enc->mi_left_roff[v][u][t][s][i];
-                        }
-
-                        for (i = 0; i < enc->mi_prd_order[LDIAG]; i++) {
-                            roff_p[i + enc->prd_order + enc->mi_prd_order[UP] +
-                                   enc->mi_prd_order[LEFT]] = enc->mi_ldiag_roff[v][u][t][s][i];
-                        }
-
-                        for (i = 0; i < enc->mi_prd_order[RDIAG]; i++) {
-                            roff_p[i + enc->prd_order + enc->mi_prd_order[UP] + enc->mi_prd_order[LEFT] +
-                                   enc->mi_prd_order[LDIAG]] = enc->mi_rdiag_roff[v][u][t][s][i];
-                        }
-
-                        // Fills the matrix mat with the reference pixels values
-                        for (i = 0; i < enc->full_prd_order; i++) {
-                            w = weight[gr] * org_p[roff_p[i]];
-
-                            for (j = i; j < enc->full_prd_order; j++) {
-                                mat[i][j] += w * org_p[roff_p[j]];
-                            }
-
-                            // Results column with the value of the pixel to be predicted
-                            mat[i][enc->full_prd_order] += w * org_p[0];
-                        }
-
-                        free(roff_p);
+                for (r = 0; r < enc->no_refsai; r++) {
+                    for (i = 0; i < enc->sai_prd_order[r]; i++) {
+                        roff_p[i + enc->prd_order] = enc->sai_ref_roff[r][t][s][i];
                     }
                 }
+
+                // Fills the matrix mat with the reference pixels values
+                for (i = 0; i < enc->full_prd_order; i++) {
+                    w = weight[gr] * org_p[roff_p[i]];
+
+                    for (j = i; j < enc->full_prd_order; j++) {
+                        mat[i][j] += w * org_p[roff_p[j]];
+                    }
+
+                    // Results column with the value of the pixel to be predicted
+                    mat[i][enc->full_prd_order] += w * org_p[0];
+                }
+
+                free(roff_p);
             }
         }
 
@@ -1089,9 +976,9 @@ cost_t design_predictor(ENCODER *enc, int f_mmse) {
     free(index);
     free(mat);
 
-    predict_region(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]);
+    predict_region(enc, 0, 0, enc->ts[HEIGHT], enc->ts[WIDTH]);
 
-    return (calc_cost(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]));
+    return (calc_cost(enc, 0, 0, enc->ts[HEIGHT], enc->ts[WIDTH]));
 }
 
 /*--------------------------- optimize_group ------------------------*
@@ -1107,7 +994,7 @@ cost_t design_predictor(ENCODER *enc, int f_mmse) {
  *-------------------------------------------------------------------*/
 cost_t optimize_group(ENCODER *enc) {
     cost_t cost, min_cost, **cbuf, *dpcost, *cbuf_p, *thc_p;
-    int v, u, t, s, th1, th0, k, upara, cl, gr, prd, e, base, frac;
+    int t, s, th1, th0, k, upara, cl, gr, prd, e, base, frac;
     int **trellis, *tre_p;
     PMODEL *pm, **pm_p;
 
@@ -1127,27 +1014,23 @@ cost_t optimize_group(ENCODER *enc) {
             }
         }
 
-        for (v = 0; v < enc->vu[HEIGHT]; v++) {
-            for (u = 0; u < enc->vu[WIDTH]; u++) {
-                for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                    for (s = 0; s < enc->ts[WIDTH]; s++) {
-                        if (enc->class[v][u][t][s] == cl) {
-                            upara = enc->upara[v][u][t][s] + 1;
-                            e = enc->encval[v][u][t][s];
-                            prd = enc->prd[v][u][t][s];
+        for (t = 0; t < enc->ts[HEIGHT]; t++) {
+            for (s = 0; s < enc->ts[WIDTH]; s++) {
+                if (enc->class[t][s] == cl) {
+                    upara = enc->upara[t][s] + 1;
+                    e = enc->encval[t][s];
+                    prd = enc->prd[t][s];
 
-                            if (prd < 0) prd = 0;
-                            else if (prd > enc->maxprd) prd = enc->maxprd;
+                    if (prd < 0) prd = 0;
+                    else if (prd > enc->maxprd) prd = enc->maxprd;
 
-                            base = enc->bconv[prd];
-                            frac = enc->fconv[prd];
-                            pm_p = enc->pmlist;
+                    base = enc->bconv[prd];
+                    frac = enc->fconv[prd];
+                    pm_p = enc->pmlist;
 
-                            for (gr = 0; gr < enc->num_group; gr++) {
-                                pm = (*pm_p++) + frac;
-                                cbuf[gr][upara] += pm->cost[base + e] + pm->subcost[base];
-                            }
-                        }
+                    for (gr = 0; gr < enc->num_group; gr++) {
+                        pm = (*pm_p++) + frac;
+                        cbuf[gr][upara] += pm->cost[base + e] + pm->subcost[base];
                     }
                 }
             }
@@ -1214,24 +1097,20 @@ cost_t optimize_group(ENCODER *enc) {
     cost = 0;
     pm_p = enc->pmlist;
 
-    for (v = 0; v < enc->vu[HEIGHT]; v++) {
-        for (u = 0; u < enc->vu[WIDTH]; u++) {
-            for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                for (s = 0; s < enc->ts[WIDTH]; s++) {
-                    cl = enc->class[v][u][t][s];
-                    upara = enc->upara[v][u][t][s];
-                    gr = enc->group[v][u][t][s] = enc->uquant[cl][upara];
-                    e = enc->encval[v][u][t][s];
-                    prd = enc->prd[v][u][t][s];
+    for (t = 0; t < enc->ts[HEIGHT]; t++) {
+        for (s = 0; s < enc->ts[WIDTH]; s++) {
+            cl = enc->class[t][s];
+            upara = enc->upara[t][s];
+            gr = enc->group[t][s] = enc->uquant[cl][upara];
+            e = enc->encval[t][s];
+            prd = enc->prd[t][s];
 
-                    if (prd < 0) prd = 0;
-                    else if (prd > enc->maxprd) prd = enc->maxprd;
+            if (prd < 0) prd = 0;
+            else if (prd > enc->maxprd) prd = enc->maxprd;
 
-                    base = enc->bconv[prd];
-                    pm = pm_p[gr] + enc->fconv[prd];
-                    cost += pm->cost[base + e] + pm->subcost[base];
-                }
-            }
+            base = enc->bconv[prd];
+            pm = pm_p[gr] + enc->fconv[prd];
+            cost += pm->cost[base + e] + pm->subcost[base];
         }
     }
 
@@ -1248,25 +1127,21 @@ cost_t optimize_group(ENCODER *enc) {
             }
         }
 
-        for (v = 0; v < enc->vu[HEIGHT]; v++) {
-            for (u = 0; u < enc->vu[WIDTH]; u++) {
-                for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                    for (s = 0; s < enc->ts[WIDTH]; s++) {
-                        gr = enc->group[v][u][t][s];
-                        e = enc->encval[v][u][t][s];
-                        prd = enc->prd[v][u][t][s];
+        for (t = 0; t < enc->ts[HEIGHT]; t++) {
+            for (s = 0; s < enc->ts[WIDTH]; s++) {
+                gr = enc->group[t][s];
+                e = enc->encval[t][s];
+                prd = enc->prd[t][s];
 
-                        if (prd < 0) prd = 0;
-                        else if (prd > enc->maxprd) prd = enc->maxprd;
+                if (prd < 0) prd = 0;
+                else if (prd > enc->maxprd) prd = enc->maxprd;
 
-                        base = enc->bconv[prd];
-                        frac = enc->fconv[prd];
+                base = enc->bconv[prd];
+                frac = enc->fconv[prd];
 
-                        for (k = 0; k < enc->num_pmodel; k++) {
-                            pm = enc->pmodels[gr][k] + frac;
-                            cbuf[gr][k] += pm->cost[base + e] + pm->subcost[base];
-                        }
-                    }
+                for (k = 0; k < enc->num_pmodel; k++) {
+                    pm = enc->pmodels[gr][k] + frac;
+                    cbuf[gr][k] += pm->cost[base + e] + pm->subcost[base];
                 }
             }
         }
@@ -1309,93 +1184,73 @@ cost_t optimize_group(ENCODER *enc) {
  |      enc		 		--> Encoder struct (IN)
  |		prdbuf			--> Struct to store the prediction value (IN/OUT)
  |		errbuf          --> Struct to store the residue value (IN/OUT)
- |		tlv				--> Top left corner v position of the current block (IN)
- |		tlu             --> Top left corner u position of the current block (IN)
  |		tlt				--> Top left corner t position of the current block (IN)
  |		tls             --> Top left corner s position of the current block (IN)
  |		bufsize			--> Size of the block (IN)
  |
  |  Returns:  ENCODER* --> returns a encoder type structure
  *-------------------------------------------------------------------*/
-void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int tlt, int tls, int bufsize) {
-    int v, u, t, s, brv, bru, brt, brs, cl, k, prd, *prdbuf_p, *errbuf_p, *coef_p;
+void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tlt, int tls, int bufsize) {
+    int t, s, brt, brs, cl, k, r, prd, *prdbuf_p, *errbuf_p, *coef_p;
     int buf_ptr, org, *org_p;
     int *intra_roff_p = NULL;
-    int *mi_up_roff_p = NULL, *mi_left_roff_p = NULL, *mi_ldiag_roff_p = NULL, *mi_rdiag_roff_p = NULL;
+    int *sai_roff_p[SAI_REFERENCES];
 
     //Check the boundaries of the block (mainly for pictures not multiple of bufsize)
-    brv = (tlv + bufsize < enc->vu[HEIGHT]) ? (tlv + bufsize) : enc->vu[HEIGHT];
-    bru = (tlu + bufsize < enc->vu[WIDTH]) ? (tlu + bufsize) : enc->vu[WIDTH];
     brt = (tlt + bufsize < enc->ts[HEIGHT]) ? (tlt + bufsize) : enc->ts[HEIGHT];
     brs = (tls + bufsize < enc->ts[WIDTH]) ? (tls + bufsize) : enc->ts[WIDTH];
 
     // Run all classes
     for (cl = 0; cl < enc->num_class; cl++) {
         //Run all pixels in the given block
-        for (v = tlv; v < brv; v++) {
-            for (u = tlu; u < bru; u++) {
-                buf_ptr = bufsize * bufsize * bufsize * (v % bufsize) + bufsize * bufsize * (u % bufsize) +
-                          bufsize * (tlt % bufsize) + tls % bufsize;
+        buf_ptr = bufsize * (tlt % bufsize) + tls % bufsize;
 
-                for (t = tlt; t < brt; t++) {
-                    prdbuf_p = &prdbuf[cl][buf_ptr];
-                    errbuf_p = &errbuf[cl][buf_ptr];
-                    buf_ptr += bufsize;
-                    org_p = &enc->org[v][u][t][tls];
+        for (t = tlt; t < brt; t++) {
+            prdbuf_p = &prdbuf[cl][buf_ptr];
+            errbuf_p = &errbuf[cl][buf_ptr];
+            buf_ptr += bufsize;
+            org_p = &enc->org[0][t][tls];
 
-                    for (s = tls; s < brs; s++) {
-                        //If the pixel is of the current class just copy
-                        if (cl == enc->class[v][u][t][s]) {
-                            *prdbuf_p++ = enc->prd[v][u][t][s];
-                            *errbuf_p++ = enc->err[v][u][t][s];
-                            org_p++;
+            for (s = tls; s < brs; s++) {
+                //If the pixel is of the current class just copy
+                if (cl == enc->class[t][s]) {
+                    *prdbuf_p++ = enc->prd[t][s];
+                    *errbuf_p++ = enc->err[0][t][s];
+                    org_p++;
+                }
+                else { //If not do the calculations
+                    intra_roff_p = enc->intra_roff[t][s];
+
+                    for (r = 0; r < enc->no_refsai; r++) {
+                        sai_roff_p[r] = enc->sai_ref_roff[r][t][s];
+                    }
+
+                    coef_p = enc->predictor[cl];
+                    prd = 0;
+
+                    for (k = 0; k < enc->prd_order; k++) {
+                        prd += org_p[*intra_roff_p++] * (*coef_p++);
+                    }
+
+                    for (r = 0; r < enc->no_refsai; r++) {
+                        for (k = 0; k < enc->sai_prd_order[r]; k++) {
+                            prd += org_p[*sai_roff_p[r]++] * (*coef_p++);
                         }
-                        else { //If not do the calculations
-                            intra_roff_p = enc->intra_roff[v][u][t][s];
+                    }
 
-                            if (enc->mi_prd_order[UP] > 0) mi_up_roff_p = enc->mi_up_roff[v][u][t][s];
-                            if (enc->mi_prd_order[LEFT] > 0) mi_left_roff_p = enc->mi_left_roff[v][u][t][s];
-                            if (enc->mi_prd_order[LDIAG] > 0) mi_ldiag_roff_p = enc->mi_ldiag_roff[v][u][t][s];
-                            if (enc->mi_prd_order[RDIAG] > 0) mi_rdiag_roff_p = enc->mi_rdiag_roff[v][u][t][s];
+                    org = *org_p++;
+                    *prdbuf_p++ = prd;
 
-                            coef_p = enc->predictor[cl];
-                            prd = 0;
+                    if (prd < 0) prd = 0;
+                    else if (prd > enc->maxprd) prd = enc->maxprd;
 
-                            for (k = 0; k < enc->prd_order; k++) {
-                                prd += org_p[*intra_roff_p++] * (*coef_p++);
-                            }
+                    prd >>= (enc->coef_precision - 1);
 
-                            for (k = 0; k < enc->mi_prd_order[UP]; k++) {
-                                prd += org_p[*mi_up_roff_p++] * (*coef_p++);
-                            }
-
-                            for (k = 0; k < enc->mi_prd_order[LEFT]; k++) {
-                                prd += org_p[*mi_left_roff_p++] * (*coef_p++);
-                            }
-
-                            for (k = 0; k < enc->mi_prd_order[LDIAG]; k++) {
-                                prd += org_p[*mi_ldiag_roff_p++] * (*coef_p++);
-                            }
-
-                            for (k = 0; k < enc->mi_prd_order[RDIAG]; k++) {
-                                prd += org_p[*mi_rdiag_roff_p++] * (*coef_p++);
-                            }
-
-                            org = *org_p++;
-                            *prdbuf_p++ = prd;
-
-                            if (prd < 0) prd = 0;
-                            else if (prd > enc->maxprd) prd = enc->maxprd;
-
-                            prd >>= (enc->coef_precision - 1);
-
-                            if (enc->depth <= 8) {
-                                *errbuf_p++ = enc->econv[org][prd];
-                            }
-                            else {
-                                *errbuf_p++ = error_conversion(org, prd, enc->maxval, enc->etype);
-                            }
-                        }
+                    if (enc->depth <= 8) {
+                        *errbuf_p++ = enc->econv[org][prd];
+                    }
+                    else {
+                        *errbuf_p++ = error_conversion(org, prd, enc->maxval, enc->etype);
                     }
                 }
             }
@@ -1421,10 +1276,9 @@ void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int 
  |
  |  Returns:  int 		--> Returns the best class
  *-------------------------------------------------------------------*/
-int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int tlt, int tls, int brv, int bru, int brt,
-               int brs, int bufsize) {
+int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlt, int tls, int brt, int brs, int bufsize) {
     cost_t cost, min_cost;
-    int v, u, t, s, bufptr, cl, min_cl;
+    int t, s, bufptr, cl, min_cl;
     char *class_p;
     int *prd_p, *prdbuf_p, *err_p, *errbuf_p;
 
@@ -1434,29 +1288,24 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int t
     for (cl = 0; cl < enc->num_class; cl++) {
         cost = enc->class_cost[enc->mtfbuf[cl]];
 
-        for (v = tlv; v < brv; v++) {
-            for (u = tlu; u < bru; u++) {
-                bufptr = bufsize * bufsize * bufsize * (v % bufsize) + bufsize * bufsize * (u % bufsize) +
-                         bufsize * (tlt % bufsize) + tls % bufsize;
+        bufptr =bufsize * (tlt % bufsize) + tls % bufsize;
 
-                for (t = tlt; t < brt; t++) {
-                    class_p = &enc->class[v][u][t][tls];
-                    prd_p = &enc->prd[v][u][t][tls];
-                    prdbuf_p = &prdbuf[cl][bufptr];
-                    err_p = &enc->err[v][u][t][tls];
-                    errbuf_p = &errbuf[cl][bufptr];
-                    bufptr += bufsize;
+        for (t = tlt; t < brt; t++) {
+            class_p = &enc->class[t][tls];
+            prd_p = &enc->prd[t][tls];
+            prdbuf_p = &prdbuf[cl][bufptr];
+            err_p = &enc->err[0][t][tls];
+            errbuf_p = &errbuf[cl][bufptr];
+            bufptr += bufsize;
 
-                    for (s = tls; s < brs; s++) {
-                        *class_p++ = (char) cl;
-                        *prd_p++ = *prdbuf_p++;
-                        *err_p++ = *errbuf_p++;
-                    }
-                }
+            for (s = tls; s < brs; s++) {
+                *class_p++ = (char) cl;
+                *prd_p++ = *prdbuf_p++;
+                *err_p++ = *errbuf_p++;
             }
         }
 
-        cost += calc_cost(enc, tlv, tlu, tlt, tls, brv, bru, brt, brs);
+        cost += calc_cost(enc, tlt, tls, brt, brs);
 
         if (cost < min_cost) {
             min_cost = cost;
@@ -1464,25 +1313,20 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int t
         }
     }
 
-    for (v = tlv; v < brv; v++) {
-        for (u = tlu; u < bru; u++) {
-            bufptr = bufsize * bufsize * bufsize * (v % bufsize) + bufsize * bufsize * (u % bufsize) +
-                     bufsize * (tlt % bufsize) + tls % bufsize;
+    bufptr = bufsize * (tlt % bufsize) + tls % bufsize;
 
-            for (t = tlt; t < brt; t++) {
-                class_p = &enc->class[v][u][t][tls];
-                prd_p = &enc->prd[v][u][t][tls];
-                prdbuf_p = &prdbuf[min_cl][bufptr];
-                err_p = &enc->err[v][u][t][tls];
-                errbuf_p = &errbuf[min_cl][bufptr];
-                bufptr += bufsize;
+    for (t = tlt; t < brt; t++) {
+        class_p = &enc->class[t][tls];
+        prd_p = &enc->prd[t][tls];
+        prdbuf_p = &prdbuf[min_cl][bufptr];
+        err_p = &enc->err[0][t][tls];
+        errbuf_p = &errbuf[min_cl][bufptr];
+        bufptr += bufsize;
 
-                for (s = tls; s < brs; s++) {
-                    *class_p++ = (char) min_cl;
-                    *prd_p++ = *prdbuf_p++;
-                    *err_p++ = *errbuf_p++;
-                }
-            }
+        for (s = tls; s < brs; s++) {
+            *class_p++ = (char) min_cl;
+            *prd_p++ = *prdbuf_p++;
+            *err_p++ = *errbuf_p++;
         }
     }
 
@@ -1499,8 +1343,6 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int t
  |      enc		 		--> Encoder struct (IN)
  |		prdbuf			--> Struct to store the prediction value (IN/OUT)
  |		errbuf          --> Struct to store the residue value (IN/OUT)
- |		tlv				--> Top left corner v position of the current block (IN)
- |		tlu             --> Top left corner u position of the current block (IN)
  |		tlt				--> Top left corner t position of the current block (IN)
  |		tls             --> Top left corner s position of the current block (IN)
  |		blksize			--> Size of the block (IN)
@@ -1509,11 +1351,11 @@ int find_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int t
  |
  |  Returns:  cost_t --> The class and partition cost
  *-------------------------------------------------------------------*/
-cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int tlt, int tls, int blksize, int width,
+cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlt, int tls, int blksize, int width,
                  int level) {
-    int v, u, t, s, k, brv, bru, brt, brs, cl, bufsize, bufptr, ctx;
+    int t, s, k, brt, brs, cl, bufsize, bufptr, ctx;
     int mtf_save[MAX_CLASS];
-    char ****qtmap;
+    char **qtmap;
     cost_t cost1, cost2, qtcost;
     char *class_p;
     int *prd_p, *prdbuf_p, *err_p, *errbuf_p;
@@ -1527,13 +1369,11 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int
     }
 
     // Check the boundaries of the block (mainly for pictures not multiple of bufsize)
-    brv = (tlv + blksize < enc->vu[HEIGHT]) ? (tlv + blksize) : enc->vu[HEIGHT];
-    bru = (tlu + blksize < enc->vu[WIDTH]) ? (tlu + blksize) : enc->vu[WIDTH];
     brt = (tlt + blksize < enc->ts[HEIGHT]) ? (tlt + blksize) : enc->ts[HEIGHT];
     brs = (tls + blksize < enc->ts[WIDTH]) ? (tls + blksize) : enc->ts[WIDTH];
 
     // Safeguard condition
-    if (tlv >= brv || tlu >= bru || tlt >= brt || tls >= brs) return (0);
+    if (tlt >= brt || tls >= brs) return (0);
 
     // Auxiliary variable that stores class order
     for (k = 0; k < enc->num_class; k++) {
@@ -1542,9 +1382,9 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int
 
     // In the case of the first loop or if we are not using quadtree
     // Reorders classes to favor the modes chosen by the neighboring blocks.
-    mtf_classlabel(enc->class, enc->mtfbuf, tlv, tlu, tlt, tls, blksize, width, enc->num_class);
+    mtf_classlabel(enc->class, enc->mtfbuf, tlt, tls, blksize, width, enc->num_class);
     // Finds the class that returns the minimum cost for the block
-    cl = find_class(enc, prdbuf, errbuf, tlv, tlu, tlt, tls, brv, bru, brt, brs, bufsize);
+    cl = find_class(enc, prdbuf, errbuf, tlt, tls, brt, brs, bufsize);
     // Return the class cost
     qtcost = enc->class_cost[enc->mtfbuf[cl]];
 
@@ -1556,26 +1396,20 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int
 
         qtmap = enc->qtmap[level - 1];
 
-        v = (tlv / MIN_BSIZE) >> level;
-        u = (tlu / MIN_BSIZE) >> level;
         t = (tlt / MIN_BSIZE) >> level;
         s = (tls / MIN_BSIZE) >> level;
 
-        if (v > 0 && qtmap[v - 1][u][t][s] == 1) ctx++;
-
-        if (u > 0 && qtmap[v][u - 1][t][s] == 1) ctx++;
-
         if (t > 0) {
-            if (qtmap[v][u][t - 1][s] == 1) ctx++;
-            if (brs < width && qtmap[v][u][t - 1][s + 1] == 1) ctx++;
+            if (qtmap[t - 1][s] == 1) ctx++;
+            if (brs < width && qtmap[t - 1][s + 1] == 1) ctx++;
         }
 
-        if (s > 0 && qtmap[v][u][t][s - 1] == 1) ctx++;
+        if (s > 0 && qtmap[t][s - 1] == 1) ctx++;
 
         ctx = ((level - 1) * 4 + ctx) << 1;
 
         /* Quad-tree partitioning */
-        cost1 = calc_cost(enc, tlv, tlu, tlt, tls, brv, bru, brt, brs) + enc->class_cost[enc->mtfbuf[cl]] + enc->qtflag_cost[ctx];
+        cost1 = calc_cost(enc, tlt, tls, brt, brs) + enc->class_cost[enc->mtfbuf[cl]] + enc->qtflag_cost[ctx];
         blksize >>= 1;
 
         for (k = 0; k < enc->num_class; k++) {
@@ -1585,27 +1419,12 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int
         qtcost = enc->qtflag_cost[ctx + 1];
 
         // v and u
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv, tlu, tlt, tls, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv, tlu, tlt, tls + blksize, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv, tlu, tlt + blksize, tls, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv, tlu, tlt + blksize, tls + blksize, blksize, brs, level - 1);
-        // v and u + blksize
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv, tlu + blksize, tlt, tls, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv, tlu + blksize, tlt, tls + blksize, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv, tlu + blksize, tlt + blksize, tls, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv, tlu + blksize, tlt + blksize, tls + blksize, blksize, brs, level - 1);
-        // v + blksize and u
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv + blksize, tlu, tlt, tls, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv + blksize, tlu, tlt, tls + blksize, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv + blksize, tlu, tlt + blksize, tls, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv + blksize, tlu, tlt + blksize, tls + blksize, blksize, brs, level - 1);
-        // v + blksize and u + blksize
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv + blksize, tlu + blksize, tlt, tls, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv + blksize, tlu + blksize, tlt, tls + blksize, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv + blksize, tlu + blksize, tlt + blksize, tls, blksize, width, level - 1);
-        qtcost += vbs_class(enc, prdbuf, errbuf, tlv + blksize, tlu + blksize, tlt + blksize, tls + blksize, blksize, brs, level - 1);
+        qtcost += vbs_class(enc, prdbuf, errbuf, tlt, tls, blksize, width, level - 1);
+        qtcost += vbs_class(enc, prdbuf, errbuf, tlt, tls + blksize, blksize, width, level - 1);
+        qtcost += vbs_class(enc, prdbuf, errbuf, tlt + blksize, tls, blksize, width, level - 1);
+        qtcost += vbs_class(enc, prdbuf, errbuf, tlt + blksize, tls + blksize, blksize, brs, level - 1);
 
-        cost2 = calc_cost(enc, tlv, tlu, tlt, tls, brv, bru, brt, brs) + qtcost;
+        cost2 = calc_cost(enc, tlt, tls, brt, brs) + qtcost;
 
         if (cost1 < cost2) {
             blksize <<= 1;
@@ -1614,67 +1433,50 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int
                 enc->mtfbuf[k] = mtf_save[k];
             }
 
-            mtf_classlabel(enc->class, enc->mtfbuf, tlv, tlu, tlt, tls, blksize, width, enc->num_class);
+            mtf_classlabel(enc->class, enc->mtfbuf, tlt, tls, blksize, width, enc->num_class);
             qtcost = enc->class_cost[enc->mtfbuf[cl]] + enc->qtflag_cost[ctx];
 
-            for (v = tlv; v < brv; v++) {
-                for (u = tlu; u < bru; u++) {
-                    bufptr = bufsize * bufsize * bufsize * (v % bufsize) + bufsize * bufsize * (u % bufsize) +
-                             bufsize * (tlt % bufsize) + tls % bufsize;
+            bufptr = bufsize * (tlt % bufsize) + tls % bufsize;
 
-                    for (t = tlt; t < brt; t++) {
-                        class_p = &enc->class[v][u][t][tls];
-                        prd_p = &enc->prd[v][u][t][tls];
-                        prdbuf_p = &prdbuf[cl][bufptr];
-                        err_p = &enc->err[v][u][t][tls];
-                        errbuf_p = &errbuf[cl][bufptr];
-                        bufptr += bufsize;
+            for (t = tlt; t < brt; t++) {
+                class_p = &enc->class[t][tls];
+                prd_p = &enc->prd[t][tls];
+                prdbuf_p = &prdbuf[cl][bufptr];
+                err_p = &enc->err[0][t][tls];
+                errbuf_p = &errbuf[cl][bufptr];
+                bufptr += bufsize;
 
-                        for (s = tls; s < brs; s++) {
-                            *class_p++ = (char) cl;
-                            *prd_p++ = *prdbuf_p++;
-                            *err_p++ = *errbuf_p++;
-                        }
-                    }
+                for (s = tls; s < brs; s++) {
+                    *class_p++ = (char) cl;
+                    *prd_p++ = *prdbuf_p++;
+                    *err_p++ = *errbuf_p++;
                 }
             }
 
-            tlv = (tlv / MIN_BSIZE) >> level;
-            tlu = (tlu / MIN_BSIZE) >> level;
             tlt = (tlt / MIN_BSIZE) >> level;
             tls = (tls / MIN_BSIZE) >> level;
 
-            brv = tlv + 1;
-            bru = tlu + 1;
             brt = tlt + 1;
             brs = tls + 1;
 
             for (; level > 0; level--) {
                 qtmap = enc->qtmap[level - 1];
 
-                for (v = tlv; v < brv; v++) {
-                    for (u = tlu; u < bru; u++) {
-                        for (t = tlt; t < brt; t++) {
-                            for (s = tls; s < brs; s++) {
-                                qtmap[v][u][t][s] = 0;
-                            }
-                        }
+                for (t = tlt; t < brt; t++) {
+                    for (s = tls; s < brs; s++) {
+                        qtmap[t][s] = 0;
                     }
                 }
 
-                tlv <<= 1;
-                tlu <<= 1;
                 tlt <<= 1;
                 tls <<= 1;
 
-                brv <<= 1;
-                bru <<= 1;
                 brt <<= 1;
                 brs <<= 1;
             }
         }
         else {
-            qtmap[v][u][t][s] = 1;
+            qtmap[t][s] = 1;
         }
     }
 
@@ -1693,7 +1495,7 @@ cost_t vbs_class(ENCODER *enc, int **prdbuf, int **errbuf, int tlv, int tlu, int
  |  Returns:  ENCODER* --> returns a encoder type structure
  *-------------------------------------------------------------------*/
 cost_t optimize_class(ENCODER *enc) {
-    int v, u, t, s, i, blksize, level;
+    int t, s, i, blksize, level;
     int **prdbuf, **errbuf;
 
     // Sets the max block size depending on the current loop
@@ -1713,20 +1515,16 @@ cost_t optimize_class(ENCODER *enc) {
     }
 
     // Auxiliary structures, prediction and residue buffer
-    prdbuf = (int **) alloc_2d_array(enc->num_class, blksize * blksize * blksize * blksize, sizeof(int));
-    errbuf = (int **) alloc_2d_array(enc->num_class, blksize * blksize * blksize * blksize, sizeof(int));
+    prdbuf = (int **) alloc_2d_array(enc->num_class, blksize * blksize, sizeof(int));
+    errbuf = (int **) alloc_2d_array(enc->num_class, blksize * blksize, sizeof(int));
 
     // Cycle to run all picture blocks
-    for (v = 0; v < enc->vu[HEIGHT]; v += blksize) {
-        for (u = 0; u < enc->vu[WIDTH]; u += blksize) {
-            for (t = 0; t < enc->ts[HEIGHT]; t += blksize) {
-                for (s = 0; s < enc->ts[WIDTH]; s += blksize) {
-                    // Calculates and stores the prediction and residue for all classes for a given block
-                    set_prdbuf(enc, prdbuf, errbuf, v, u, t, s, blksize);
-                    // Determines the variable size block partition
-                    vbs_class(enc, prdbuf, errbuf, v, u, t, s, blksize, enc->ts[WIDTH], level);
-                }
-            }
+    for (t = 0; t < enc->ts[HEIGHT]; t += blksize) {
+        for (s = 0; s < enc->ts[WIDTH]; s += blksize) {
+            // Calculates and stores the prediction and residue for all classes for a given block
+            set_prdbuf(enc, prdbuf, errbuf, t, s, blksize);
+            // Determines the variable size block partition
+            vbs_class(enc, prdbuf, errbuf, t, s, blksize, enc->ts[WIDTH], level);
         }
     }
 
@@ -1735,205 +1533,7 @@ cost_t optimize_class(ENCODER *enc) {
     free(prdbuf);
 
     // Returns cost
-    return (calc_cost(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]));
-}
-
-/*--------------------------- optimize_coef -------------------------*
- |  Function optimize_coef
- |
- |  Purpose: Optimizes the coefficients
- |
- |  Parameters:
- |      enc		 		--> Encoder struct (IN/OUT)
- |		cl				--> Class number (IN)
- |		pos1			--> Coefficient position (IN)
- |		pos2			--> Coefficient position (IN)
- |
- |  Returns:  void
- *-------------------------------------------------------------------*/
-void optimize_coef(ENCODER *enc, int cl, int pos1, int pos2) {
-//#define SEARCH_RANGE 11
-//#define SUBSEARCH_RANGE 3
-//	cost_t cbuf[SEARCH_RANGE * SUBSEARCH_RANGE], *cbuf_p;
-//	float *pmcost_p;
-//	int i, j, k, x, y, df1, df2, base;
-//	int prd, prd_f, shift, maxprd, *coef_p, *econv_p = NULL, *org_p;
-//	int ***roff1_pp, ***roff2_pp, *roff1_p, *roff2_p;
-//    char *class_p;
-//	img_t *bconv_p, *fconv_p;
-//	PMODEL *pm, *pm_p;
-//
-//	cbuf_p = cbuf;
-//	coef_p = enc->predictor[cl];
-//	k = 0;
-//
-//	for (i = 0; i < SEARCH_RANGE; i++) {
-//		y = coef_p[pos1] + i - (SEARCH_RANGE >> 1);
-//
-//		if (y < 0) y = -y;
-//
-//		if (y > MAX_COEF) y = MAX_COEF;
-//
-//		for (j = 0; j < SUBSEARCH_RANGE; j++) {
-//			x = coef_p[pos2] - (i - (SEARCH_RANGE >> 1)) - (j - (SUBSEARCH_RANGE >> 1));
-//
-//			if (x < 0) x = -x;
-//
-//			if (x > MAX_COEF) x = MAX_COEF;
-//
-//			cbuf_p[k++] = enc->coef_cost[enc->coef_m[pos1]][y] + enc->coef_cost[enc->coef_m[pos2]][x];
-//		}
-//	}
-//
-//	bconv_p = enc->bconv;
-//	fconv_p = enc->fconv;
-//	maxprd = enc->maxprd;
-//	shift = enc->coef_precision - 1;
-//
-//	// TODO: check case where for instance mi_prd_order == 0
-//    roff1_pp = (pos1 < enc->prd_order) ? enc->intra_roff : (pos1 < enc->prd_order + enc->mi_prd_order[UP]) ? enc->mi_up_roff : (pos1 < enc->prd_order + enc->mi_prd_order[UP] + enc->back_prd_order) ? enc->back_roff : enc->for_roff;
-//    roff2_pp = (pos2 < enc->prd_order) ? enc->intra_roff : (pos2 < enc->prd_order + enc->mi_prd_order[UP]) ? enc->mi_up_roff : (pos2 < enc->prd_order + enc->mi_prd_order[UP] + enc->back_prd_order) ? enc->back_roff : enc->for_roff;
-//
-//	for (y = 0; y < enc->height; y++) {
-//		class_p = enc->class[y];
-//
-//		for (x = 0; x < enc->width; x++) {
-//			if (cl != *class_p++) continue;
-//
-//			prd = enc->prd[y][x];
-//			org_p = &enc->org[1][y][x];
-//			pm_p = enc->pmlist[(int)enc->group[y][x]];
-//
-//            roff1_p = roff1_pp[y][x];
-//            roff2_p = roff2_pp[y][x];
-//
-//            df1 = org_p[roff1_p[pos1]];
-//			df2 = org_p[roff2_p[pos2]];
-//
-//			prd_f = prd - (df1 - df2) * (SEARCH_RANGE >> 1) + df2 * (SUBSEARCH_RANGE >> 1);
-//			cbuf_p = cbuf;
-//
-//			if (enc->pm_accuracy < 0) {
-//				if (enc->depth <= 8) {
-//					econv_p = enc->econv[*org_p];
-//				}
-//
-//				pmcost_p = pm_p->cost;
-//
-//				for (i = 0; i < SEARCH_RANGE; i++) {
-//					for (j = 0; j < SUBSEARCH_RANGE; j++) {
-//						prd = prd_f;
-//
-//						if (prd < 0) prd = 0;
-//						else if (prd > maxprd) prd = maxprd;
-//
-//						if (enc->depth <= 8) {
-//							(*cbuf_p++) += pmcost_p[econv_p[prd >> shift]];
-//						}
-//						else {
-//							(*cbuf_p++) += pmcost_p[error_conversion(*org_p, prd >> shift, enc->maxval, enc->etype)];
-//						}
-//
-//						prd_f -= df2;
-//					}
-//
-//					prd_f += df1 + df2 * (SUBSEARCH_RANGE - 1);
-//				}
-//			}
-//			else {
-//				for (i = 0; i < SEARCH_RANGE; i++) {
-//					for (j = 0; j < SUBSEARCH_RANGE; j++) {
-//						prd = prd_f;
-//
-//						if (prd < 0) prd = 0;
-//						else if (prd > maxprd) prd = maxprd;
-//
-//						base = bconv_p[prd];
-//						pm = pm_p + fconv_p[prd];
-//						(*cbuf_p++) += pm->cost[*org_p + base] + pm->subcost[base];
-//						prd_f -= df2;
-//					}
-//
-//					prd_f += df1 + df2 * (SUBSEARCH_RANGE - 1);
-//				}
-//			}
-//		}
-//	}
-//
-//	cbuf_p = cbuf;
-//	j = (SEARCH_RANGE * SUBSEARCH_RANGE) >> 1;
-//
-//	for (i = 0; i < SEARCH_RANGE * SUBSEARCH_RANGE; i++) {
-//		if (cbuf_p[i] < cbuf_p[j]) {
-//			j = i;
-//		}
-//	}
-//
-//	i = (j / SUBSEARCH_RANGE) - (SEARCH_RANGE >> 1);
-//	j = (j % SUBSEARCH_RANGE) - (SUBSEARCH_RANGE >> 1);
-//	y = coef_p[pos1] + i;
-//	x = coef_p[pos2] - i - j;
-//
-//	if (y < -MAX_COEF) y = -MAX_COEF;
-//	else if (y > MAX_COEF) y = MAX_COEF;
-//
-//	if (x < -MAX_COEF) x = -MAX_COEF;
-//	else if (x > MAX_COEF) x = MAX_COEF;
-//
-//	i = y - coef_p[pos1];
-//	j = x - coef_p[pos2];
-//
-//	if (i != 0 || j != 0) {
-//		for (y = 0; y < enc->height; y++) {
-//			class_p = enc->class[y];
-//
-//			for (x = 0; x < enc->width; x++) {
-//				if (cl == *class_p++) {
-//					roff1_p = roff1_pp[y][x];
-//                    roff2_p = roff2_pp[y][x];
-//
-//					org_p = &enc->org[1][y][x];
-//					enc->prd[y][x] += org_p[roff1_p[pos1]] * i + org_p[roff2_p[pos2]] * j;
-//				}
-//			}
-//		}
-//
-//		coef_p[pos1] += i;
-//		coef_p[pos2] += j;
-//	}
-}
-
-/*------------------------- optimize_predictor ----------------------*
- |  Function optimize_predictor
- |
- |  Purpose: Two coefficients are randomly chosen
- |			 and optimized together
- |
- |  Parameters:
- |      enc		 		--> Encoder struct (IN/OUT)
- |
- |  Returns:  cost_t	--> Returns the new cost value
- *-------------------------------------------------------------------*/
-cost_t optimize_predictor(ENCODER *enc) {
-    int cl, k, pos1, pos2;
-#ifndef RAND_MAX
-#  define RAND_MAX 32767
-#endif
-
-    for (cl = 0; cl < enc->num_class; cl++) {
-        for (k = 0; k < enc->full_prd_order; k++) {
-            retry:
-            pos1 = (int) (((double) random() * enc->full_prd_order) / (RAND_MAX + 1.0));
-            pos2 = (int) (((double) random() * enc->full_prd_order) / (RAND_MAX + 1.0));
-
-            if (pos1 == pos2) goto retry;
-
-            optimize_coef(enc, cl, pos1, pos2);
-        }
-    }
-
-    predict_region(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]);
-    return (calc_cost(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]));
+    return (calc_cost(enc, 0, 0, enc->ts[HEIGHT], enc->ts[WIDTH]));
 }
 
 int putbits(FILE *fp, int n, uint x) {
@@ -1975,20 +1575,16 @@ int putbits(FILE *fp, int n, uint x) {
  |  Returns:  void
  *-------------------------------------------------------------------*/
 void remove_emptyclass(ENCODER *enc) {
-    int cl, i, k, v, u, t, s;
+    int cl, i, k, t, s;
 
     for (cl = 0; cl < enc->num_class; cl++) {
         enc->mtfbuf[cl] = 0;
     }
 
-    for (v = 0; v < enc->vu[HEIGHT]; v += MIN_BSIZE) {
-        for (u = 0; u < enc->vu[WIDTH]; u += MIN_BSIZE) {
-            for (t = 0; t < enc->ts[HEIGHT]; t += MIN_BSIZE) {
-                for (s = 0; s < enc->ts[WIDTH]; s += MIN_BSIZE) {
-                    cl = enc->class[v][u][t][s];
-                    enc->mtfbuf[cl]++;
-                }
-            }
+    for (t = 0; t < enc->ts[HEIGHT]; t += MIN_BSIZE) {
+        for (s = 0; s < enc->ts[WIDTH]; s += MIN_BSIZE) {
+            cl = enc->class[t][s];
+            enc->mtfbuf[cl]++;
         }
     }
 
@@ -2003,17 +1599,12 @@ void remove_emptyclass(ENCODER *enc) {
 
     if (cl == enc->num_class) return;	/* no empty class */
 
-    for (v = 0; v < enc->vu[HEIGHT]; v++) {
-        for (u = 0; u < enc->vu[WIDTH]; u++) {
-            for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                for (s = 0; s < enc->ts[WIDTH]; s++) {
-                    i = enc->class[v][u][t][s];
-                    enc->class[v][u][t][s] = (char) enc->mtfbuf[i];
-                }
-            }
+    for (t = 0; t < enc->ts[HEIGHT]; t++) {
+        for (s = 0; s < enc->ts[WIDTH]; s++) {
+            i = enc->class[t][s];
+            enc->class[t][s] = (char) enc->mtfbuf[i];
         }
     }
-
     for (i = cl = 0; i < enc->num_class; i++) {
         if (enc->mtfbuf[i] < 0) continue;
 
@@ -2046,23 +1637,23 @@ void remove_emptyclass(ENCODER *enc) {
  |
  |  Returns:  int		--> Returns the number of bits used
  *---------------------------------------------------------------------*/
-int write_header(ENCODER *enc, int prd_order, int mi_prd_order[4], FILE *fp) {
+int write_header(ENCODER *enc, int *vu, int hilevels, int prd_order, int *sai_prd_order, FILE *fp) {
     int bits, i;
 
     bits =  putbits(fp, 16, MAGIC_NUMBER);
-    bits += putbits(fp, 16, (uint) enc->vu[HEIGHT]);
-    bits += putbits(fp, 16, (uint) enc->vu[WIDTH]);
+    bits += putbits(fp, 16, (uint) vu[HEIGHT]);
+    bits += putbits(fp, 16, (uint) vu[WIDTH]);
     bits += putbits(fp, 16, (uint) enc->ts[HEIGHT]);
     bits += putbits(fp, 16, (uint) enc->ts[WIDTH]);
     bits += putbits(fp, 16, (uint) enc->maxval);
     bits += putbits(fp, 6,  (uint) enc->depth);
     bits += putbits(fp, 4,  1);	/* number of components (1 = monochrome) */
     bits += putbits(fp, 6,  (uint) enc->num_group);
+    bits += putbits(fp, 16, (uint) hilevels);
+    bits += putbits(fp, 8,  (uint) prd_order);
 
-    bits += putbits(fp, 8, (uint) prd_order);
-
-    for (i = 0; i < 4; i++) {
-        bits += putbits(fp, 8, (uint) mi_prd_order[i]);
+    for (i = 0; i < SAI_REFERENCES; i++) {
+        bits += putbits(fp, 8, (uint) sai_prd_order[i]);
     }
 
     bits += putbits(fp, 8,  (uint) enc->delta);
@@ -2093,6 +1684,24 @@ int write_class(ENCODER *enc, FILE *fp) {
     return (bits);
 }
 
+/*---------------------------- write_hilevel ----------------------------*
+ |  Function write_hilevel
+ |
+ |  Purpose: Writes the hierarchical level of the current frame
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |		fp				--> File to write into (IN)
+ |
+ |  Returns:  int		--> Returns the number of bits used
+ *---------------------------------------------------------------------*/
+int write_hilevel(int hilevel, FILE *fp) {
+    int bits;
+
+    bits = putbits(fp, 16, (uint) hilevel);
+    return (bits);
+}
+
 int encode_golomb(FILE *fp, int m, int v) {
     int bits, p;
 
@@ -2109,81 +1718,43 @@ int encode_golomb(FILE *fp, int m, int v) {
     return (bits + m);
 }
 
-void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlv, int tlu, int tlt, int tls, int blksize,
-                 int width, int level) {
-    int i, cl, v, u, t, s, ctx, last_width;
-    char ****qtmap;
+void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlt, int tls, int blksize, int width, int level) {
+    int i, cl, t, s, ctx;
+    char **qtmap;
 
-    if (tlv >= enc->vu[HEIGHT] || tlu >= enc->vu[WIDTH] || tlt >= enc->ts[HEIGHT] || tls >= enc->ts[WIDTH]) return;
+    if (tlt >= enc->ts[HEIGHT] || tls >= enc->ts[WIDTH]) return;
 
     if (level > 0) {
         /* context modeling for quad-tree flag */
         ctx = 0;
         qtmap = enc->qtmap[level - 1];
 
-        v = (tlv / MIN_BSIZE) >> level;
-        u = (tlu / MIN_BSIZE) >> level;
         t = (tlt / MIN_BSIZE) >> level;
         s = (tls / MIN_BSIZE) >> level;
 
-        if (v > 0 && qtmap[v - 1][u][t][s] == 1) ctx++;
-
-        if (u > 0 && qtmap[v][u - 1][t][s] == 1) ctx++;
-
         if (t > 0) {
-            if (qtmap[v][u][t - 1][s] == 1) ctx++;
-            if (tls + blksize < width && qtmap[v][u][t - 1][s + 1] == 1) ctx++;
+            if (qtmap[t - 1][s] == 1) ctx++;
+            if (tls + blksize < width && qtmap[t - 1][s + 1] == 1) ctx++;
         }
 
-        if (s > 0 && qtmap[v][u][t][s - 1] == 1) ctx++;
+        if (s > 0 && qtmap[t][s - 1] == 1) ctx++;
 
         ctx = ((level - 1) * 4 + ctx) << 1;
 
-        if (qtmap[v][u][t][s] == 1) {
+        if (qtmap[t][s] == 1) {
             ctx++;
             index[(*numidx)++] = -(ctx + 1);
             enc->qtctx[ctx]++;
             blksize >>= 1;
 
-            // v and u
-            set_qtindex(enc, index, hist, numidx, tlv, tlu, tlt, tls, blksize, width, level - 1);
-            set_qtindex(enc, index, hist, numidx, tlv, tlu, tlt, tls + blksize, blksize, width, level - 1);
-            set_qtindex(enc, index, hist, numidx, tlv, tlu, tlt + blksize, tls, blksize, width, level - 1);
+            set_qtindex(enc, index, hist, numidx, tlt, tls, blksize, width, level - 1);
+            set_qtindex(enc, index, hist, numidx, tlt, tls + blksize, blksize, width, level - 1);
+            set_qtindex(enc, index, hist, numidx, tlt + blksize, tls, blksize, width, level - 1);
 
-            last_width = tls + blksize * 2;
-            if (last_width >= enc->ts[WIDTH]) last_width = enc->ts[WIDTH];
+            width = tls + blksize * 2;
+            if (width >= enc->ts[WIDTH]) width = enc->ts[WIDTH];
 
-            set_qtindex(enc, index, hist, numidx, tlv, tlu, tlt + blksize, tls + blksize, blksize, last_width, level - 1);
-
-            // v and u + blksize
-            set_qtindex(enc, index, hist, numidx, tlv, tlu + blksize, tlt, tls, blksize, width, level - 1);
-            set_qtindex(enc, index, hist, numidx, tlv, tlu + blksize, tlt, tls + blksize, blksize, width, level - 1);
-            set_qtindex(enc, index, hist, numidx, tlv, tlu + blksize, tlt + blksize, tls, blksize, width, level - 1);
-
-            last_width = tls + blksize * 2;
-            if (last_width >= enc->ts[WIDTH]) last_width = enc->ts[WIDTH];
-
-            set_qtindex(enc, index, hist, numidx, tlv, tlu + blksize, tlt + blksize, tls + blksize, blksize, last_width, level - 1);
-
-            // v + blksize and u
-            set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu, tlt, tls, blksize, width, level - 1);
-            set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu, tlt, tls + blksize, blksize, width, level - 1);
-            set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu, tlt + blksize, tls, blksize, width, level - 1);
-
-            last_width = tls + blksize * 2;
-            if (last_width >= enc->ts[WIDTH]) last_width = enc->ts[WIDTH];
-
-            set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu, tlt + blksize, tls + blksize, blksize, last_width, level - 1);
-
-            // v + blksize and u + blksize
-            set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu + blksize, tlt, tls, blksize, width, level - 1);
-            set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu + blksize, tlt, tls + blksize, blksize, width, level - 1);
-            set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu + blksize, tlt + blksize, tls, blksize, width, level - 1);
-
-            last_width = tls + blksize * 2;
-            if (last_width >= enc->ts[WIDTH]) last_width = enc->ts[WIDTH];
-
-            set_qtindex(enc, index, hist, numidx, tlv + blksize, tlu + blksize, tlt + blksize, tls + blksize, blksize, last_width, level - 1);
+            set_qtindex(enc, index, hist, numidx, tlt + blksize, tls + blksize, blksize, width, level - 1);
             return;
         }
         else {
@@ -2192,8 +1763,8 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlv, int
         }
     }
 
-    cl = enc->class[tlv][tlu][tlt][tls];
-    mtf_classlabel(enc->class, enc->mtfbuf, tlv, tlu, tlt, tls, blksize, width, enc->num_class);
+    cl = enc->class[tlt][tls];
+    mtf_classlabel(enc->class, enc->mtfbuf,tlt, tls, blksize, width, enc->num_class);
     i = enc->mtfbuf[cl];
     index[(*numidx)++] = i;
     hist[i]++;
@@ -2211,7 +1782,7 @@ void set_qtindex(ENCODER *enc, int *index, uint *hist, int *numidx, int tlv, int
  |  Returns:  int		--> Returns the number of bits used
  *---------------------------------------------------------------------*/
 int encode_class(FILE *fp, ENCODER *enc) {
-    int i, j, k, numidx, blksize, level, v, u, t, s, ctx, bits, *index;
+    int i, j, k, numidx, blksize, level, t, s, ctx, bits, *index;
     uint *hist;
     cost_t cost;
 
@@ -2224,16 +1795,12 @@ int encode_class(FILE *fp, ENCODER *enc) {
         numidx = 0;
 
         // Calculates the next multiple of BASE_BSIZE to correctly calculate the number of blocks
-        v = (int) ceil((double) enc->vu[HEIGHT] / MIN_BSIZE);
-        u = (int) ceil((double) enc->vu[WIDTH] / MIN_BSIZE);
         t = (int) ceil((double) enc->ts[HEIGHT] / MIN_BSIZE);
         s = (int) ceil((double) enc->ts[WIDTH] / MIN_BSIZE);
 
         for (k = 0; k <= level; k++) {
-            numidx += v * u * t * s;
+            numidx += t * s;
 
-            v = (v + 1) >> 1;
-            u = (u + 1) >> 1;
             t = (t + 1) >> 1;
             s = (s + 1) >> 1;
         }
@@ -2245,8 +1812,7 @@ int encode_class(FILE *fp, ENCODER *enc) {
     else {
         level = 0;
         blksize = BASE_BSIZE;
-        numidx = enc->vu[HEIGHT] * enc->vu[WIDTH] * enc->ts[HEIGHT] * enc->ts[WIDTH] /
-                 (BASE_BSIZE * BASE_BSIZE * BASE_BSIZE * BASE_BSIZE);
+        numidx = enc->ts[HEIGHT] * enc->ts[WIDTH] / (BASE_BSIZE * BASE_BSIZE);
     }
 
     hist = (uint *) alloc_mem(enc->num_class * sizeof(uint));
@@ -2259,13 +1825,9 @@ int encode_class(FILE *fp, ENCODER *enc) {
 
     numidx = 0;
 
-    for (v = 0; v < enc->vu[HEIGHT]; v += blksize) {
-        for (u = 0; u < enc->vu[WIDTH]; u += blksize) {
-            for (t = 0; t < enc->ts[HEIGHT]; t += blksize) {
-                for (s = 0; s < enc->ts[WIDTH]; s += blksize) {
-                    set_qtindex(enc, index, hist, &numidx, v, u, t, s, blksize, enc->ts[WIDTH], level);
-                }
-            }
+    for (t = 0; t < enc->ts[HEIGHT]; t += blksize) {
+        for (s = 0; s < enc->ts[WIDTH]; s += blksize) {
+            set_qtindex(enc, index, hist, &numidx, t, s, blksize, enc->ts[WIDTH], level);
         }
     }
 
@@ -2740,47 +2302,39 @@ int encode_threshold(FILE *fp, ENCODER *enc) {
  |  Returns:  int		--> Returns the number of bits used
  *---------------------------------------------------------------------*/
 int encode_image(FILE *fp, ENCODER *enc) {
-    int v, u, t, s, e, prd, base, bits, gr, cumbase;
+    int t, s, e, prd, base, bits, gr, cumbase;
     PMODEL *pm;
 
     bits = 0;
     if (enc->f_huffman == 1) {    /* Huffman */
         VLC *vlc;
 
-        for (v = 0; v < enc->vu[HEIGHT]; v++) {
-            for (u = 0; u < enc->vu[WIDTH]; u++) {
-                for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                    for (s = 0; s < enc->ts[WIDTH]; s++) {
-                        gr = enc->group[v][u][t][s];
-                        e = enc->encval[v][u][t][s];
-                        pm = enc->pmlist[gr];
-                        vlc = &enc->vlcs[gr][pm->id];
-                        bits += putbits(fp, vlc->len[e], vlc->code[e]);
-                    }
-                }
+        for (t = 0; t < enc->ts[HEIGHT]; t++) {
+            for (s = 0; s < enc->ts[WIDTH]; s++) {
+                gr = enc->group[t][s];
+                e = enc->encval[t][s];
+                pm = enc->pmlist[gr];
+                vlc = &enc->vlcs[gr][pm->id];
+                bits += putbits(fp, vlc->len[e], vlc->code[e]);
             }
         }
     }
     else {            /* Arithmetic */
-        for (v = 0; v < enc->vu[HEIGHT]; v++) {
-            for (u = 0; u < enc->vu[WIDTH]; u++) {
-                for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                    for (s = 0; s < enc->ts[WIDTH]; s++) {
-                        gr = enc->group[v][u][t][s];
-                        prd = enc->prd[v][u][t][s];
+        for (t = 0; t < enc->ts[HEIGHT]; t++) {
+            for (s = 0; s < enc->ts[WIDTH]; s++) {
+                gr = enc->group[t][s];
+                prd = enc->prd[t][s];
 
-                        if (prd < 0) prd = 0;
-                        else if (prd > enc->maxprd) prd = enc->maxprd;
+                if (prd < 0) prd = 0;
+                else if (prd > enc->maxprd) prd = enc->maxprd;
 
-                        e = enc->encval[v][u][t][s];
-                        base = enc->bconv[prd];
-                        pm = enc->pmlist[gr] + enc->fconv[prd];
-                        cumbase = pm->cumfreq[base];
+                e = enc->encval[t][s];
+                base = enc->bconv[prd];
+                pm = enc->pmlist[gr] + enc->fconv[prd];
+                cumbase = pm->cumfreq[base];
 
-                        rc_encode(fp, enc->rc, pm->cumfreq[base + e] - cumbase, pm->freq[base + e],
-                                  pm->cumfreq[base + enc->maxval + 1] - cumbase);
-                    }
-                }
+                rc_encode(fp, enc->rc, pm->cumfreq[base + e] - cumbase, pm->freq[base + e],
+                            pm->cumfreq[base + enc->maxval + 1] - cumbase);
             }
         }
 
@@ -2833,8 +2387,8 @@ char *remove_ext (char* mystr, char dot, char sep) {
     return retstr;
 }
 
-void print_results(FILE *res, const int *vu, const int *ts, int header, int class_info, int predictors, int thresholds,
-                   int errors) {
+void print_results(FILE *res, int no_hilevels, int **hilevels, const int *vu, const int *ts, int header, int *class_info,
+                   int *predictors, int *thresholds, int *errors) {
     int rate = 0, total_bits = 0;
 
     printf("\n---------------------------------\n");
@@ -2842,27 +2396,36 @@ void print_results(FILE *res, const int *vu, const int *ts, int header, int clas
     fprintf(res, "Header info.\t :%10d bits\n", header);
     fprintf(res, "Bits\t\tBpp\n");
 
-    // Results output
-    printf("---------------------------------\n");
-    printf("class info\t :%10d bits\n", class_info);
-    printf("predictors\t :%10d bits\n", predictors);
-    printf("thresholds\t :%10d bits\n", thresholds);
-    printf("pred. errors\t :%10d bits\n", errors);
+    for (int h = 0; h < no_hilevels; h++) {
+        printf("\n---------------------------------\n");
+        printf("Hierarchical level %d.\n", h);
 
-    rate = class_info + predictors + thresholds + errors;
+        // Loop the frames in each hierarchical level
+        for (int f = 1; f <= hilevels[h][0]; f++) {
+            // Results output
+            printf("---------------------------------\n");
+            printf("\tSAI [%03d]\n", hilevels[h][f]);
+            printf("\t\tclass info\t :%10d bits\n", class_info[hilevels[h][f]]);
+            printf("\t\tpredictors\t :%10d bits\n", predictors[hilevels[h][f]]);
+            printf("\t\tthresholds\t :%10d bits\n", thresholds[hilevels[h][f]]);
+            printf("\t\tpred. errors\t :%10d bits\n", errors[hilevels[h][f]]);
 
-    total_bits += rate;
+            rate = class_info[hilevels[h][f]] + predictors[hilevels[h][f]] + thresholds[hilevels[h][f]] + errors[hilevels[h][f]];
 
-    printf("---------------------------------\n");
-    printf("total LF:%10d bits\n", rate);
-    printf("LF coding rate:%10.5f bpp\n", (double) rate / (vu[HEIGHT] * vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]));
-    fprintf(res, "%10d\t%10.5f\n", rate, (double) rate / (vu[HEIGHT] * vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]));
+            total_bits += rate;
+
+            printf("---------------------------------\n");
+            printf("\ttotal SAI [%03d]:%10d bits\n", hilevels[h][f], rate);
+            printf("\tSAI coding rate:%10.5f bpp\n", (double) rate / (ts[HEIGHT] * ts[WIDTH]));
+            fprintf(res, "%10d\t%10.5f\n", rate, (double) rate / (ts[HEIGHT] * ts[WIDTH]));
+        }
+    }
 
     total_bits += header;
 
     printf("---------------------------------\n");
     printf("total\t\t :%10d bits\n", total_bits);
-    printf("total coding rate:%10.5f bpp\n", (double) total_bits / (vu[HEIGHT] * vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]));
+    printf("total LF coding rate:%10.5f bpp\n", (double) total_bits / (vu[HEIGHT] * vu[WIDTH] * ts[HEIGHT] * ts[WIDTH]));
 }
 
 /*--------------------------- total_variation ---------------------------*
@@ -3200,6 +2763,148 @@ int encode_lookuptable(FILE *fp, const int *forward_table, int size) {
     return bits;
 }
 
+// Read hierarchical encoding configuration file
+int **read_hicfg(char *filename, int no_sai, int *no_hilevels) {
+    int **hilevels;
+    int level = 0, frame = 0, f = 0, used = 0;
+    size_t bufsize = 0;
+    char *buffer = NULL, *ptr = NULL;
+    char delim[] = " ,", comment[] = "#";
+
+    // Open file for read
+    FILE *fid = fopen(filename, "r");
+
+    // Loop file lines
+    while ((getline(&buffer, &bufsize, fid)) != -1) {
+        // Remove new line characters from string
+        buffer[strcspn(buffer, "\r\n")] = 0;
+
+        // Skip blank and comment lines
+        if (!strcmp(buffer, "") || buffer[0] == comment[0]) continue;
+
+        // Read the number of hierarchical levels
+        if (*no_hilevels == 0) {
+            // Remove end of line characters from string
+            buffer[strcspn(buffer, "\r\n")] = 0;
+
+            // Find HiLevels indicator
+            ptr = strtok(buffer, delim);
+            if (strcmp(ptr, "HiLevels") == 0) {
+                while (!isdigit(ptr[0])) ptr = strtok (NULL, delim);
+
+                // Get the number of hierarchical levels
+                *no_hilevels = (int) strtol(ptr, NULL, 10);
+
+                // Alloc hierarchical levels array
+                hilevels = (int **) alloc_2d_array(*no_hilevels, no_sai, sizeof(int));
+            }
+            else{
+                // Print error message if the configuration file is not properly structured
+                fprintf (stderr, "The first non comment line of the Hierarchical Levels configuration file must start with: 'HiLevels'.\n");
+                exit(-404);
+            }
+
+            // Skip remainder of line if exists
+            continue;
+        }
+
+        // Divide lines by delimiter
+        ptr = strtok (buffer, delim);
+        // Cycle the parts until ":" is found
+        while (strcmp(ptr, ":") != 0) ptr = strtok (NULL, delim);
+
+        // Cycle all frames in a hierarchical level
+        frame = 1;
+        while (ptr != NULL) {
+            ptr = strtok(NULL, delim);
+
+            // Exit cycle if string ends or if a comment is found
+            if (ptr == NULL || strstr(ptr, comment) != NULL) break;
+
+            // Convert string to decimal
+            hilevels[level][frame] = (int) strtol(ptr, NULL, 10);
+
+            // Increase frame count
+            frame++;
+        }
+
+        // Store the number of frames of a given hierarchical level on the first position
+        hilevels[level][0] = frame - 1;
+        // Add -1 after the last frame as a check the frames have ended
+        hilevels[level][frame] = -1;
+
+        // Increase the level
+        level++;
+
+        // Check if the level reached the maximum value
+        if (level == *no_hilevels - 1) break;
+    }
+
+    // Free the memory used by reading the line
+    free(buffer);
+
+    // Close file
+    fclose(fid);
+
+    // Fill the frames of the last hierarchical level
+    // Set number of remaining frames as zero
+    hilevels[*no_hilevels - 1][0] = 0;
+
+    // Count the number of frames used in other hierarchical levels
+    for (level = 0; level < *no_hilevels - 1; level++) {
+        hilevels[*no_hilevels - 1][0] += hilevels[level][0];
+    }
+
+    // Calculate the number of remaining frames
+    hilevels[*no_hilevels - 1][0] = no_sai - hilevels[*no_hilevels - 1][0];
+
+    // Initialize variables
+    f = 0;
+    used = 0;
+
+    // Add the remaining frames number, while checking if it wasn't already used
+    for (frame = 1; frame < hilevels[*no_hilevels - 1][0] + 1; frame++) {
+        // Determine if frame number was already used
+        for (level = 0; level < *no_hilevels - 1; level++) {
+            for (int frame2 = 1; frame2 < hilevels[level][0] + 1; frame2++) {
+                if (hilevels[level][frame2] == f) {
+                    used = 1;
+                    level = *no_hilevels;
+                    break;
+                }
+            }
+        }
+
+        // If the frame number was used skip the number and reset the position
+        if (used == 1) {
+            used = 0;
+            frame--;
+            f++;
+            continue;
+        }
+
+        // If the frame number was not used store to the last hierarchical level
+        hilevels[*no_hilevels - 1][frame] = f;
+
+        // Increase the frame number
+        f++;
+    }
+
+    // Add -1 after the last frame as a check the frames have ended
+    hilevels[*no_hilevels - 1][frame + 1] = -1;
+
+    // Return the array with the hierarchical levels
+    return (hilevels);
+}
+
+// Compare SAI distance for the sort function
+int compare_distance(const void *a, const void *b) {
+    const SAIDISTANCE *saidist_a = a;
+    const SAIDISTANCE *saidist_b = b;
+
+    return ((int) (saidist_a->distance - saidist_b->distance));
+}
+
 // Write classes to file
 void debug_predictors(ENCODER *enc) {
     if (enc->debug_path != NULL) {
@@ -3225,168 +2930,168 @@ void debug_predictors(ENCODER *enc) {
 }
 
 // Write partition to file
-void debug_partition(ENCODER *enc, int endianness) {
-    int d, i, j, k, l, v, u, t, s;
-
-    img_t *qt_lf_ptr[3];
-
-    if (enc->debug_path != NULL) {
-        char *partition_img = (char *) alloc_mem(
-                (strlen(enc->debug_path) + strlen("/partition_0000x0000_10bpp_LE_YUV444p.yuv\0")) * sizeof(char));
-
-        LF4D *qt_lf[3];
-        for (k = 0; k < 3; k++) {
-            qt_lf[k] = alloc_lf4d(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], (int) pow(2, enc->depth) - 1);
-            qt_lf_ptr[k] = &qt_lf[k]->val[0][0][0][0];
-        }
-
-        uint scale = (uint) floor(pow(2, enc->depth) / enc->num_class);
-
-        for (v = 0; v < enc->vu[HEIGHT]; v++) {
-            for (u = 0; u < enc->vu[WIDTH]; u++) {
-                for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                    for (s = 0; s < enc->ts[WIDTH]; s++) {
-                        *qt_lf_ptr[0]++ = enc->org[v][u][t][s];
-
-                        *qt_lf_ptr[1]++ = enc->class[v][u][t][s] * scale;
-                        *qt_lf_ptr[2]++ = enc->class[v][u][t][s] * scale;
-                    }
-                }
-            }
-        }
-
-        if (enc->quadtree_depth > 0) {
-            uint blksize = MAX_BSIZE;
-
-            // TODO: Rever e tentar fazer bonito
-            for (d = enc->quadtree_depth - 1; d >= 0; d--) {
-                for (v = 0; v < enc->vu[HEIGHT]; v += blksize) {
-                    for (u = 0; u < enc->vu[WIDTH]; u += blksize) {
-                        for (t = 0; t < enc->ts[HEIGHT]; t += blksize) {
-                            for (s = 0; s < enc->ts[WIDTH]; s += blksize) {
-                                for (k = v; k < (v + blksize < enc->vu[HEIGHT] ? v + blksize : enc->vu[HEIGHT]); k++) {
-                                    for (l = u;
-                                         l < (u + blksize < enc->vu[WIDTH] ? u + blksize : enc->vu[WIDTH]); l++) {
-                                        if ((enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
-                                             d == enc->quadtree_depth - 1) ||
-                                            (enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
-                                             d < enc->quadtree_depth - 1 &&
-                                             enc->qtmap[d + 1][v / (blksize * 2)][u / (blksize * 2)][t / (blksize * 2)][
-                                                     s / (blksize * 2)] == 1)) {
-                                            if (t + blksize - 1 < enc->ts[HEIGHT]) {
-                                                for (j = s; j < (s + blksize < enc->ts[WIDTH] ? s + blksize
-                                                                                              : enc->ts[WIDTH]); j++) {
-                                                    qt_lf[0]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (s + blksize - 1 < enc->ts[WIDTH]) {
-                                                for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize
-                                                                                               : enc->ts[HEIGHT]); i++) {
-                                                    qt_lf[0]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                        }
-                                        if (d == 0 &&
-                                            enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 1) {
-                                            if (t + blksize / 2 - 1 < enc->ts[HEIGHT]) {
-                                                for (j = s; j < (s + blksize < enc->ts[WIDTH] ? s + blksize
-                                                                                              : enc->ts[WIDTH]); j++) {
-                                                    qt_lf[0]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (t + blksize - 1 < enc->ts[HEIGHT]) {
-                                                for (j = s; j < (s + blksize < enc->ts[WIDTH] ? s + blksize
-                                                                                              : enc->ts[WIDTH]); j++) {
-                                                    qt_lf[0]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (s + blksize / 2 - 1 < enc->ts[WIDTH]) {
-                                                for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize
-                                                                                               : enc->ts[HEIGHT]); i++) {
-                                                    qt_lf[0]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (s + blksize - 1 < enc->ts[WIDTH]) {
-                                                for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize
-                                                                                               : enc->ts[HEIGHT]); i++) {
-                                                    qt_lf[0]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                blksize >>= 1u;
-            }
-
-            for (v = 0; v < enc->vu[HEIGHT]; v++) {
-                for (u = 0; u < enc->vu[WIDTH]; u++) {
-                    for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                        qt_lf[0]->val[v][u][t][enc->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[1]->val[v][u][t][enc->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[2]->val[v][u][t][enc->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
-                    }
-                    for (s = 0; s < enc->ts[WIDTH]; s++) {
-                        qt_lf[0]->val[v][u][enc->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[1]->val[v][u][enc->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[2]->val[v][u][enc->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
-                    }
-                }
-            }
-        }
-
-        // Quadtree partition image name
-        sprintf(partition_img, "%s/partition_%dx%d_%dbpp_LE_YUV444p.yuv", enc->debug_path,
-                enc->vu[WIDTH] * enc->ts[WIDTH], enc->vu[HEIGHT] * enc->ts[HEIGHT], enc->depth);
-
-        // Write image to file
-        for (k = 0; k < 3; k++) {
-            write_yuv(qt_lf[k], partition_img, enc->depth, endianness, SAI);
-        }
-
-        free(partition_img);
-
-        for (k = 0; k < 3; k++) {
-            safefree_lf4d(&qt_lf[k]);
-        }
-    }
+void debug_partition(ENCODER *enc, int endianness) { // TODO: fix this
+//     int d, i, j, k, l, t, s;
+//
+//     img_t *qt_lf_ptr[3];
+//
+//     if (enc->debug_path != NULL) {
+//         char *partition_img = (char *) alloc_mem(
+//                 (strlen(enc->debug_path) + strlen("/partition_0000x0000_10bpp_LE_YUV444p.yuv\0")) * sizeof(char));
+//
+//         LF4D *qt_lf[3];
+//         for (k = 0; k < 3; k++) {
+//             qt_lf[k] = alloc_lf4d(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], (int) pow(2, enc->depth) - 1);
+//             qt_lf_ptr[k] = &qt_lf[k]->val[0][0][0][0];
+//         }
+//
+//         uint scale = (uint) floor(pow(2, enc->depth) / enc->num_class);
+//
+//         for (v = 0; v < enc->vu[HEIGHT]; v++) {
+//             for (u = 0; u < enc->vu[WIDTH]; u++) {
+//                 for (t = 0; t < enc->ts[HEIGHT]; t++) {
+//                     for (s = 0; s < enc->ts[WIDTH]; s++) {
+//                         *qt_lf_ptr[0]++ = enc->org[v][u][t][s];
+//
+//                         *qt_lf_ptr[1]++ = enc->class[v][u][t][s] * scale;
+//                         *qt_lf_ptr[2]++ = enc->class[v][u][t][s] * scale;
+//                     }
+//                 }
+//             }
+//         }
+//
+//         if (enc->quadtree_depth > 0) {
+//             uint blksize = MAX_BSIZE;
+//
+//             // TODO: Rever e tentar fazer bonito
+//             for (d = enc->quadtree_depth - 1; d >= 0; d--) {
+//                 for (v = 0; v < enc->vu[HEIGHT]; v += blksize) {
+//                     for (u = 0; u < enc->vu[WIDTH]; u += blksize) {
+//                         for (t = 0; t < enc->ts[HEIGHT]; t += blksize) {
+//                             for (s = 0; s < enc->ts[WIDTH]; s += blksize) {
+//                                 for (k = v; k < (v + blksize < enc->vu[HEIGHT] ? v + blksize : enc->vu[HEIGHT]); k++) {
+//                                     for (l = u;
+//                                          l < (u + blksize < enc->vu[WIDTH] ? u + blksize : enc->vu[WIDTH]); l++) {
+//                                         if ((enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
+//                                              d == enc->quadtree_depth - 1) ||
+//                                             (enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
+//                                              d < enc->quadtree_depth - 1 &&
+//                                              enc->qtmap[d + 1][v / (blksize * 2)][u / (blksize * 2)][t / (blksize * 2)][
+//                                                      s / (blksize * 2)] == 1)) {
+//                                             if (t + blksize - 1 < enc->ts[HEIGHT]) {
+//                                                 for (j = s; j < (s + blksize < enc->ts[WIDTH] ? s + blksize
+//                                                                                               : enc->ts[WIDTH]); j++) {
+//                                                     qt_lf[0]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[1]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[2]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                 }
+//                                             }
+//                                             if (s + blksize - 1 < enc->ts[WIDTH]) {
+//                                                 for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize
+//                                                                                                : enc->ts[HEIGHT]); i++) {
+//                                                     qt_lf[0]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[1]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[2]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                 }
+//                                             }
+//                                         }
+//                                         if (d == 0 &&
+//                                             enc->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 1) {
+//                                             if (t + blksize / 2 - 1 < enc->ts[HEIGHT]) {
+//                                                 for (j = s; j < (s + blksize < enc->ts[WIDTH] ? s + blksize
+//                                                                                               : enc->ts[WIDTH]); j++) {
+//                                                     qt_lf[0]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[1]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[2]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                 }
+//                                             }
+//                                             if (t + blksize - 1 < enc->ts[HEIGHT]) {
+//                                                 for (j = s; j < (s + blksize < enc->ts[WIDTH] ? s + blksize
+//                                                                                               : enc->ts[WIDTH]); j++) {
+//                                                     qt_lf[0]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[1]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[2]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
+//                                                 }
+//                                             }
+//                                             if (s + blksize / 2 - 1 < enc->ts[WIDTH]) {
+//                                                 for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize
+//                                                                                                : enc->ts[HEIGHT]); i++) {
+//                                                     qt_lf[0]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[1]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[2]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
+//                                                 }
+//                                             }
+//                                             if (s + blksize - 1 < enc->ts[WIDTH]) {
+//                                                 for (i = t; i < (t + blksize < enc->ts[HEIGHT] ? t + blksize
+//                                                                                                : enc->ts[HEIGHT]); i++) {
+//                                                     qt_lf[0]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[1]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                     qt_lf[2]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
+//                                                 }
+//                                             }
+//                                         }
+//                                     }
+//                                 }
+//                             }
+//                         }
+//                     }
+//                 }
+//
+//                 blksize >>= 1u;
+//             }
+//
+//             for (v = 0; v < enc->vu[HEIGHT]; v++) {
+//                 for (u = 0; u < enc->vu[WIDTH]; u++) {
+//                     for (t = 0; t < enc->ts[HEIGHT]; t++) {
+//                         qt_lf[0]->val[v][u][t][enc->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
+//                         qt_lf[1]->val[v][u][t][enc->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
+//                         qt_lf[2]->val[v][u][t][enc->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
+//                     }
+//                     for (s = 0; s < enc->ts[WIDTH]; s++) {
+//                         qt_lf[0]->val[v][u][enc->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
+//                         qt_lf[1]->val[v][u][enc->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
+//                         qt_lf[2]->val[v][u][enc->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
+//                     }
+//                 }
+//             }
+//         }
+//
+//         // Quadtree partition image name
+//         sprintf(partition_img, "%s/partition_%dx%d_%dbpp_LE_YUV444p.yuv", enc->debug_path,
+//                 enc->vu[WIDTH] * enc->ts[WIDTH], enc->vu[HEIGHT] * enc->ts[HEIGHT], enc->depth);
+//
+//         // Write image to file
+//         for (k = 0; k < 3; k++) {
+//             write_yuv(qt_lf[k], partition_img, enc->depth, endianness, SAI);
+//         }
+//
+//         free(partition_img);
+//
+//         for (k = 0; k < 3; k++) {
+//             safefree_lf4d(&qt_lf[k]);
+//         }
+//     }
 }
 
 int main(int argc, char **argv) {
     // Variable declaration
     cost_t cost, min_cost, side_cost = 0;
-    int i, j, k, v, u, t, s, cl, **prd_save, **th_save, **error = NULL;
-    char ****class_save;
-    LF4D *lf = NULL;
+    int i, j, k, t, s, cl, **prd_save, **th_save, **encval_save;
+    char **class_save, **qtmap_save[QUADTREE_DEPTH], **group_save;
+    PMODEL **pmlist_save = NULL;
+    LF4D *lf = NULL, *save_err = NULL;
     ENCODER *enc = NULL;
     double elapse = 0.0;
     int f_mmse = 0;
-    int f_optpred = 0;
     int f_huffman = 0;
     int do_histogram_packing = 1;
     int *forward_table = NULL;
     int quadtree_depth = QUADTREE_DEPTH;
     int num_class = NUM_CLASS;
     int num_group = NUM_GROUP;
-    int mi_size[2] = {0, 0};
+    int sai_size[2] = {0, 0};
     int vu[2] = {0, 0};
-    int prd_order = 0, mi_prd_order[4] = {0, 0, 0, 0};
+    int prd_order = 0, sai_prd_order[4] = {0, 0, 0, 0};
     int coef_precision = COEF_PRECISION;
     int num_pmodel = NUM_PMODEL;
     int pm_accuracy = PM_ACCURACY;
@@ -3394,8 +3099,12 @@ int main(int argc, char **argv) {
     int depth = DEPTH;
     int endianness = LITTLE_ENDIANNESS;
     int chroma = GRAY;
+    int no_hilevels = 0, no_refsai = 0, curr_frame = 0;
+    int **hilevels = NULL, *reference_list = NULL;
+    SAIDISTANCE **reference_candidates = NULL;
+    int sai_coord[2] = {0, 0};
     char *chroma_name = NULL;
-    char *infile, *outfile;
+    char *infile, *outfile, *cfgfile;
     char resfile[1000];
     int format = SAI;
     char *format_name = NULL;
@@ -3404,22 +3113,23 @@ int main(int argc, char **argv) {
     FILE *fp, *res;
 
     //Print results variables
-    int header = 0, class_info, predictors, thresholds, errors;
+    bool print_header = true;
+    int header = 0, *class_info, *predictors, *thresholds, *errors;
     int delta = 1;
 
     cpu_time();
     setbuf(stdout, 0);
-    infile = outfile = NULL;
+    infile = outfile = cfgfile = NULL;
 
     // Read input parameters
     for (i = 1; i < argc; i++) {
         if (argv[i][0] == '-') {
             switch(argv[i][1]) {
                 case 'J':
-                    mi_size[HEIGHT] = (int) strtol(argv[++i], NULL, 10);
-                    mi_size[WIDTH] = (int) strtol(argv[++i], NULL, 10);
+                    sai_size[HEIGHT] = (int) strtol(argv[++i], NULL, 10);
+                    sai_size[WIDTH] = (int) strtol(argv[++i], NULL, 10);
 
-                    if (mi_size[HEIGHT] < 0 || mi_size[WIDTH] < 0) {
+                    if (sai_size[HEIGHT] < 0 || sai_size[WIDTH] < 0) {
                         fprintf(stderr, "The dimensions of the micro images cannot be less than 1!\n");
                         exit(-3);
                     }
@@ -3456,10 +3166,10 @@ int main(int argc, char **argv) {
                     }
 
                     for (j = 0; j < 4; j++) {
-                        mi_prd_order[j] = (int) strtol(argv[++i], NULL, 10);
+                        sai_prd_order[j] = (int) strtol(argv[++i], NULL, 10);
 
-                        if (mi_prd_order[j] < 0 || mi_prd_order[j] > 41) {
-                            mi_prd_order[j] = MI_PRD_ORDER;
+                        if ( sai_prd_order[j] < 0 || sai_prd_order[j] > 41) {
+                            sai_prd_order[j] = SAI_PRD_ORDER;
                         }
                     }
 
@@ -3503,11 +3213,6 @@ int main(int argc, char **argv) {
 
                 case 'm':
                     f_mmse = 1;
-
-                    break;
-
-                case 'o':
-                    f_optpred = 1;
 
                     break;
 
@@ -3583,11 +3288,11 @@ int main(int argc, char **argv) {
                     else {
                         printf("Chroma format not recognised: %s.\n", chroma_name);
                         printf("Supported formats:\n");
-                        printf("\tGRAY;\n"
-                               "\t444;\n"
-                               "\t422; --> Not yet implemented\n"
-                               "\t411; --> Not yet implemented\n"
-                               "\t420.\n");
+                        printf("\tGRAY;\n");
+                        printf("\t444;\n");
+                        printf("\t422; --> Not yet implemented\n");
+                        printf("\t411; --> Not yet implemented\n");
+                        printf("\t420.\n");
                         exit(-2);
                     }
 
@@ -3615,11 +3320,16 @@ int main(int argc, char **argv) {
                     else {
                         printf("Light field format not recognised: %s.\n", format_name);
                         printf("Supported formats:\n");
-                        printf("\tMIA; --> Not yet implemented;\n"
-                               "\tPVS;\n"
-                               "\tSAI.\n");
+                        printf("\tMIA; --> Not yet implemented;\n");
+                        printf("\tPVS;\n");
+                        printf("\tSAI.\n");
                         exit(-2);
                     }
+
+                    break;
+
+                case 'c':
+                    cfgfile = argv[++i];
 
                     break;
 
@@ -3644,22 +3354,25 @@ int main(int argc, char **argv) {
     if (pm_accuracy > coef_precision) pm_accuracy = coef_precision;
 
     // Help and version
-    if (infile == NULL || outfile == NULL) {
+    if (infile == NULL || outfile == NULL || cfgfile == NULL) {
         printf(BANNER"\n", MRP_VERSION, MRP_VERSION_DATE);
         printf("usage: encmrp [options] infile outfile\n");
         printf("options:\n");
         printf("    -J 2 * num  Views dimensions (in pixels) [%c %c]\n", 'H', 'W');
         printf("    -K 2 * num  Dimensions of the array of views [%c %c]\n", 'H', 'W');
-        printf("    -L 5 * num  Prediction order (1 * Intra, 4 * Inter) [%d %d %d %d %d]\n", INTRA_PRD_ORDER, mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG], mi_prd_order[RDIAG]);
+        printf("    -L 5 * num  Prediction order (1 * Intra, 4 * Inter) [%d ", INTRA_PRD_ORDER);
+        for (int r = 0; r < SAI_REFERENCES; r++) printf("%d", SAI_PRD_ORDER);
+        printf("]\n");
+        printf("    -c str      Hierarchical encoding configuration file\n");
         printf("    -b num      Bit depth [%d]\n", depth);
         printf("    -E num      Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
         printf("    -C str      Chroma format [%s]. Supported formats:\n", "GRAY");
-        printf("                    GRAY;\n"
-               "                    444;\n"
-               "                    422; --> Not yet implemented\n"
-               "                    411; --> Not yet implemented\n"
-               "                    420.\n"
-               "                    (Notice: Currently MRP is a Luma only encoder. Thus this step is used only to skip the Chromas.)\n");
+        printf("                    GRAY;\n");
+        printf("                    444;\n");
+        printf("                    422; --> Not yet implemented\n");
+        printf("                    411; --> Not yet implemented\n");
+        printf("                    420.\n");
+        printf("                    (Notice: Currently MRP is a Luma only encoder. Thus this step is used only to skip the Chromas.)\n");
         printf("    -D num      Distance between views [%d]*\n", delta);
         printf("    -M num      Number of predictors [%d]\n", num_class);
         printf("    -P num      Precision of prediction coefficients (fractional bits) [%d]\n", coef_precision);
@@ -3670,12 +3383,11 @@ int main(int argc, char **argv) {
         printf("    -h          Use Huffman coding\n");
         printf("    -f          Fixed block-size for adaptive prediction\n");
         printf("    -u          Deactivate the histogram packing procedures\n");
-        printf("    -o          Further optimization of predictors (experimental)\n");
         printf("    -d          Create extra debug output (coefficients, partitions, etc.)\n");
         printf("    -r str      Light field file format [%s]. Supported formats:\n", "SAI");
-        printf("                    MIA; --> Not yet implemented\n"
-               "                    PVS;\n"
-               "                    SAI.\n");
+        printf("                    MIA; --> Not yet implemented\n");
+        printf("                    PVS;\n");
+        printf("                    SAI.\n");
         printf("infile:     	Input file (must be in a raw YUV format)\n");
         printf("outfile:    	Output file\n");
         printf("\nNote: * stands for a mandatory option.\n");
@@ -3686,7 +3398,7 @@ int main(int argc, char **argv) {
     fp = fileopen(outfile, "wb");
 
     // If the number of classes was not defined it is now
-    k = vu[HEIGHT] * vu[WIDTH] * mi_size[HEIGHT] * mi_size[WIDTH];
+    k = vu[HEIGHT] * vu[WIDTH] * sai_size[HEIGHT] *sai_size[WIDTH];
     if (num_class < 0) {
         num_class = (int) (10.4E-5 * k + 13.8);
 
@@ -3732,14 +3444,22 @@ int main(int argc, char **argv) {
         }
     }
 
+    // Read configuration file
+    hilevels = read_hicfg(cfgfile, vu[HEIGHT] * vu[WIDTH], &no_hilevels);
+    reference_candidates = (SAIDISTANCE **) alloc_mem((vu[HEIGHT] * vu[WIDTH] + 1) * sizeof(SAIDISTANCE));
+    reference_list = (int *) alloc_mem(SAI_REFERENCES);
+
     // Read input file
-    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH], depth, endianness, chroma, format);
+    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], sai_size[HEIGHT], sai_size[WIDTH], depth, endianness, chroma, format);
     // Perform histogram packing if appropriate
     if (do_histogram_packing == 1) forward_table = histogram_check(lf, depth);
 
-    printf("\nMRP-Video Encoder\n\n");
+    // Allocate memory so save the error structure
+    save_err = alloc_lf4d(vu[HEIGHT], vu[WIDTH], sai_size[HEIGHT], sai_size[WIDTH], (int) (pow(2, depth) - 1));
+
+    printf("\nHiMRP Encoder\n\n");
     // Print file characteristics to screen
-    printf("%s (%d x %d x %d x %d x %d) -> %s\n", infile, vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH],depth, outfile);
+    printf("%s (%d x %d x %d x %d x %d) -> %s\n", infile, vu[HEIGHT], vu[WIDTH], sai_size[HEIGHT], sai_size[WIDTH],depth, outfile);
     // Print coding parameters to screen
     printf("M = %d, P = %d, V = %d, A = %d, D = %d\n\n", num_class, coef_precision, num_pmodel, pm_accuracy, delta);
     // Print prediction parameters to screen
@@ -3749,242 +3469,347 @@ int main(int argc, char **argv) {
 
     printf("Prediction order:\n\tFrame I: %d\n\n", prd_order);
 
-    printf("LF Prediction order: %d %d %d %d ", mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG],
-           mi_prd_order[RDIAG]);
-    printf("(4DLF dimensions: %d x %d x %d x %d)\n\n", vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH]);
+    printf("LF Prediction order: ");
+    for (int r = 0; r < SAI_REFERENCES; r++) printf("%d ", sai_prd_order[r]);
+    printf("(4DLF dimensions: %d x %d x %d x %d)\n\n", vu[HEIGHT], vu[WIDTH], sai_size[HEIGHT], sai_size[WIDTH]);
+
+
+    //Allocation of print results variables
+    errors 	   = (int *) alloc_mem(vu[HEIGHT] * vu[WIDTH] * sizeof(int));
+    class_info = (int *) alloc_mem(vu[HEIGHT] * vu[WIDTH] * sizeof(int));
+    predictors = (int *) alloc_mem(vu[HEIGHT] * vu[WIDTH] * sizeof(int));
+    thresholds = (int *) alloc_mem(vu[HEIGHT] * vu[WIDTH] * sizeof(int));
+    for (int f = 0; f < vu[HEIGHT] * vu[WIDTH]; f++) {
+        errors[f] = 0;
+        class_info[f] = 0;
+        predictors[f] = 0;
+        thresholds[f] = 0;
+    }
 
     char *aux = remove_ext(outfile, '.', '/');
     sprintf(resfile, "%s/res_%s.txt", dirname(aux), basename(aux));
     free(aux);
 
     res = fileopen(resfile, "w");
-    fprintf(res, "MRP-Lenslet version %s (%s) encoding results\n", MRP_VERSION, MRP_VERSION_DATE);
+    fprintf(res, "HiMRP version %s (%s) encoding results\n", MRP_VERSION, MRP_VERSION_DATE);
     fprintf(res, "\tEncoded file: %s\n", infile);
-    fprintf(res, "\tDimensions: %d x %d x %d x %d\n", vu[HEIGHT], vu[WIDTH], mi_size[HEIGHT], mi_size[WIDTH]);
+    fprintf(res, "\tDimensions: %d x %d x %d x %d\n", vu[HEIGHT], vu[WIDTH], sai_size[HEIGHT], sai_size[WIDTH]);
     fprintf(res, "---------------------------------------------\n");
 
-    //// Start of the encoding process
     // Perform histogram packing
     if (forward_table != NULL) histogram_packing(lf, forward_table, depth);
 
-    // Creates new ENCODER structure
-    enc = init_encoder(lf, num_class, num_group, prd_order, mi_prd_order, coef_precision, f_huffman, quadtree_depth,
-                       num_pmodel, pm_accuracy, delta, depth, debug_path);
+    // Loop the hierarchical levels
+    for (int h = 0; h < no_hilevels; h++) {
+        printf("Encoding hierarchical level %d.\n", h);
 
-    // Set cost model
-    set_cost_model(enc, f_mmse);
+        // Check if the current hierarchical level is not the first
+        if (h > 0) {
+            no_refsai = 0;
 
-    // First block classification
-    init_class(enc);
+            // Loop previous hierarchical levels to get the reference SAI candidates
+            for (int hh = 0; hh < h; hh++) {
+                for (int f = 1; f <= hilevels[hh][0]; f++) {
+                    // Store the reference SAI number on the reference_candidates structure
+                    reference_candidates[no_refsai]->sai = hilevels[hh][f];
 
-    // Auxiliary variables
-    prd_save = (int **) alloc_2d_array(enc->num_class, enc->full_prd_order, sizeof(int));
-    th_save = (int **) alloc_2d_array(enc->num_class, enc->num_group, sizeof(int));
-    class_save = (char ****) alloc_4d_array(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
+                    // Convert the SAI number to coordinates in the angular dimensions array
+                    frame2coordinates(reference_candidates[no_refsai++]->coordinates, hilevels[hh][f], vu[WIDTH]);
+                }
+            }
+        }
 
-    /* 1st loop */
-    // Loop type
-    enc->optimize_loop = 1;
-    min_cost = INT_MAX;
+        // Loop the frames in hierarchical level h
+        for (int f = 1; f <= hilevels[h][0]; f++) {
+            no_refsai = 0;
+            curr_frame = hilevels[h][f];
 
-    for (i = j = 0; i < max_iteration; i++) {
-        design_predictor(enc, f_mmse);
-        optimize_group(enc);
-        cost = optimize_class(enc);
+            // Get the coordinates of the current SAI
+            frame2coordinates(sai_coord, curr_frame, vu[WIDTH]);
 
-        if (cost < min_cost) {
-            min_cost = cost;
-            j = i;
+            // Calculate the distance of the reference candidates to the current SAI
+            for (i = 0; i < no_refsai; i++) {
+                reference_candidates[i]->distance = pow(reference_candidates[i]->coordinates[0] - sai_coord[0], 2) + pow(reference_candidates[i]->coordinates[1] - sai_coord[1], 2);
+            }
 
-            for (v = 0; v < enc->vu[HEIGHT]; v++) {
-                for (u = 0; u < enc->vu[WIDTH]; u++) {
+            // Sort the reference candidates by growing distance
+            qsort(reference_candidates, no_refsai, sizeof(SAIDISTANCE), compare_distance);
+
+            // Select the actual SAI references, if not encoding the first hierarchical level
+            if (h > 0) {
+                // Select up to SAI_REFERENCES provided the distance is lower than SAI_DISTANCE_THRESHOLD
+                for (i = 0; i < SAI_REFERENCES; i++) {
+                    if (reference_candidates[i]->distance < SAI_DISTANCE_THRESHOLD) {
+                        reference_list[i] = reference_candidates[i]->sai; // TODO: provavelmente melhor mudar para preencher a informação que é necessária para a codificação
+                        no_refsai++;
+                    }
+                }
+            }
+
+            //// Start of the encoding process
+            // Creates new ENCODER structure
+            enc = init_encoder(curr_frame, lf, num_class, num_group, prd_order, sai_prd_order, coef_precision, f_huffman, quadtree_depth,
+                               num_pmodel, pm_accuracy, delta, save_err, no_refsai, reference_list, depth, debug_path);
+
+            // Set cost model
+            set_cost_model(enc, f_mmse);
+
+            // First block classification
+            init_class(enc);
+
+            // Auxiliary variables
+            prd_save = (int **) alloc_2d_array(enc->num_class, enc->full_prd_order, sizeof(int));
+            th_save = (int **) alloc_2d_array(enc->num_class, enc->num_group, sizeof(int));
+            class_save = (char **) alloc_2d_array(enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
+
+            /* 1st loop */
+            // Loop type
+            enc->optimize_loop = 1;
+            min_cost = INT_MAX;
+
+            for (i = j = 0; i < max_iteration; i++) {
+                design_predictor(enc, f_mmse);
+                optimize_group(enc);
+                cost = optimize_class(enc);
+
+                if (cost < min_cost) {
+                    min_cost = cost;
+                    j = i;
+
                     for (t = 0; t < enc->ts[HEIGHT]; t++) {
                         for (s = 0; s < enc->ts[WIDTH]; s++) {
-                            class_save[v][u][t][s] = enc->class[v][u][t][s];
+                            class_save[t][s] = enc->class[t][s];
                         }
                     }
+
+                    for (cl = 0; cl < enc->num_class; cl++) {
+                        for (k = 0; k < enc->full_prd_order; k++) {
+                            prd_save[cl][k] = enc->predictor[cl][k];
+                        }
+
+                        for (k = 0; k < enc->num_group; k++) {
+                            th_save[cl][k] = enc->th[cl][k];
+                        }
+                    }
+                }
+
+                if (i - j >= EXTRA_ITERATION) break;
+                elapse += cpu_time();
+            }
+
+            //Restore values
+            for (t = 0; t < enc->ts[HEIGHT]; t++) {
+                for (s = 0; s < enc->ts[WIDTH]; s++) {
+                    enc->class[t][s] = class_save[t][s];
                 }
             }
 
             for (cl = 0; cl < enc->num_class; cl++) {
                 for (k = 0; k < enc->full_prd_order; k++) {
-                    prd_save[cl][k] = enc->predictor[cl][k];
+                    enc->predictor[cl][k] = prd_save[cl][k];
                 }
 
                 for (k = 0; k < enc->num_group; k++) {
-                    th_save[cl][k] = enc->th[cl][k];
+                    enc->th[cl][k] = th_save[cl][k];
                 }
             }
-        }
 
-        if (i - j >= EXTRA_ITERATION) break;
-        elapse += cpu_time();
-    }
+            set_cost_rate(enc);
+            predict_region(enc, 0, 0, enc->ts[HEIGHT], enc->ts[WIDTH]);
+            cost = calc_cost(enc, 0, 0, enc->ts[HEIGHT], enc->ts[WIDTH]);
 
-    //Restore values
-    for (v = 0; v < enc->vu[HEIGHT]; v++) {
-        for (u = 0; u < enc->vu[WIDTH]; u++) {
-            for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                for (s = 0; s < enc->ts[WIDTH]; s++) {
-                    enc->class[v][u][t][s] = class_save[v][u][t][s];
+            printf("\tSAI: %d\n\t\t1st optimization --> Cost: %d\n", hilevels[h][f], (int) cost);
+
+            // Backup variables
+            prd_save = (int **) alloc_2d_array(enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(int));
+            encval_save = (int **) alloc_2d_array(enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(int));
+            group_save = (char **) alloc_2d_array(enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
+            pmlist_save = (PMODEL **) alloc_mem(enc->num_group * sizeof(PMODEL *));
+
+            // Quadtree map save allocation
+            if (enc->quadtree_depth > 0) {
+                t = (enc->ts[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
+                s = (enc->ts[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
+
+                for (i = enc->quadtree_depth - 1; i >= 0; i--) {
+                    qtmap_save[i] = (char **) alloc_2d_array(t, s, sizeof(char));
+
+                    t <<= 1;
+                    s <<= 1;
                 }
             }
-        }
-    }
 
-    for (cl = 0; cl < enc->num_class; cl++) {
-        for (k = 0; k < enc->full_prd_order; k++) {
-            enc->predictor[cl][k] = prd_save[cl][k];
-        }
+            /* 2nd loop */
+            //Loop type
+            enc->optimize_loop = 2;
+            min_cost = INT_MAX;
 
-        for (k = 0; k < enc->num_group; k++) {
-            enc->th[cl][k] = th_save[cl][k];
-        }
-    }
+            for (i = j = 0; i < max_iteration; i++) {
+                side_cost = encode_predictor(NULL, enc);
+                optimize_group(enc);
+                side_cost += encode_threshold(NULL, enc);
+                cost = optimize_class(enc);
+                side_cost += encode_class(NULL, enc);
+                cost += side_cost;
 
-    set_cost_rate(enc);
-    predict_region(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]);
-    cost = calc_cost(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]);
+                if (cost < min_cost) {
+                    min_cost = cost;
+                    j = i;
 
-    printf("1st optimization --> Cost: %d\n", (int) cost);
+                    for (t = 0; t < enc->ts[HEIGHT]; t++) {
+                        for (s = 0; s < enc->ts[WIDTH]; s++) {
+                            class_save[t][s] = enc->class[t][s];
+                            group_save[t][s] = enc->group[t][s];
+                            prd_save[t][s] = enc->prd[t][s];
+                            encval_save[t][s] = enc->encval[t][s];
+                        }
+                    }
 
-    /* 2nd loop */
-    //Loop type
-    enc->optimize_loop = 2;
-    min_cost = INT_MAX;
+                    for (cl = 0; cl < enc->num_class; cl++) {
+                        for (k = 0; k < enc->num_group; k++) {
+                            th_save[cl][k] = enc->th[cl][k];
+                            pmlist_save[k] = enc->pmlist[k];
+                        }
+                    }
 
-    for (i = j = 0; i < max_iteration; i++) {
-        if (f_optpred) {
-            optimize_predictor(enc);
-        }
+                    if (enc->quadtree_depth > 0) {
+                        int tt, ss;
 
-        side_cost = encode_predictor(NULL, enc);
-        optimize_group(enc);
-        side_cost += encode_threshold(NULL, enc);
-        cost = optimize_class(enc);
-        side_cost += encode_class(NULL, enc);
-        cost += side_cost;
+                        tt = (enc->ts[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
+                        ss = (enc->ts[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
 
-        if (cost < min_cost) {
-            min_cost = cost;
-            j = i;
-
-            if (f_optpred) {
-                for (v = 0; v < enc->vu[HEIGHT]; v++) {
-                    for (u = 0; u < enc->vu[WIDTH]; u++) {
-                        for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                            for (s = 0; s < enc->ts[WIDTH]; s++) {
-                                class_save[v][u][t][s] = enc->class[v][u][t][s];
+                        for (k = enc->quadtree_depth - 1; k >= 0; k--) {
+                            for (t = 0; t < tt; t++) {
+                                for (s = 0; s < ss; s++) {
+                                    qtmap_save[k][t][s] = enc->qtmap[k][t][s];
+                                }
                             }
+
+                            tt <<= 1;
+                            ss <<= 1;
                         }
                     }
                 }
 
-                for (cl = 0; cl < enc->num_class; cl++) {
-                    for (k = 0; k < enc->full_prd_order; k++) {
-                        prd_save[cl][k] = enc->predictor[cl][k];
-                    }
+                if (i > j) break;
 
-                    for (k = 0; k < enc->num_group; k++) {
-                        th_save[cl][k] = enc->th[cl][k];
-                    }
+                elapse += cpu_time();
+            }
+
+            // Recover optimal values
+            for (t = 0; t < enc->ts[HEIGHT]; t++) {
+                for (s = 0; s < enc->ts[WIDTH]; s++) {
+                    enc->class[t][s] = class_save[t][s];
+                    enc->group[t][s] = group_save[t][s];
+                    enc->prd[t][s] = prd_save[t][s];
+                    enc->encval[t][s] = encval_save[t][s];
                 }
             }
-        }
 
-        if (f_optpred) {
-            if (i - j >= EXTRA_ITERATION) break;
-        }
-        else {
-            if (i > j) break;
-        }
+            for (cl = 0; cl < enc->num_class; cl++) {
+                i = 0;
 
-        elapse += cpu_time();
-    }
+                for (k = 0; k < enc->num_group; k++) {
+                    enc->th[cl][k] = th_save[cl][k];
 
-    if (f_optpred) {
-        for (v = 0; v < enc->vu[HEIGHT]; v++) {
-            for (u = 0; u < enc->vu[WIDTH]; u++) {
-                for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                    for (s = 0; s < enc->ts[WIDTH]; s++) {
-                        enc->class[v][u][t][s] = class_save[v][u][t][s];
+                    enc->pmlist[k] = pmlist_save[k];
+
+                    for (; i < enc->th[cl][k]; i++) {
+                        enc->uquant[cl][i] = (char) k;
                     }
                 }
             }
-        }
 
-        for (cl = 0; cl < enc->num_class; cl++) {
-            for (k = 0; k < enc->full_prd_order; k++) {
-                enc->predictor[cl][k] = prd_save[cl][k];
-            }
+            if (enc->quadtree_depth > 0) {
+                int tt, ss;
 
-            i = 0;
+                tt = (enc->ts[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
+                ss = (enc->ts[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
 
-            for (k = 0; k < enc->num_group; k++) {
-                enc->th[cl][k] = th_save[cl][k];
+                for (i = enc->quadtree_depth - 1; i >= 0; i--) {
+                    for (t = 0; t < tt; t++) {
+                        for (s = 0; s < ss; s++) {
+                            enc->qtmap[i][s][t] = qtmap_save[i][t][s];
+                        }
+                    }
 
-                for (; i < enc->th[cl][k]; i++) {
-                    enc->uquant[cl][i] = (char) k;
+                    tt <<= 1;
+                    ss <<= 1;
                 }
             }
+
+            remove_emptyclass(enc);
+
+            printf("\t\t2nd optimization --> Cost: %d (%d)", (int) cost, (int) side_cost);
+            printf(" --> M = %d\n", enc->num_class);
+
+            if (print_header) {
+                print_header = false;
+
+                // Write header to file
+                header = write_header(enc, vu, no_hilevels, prd_order, sai_prd_order, fp);
+
+                // Write histogram packing table to file
+                if (forward_table != NULL) {
+                    header += encode_lookuptable(fp, forward_table, (int) pow(2, depth));
+                }
+                else {
+                    header += putbits(fp, 16, 0);
+                }
+
+                // Free histogram packing table
+                safefree((void **) &forward_table);
+            }
+
+            class_info[hilevels[h][f]] = write_class(enc, fp);
+            class_info[hilevels[h][f]] += write_hilevel(h, fp);
+
+            if (enc->f_huffman == 0) {
+                enc->rc = rc_init();
+            }
+
+            class_info[hilevels[h][f]] += encode_class(fp, enc);
+            predictors[hilevels[h][f]] = encode_predictor(fp, enc);
+            thresholds[hilevels[h][f]] = encode_threshold(fp, enc);
+            errors[hilevels[h][f]] = encode_image(fp, enc);
+
+            free(class_save);
+            free(prd_save);
+            free(th_save);
+
+            if (debug == 1) {
+                debug_predictors(enc);
+                debug_partition(enc, endianness);
+
+                free(debug_path);
+            }
+
+            // Save the residuals into the 4D structure
+            for (t = 0; enc->ts[HEIGHT]; t++) {
+                for (s = 0; enc->ts[WIDTH]; s++) {
+                    save_err->val[sai_coord[0]][sai_coord[1]][t][s] = enc->err[0][t][s];
+                }
+            }
+
+            free_encoder(enc);
+
+            if (f_huffman == 1) {
+                putbits(fp, 7, 0);    /* flush remaining bits */
+            }
+
+            fclose(fp);
         }
-
-        predict_region(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]);
-        cost = calc_cost(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]);
-        optimize_class(enc);
     }
-
-    remove_emptyclass(enc);
-
-    printf("2nd optimization --> Cost: %d (%d)", (int) cost, (int) side_cost);
-    printf(" --> M = %d\n", enc->num_class);
-
-    header = write_header(enc, prd_order, mi_prd_order, fp);
-
-    if (forward_table != NULL) {
-        header += encode_lookuptable(fp, forward_table, (int) pow(2, depth));
-    }
-    else {
-        header += putbits(fp, 16, 0);
-    }
-
-    class_info = write_class(enc, fp);
-
-    if (enc->f_huffman == 0) {
-        enc->rc = rc_init();
-    }
-
-    class_info += encode_class(fp, enc);
-    predictors = encode_predictor(fp, enc);
-    thresholds = encode_threshold(fp, enc);
-    errors = encode_image(fp, enc);
-
-    free(class_save);
-    free(prd_save);
-    free(th_save);
-
-    if (debug == 1) {
-        debug_predictors(enc);
-        debug_partition(enc, endianness);
-
-        free(debug_path);
-    }
-
-    free_encoder(enc);
 
     safefree_lf4d(&lf);
+    safefree_lf4d(&save_err);
 
-    if (f_huffman == 1) {
-        putbits(fp, 7, 0);    /* flush remaining bits */
-    }
+    print_results(res, no_hilevels, hilevels, vu, sai_size, header, class_info, predictors, thresholds, errors);
 
-    fclose(fp);
-
-    print_results(res, vu, mi_size, header, class_info, predictors, thresholds, errors);
-
-    free(error);
-
-    safefree((void **) &forward_table);
+    free(class_info);
+    free(predictors);
+    free(thresholds);
+    free(errors);
 
     elapse += cpu_time();
 

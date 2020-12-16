@@ -4,7 +4,7 @@
 #define HAVE_CLOCK
 #define HAVE_64BIT_INTEGER
 #define MAGIC_NUMBER        ('M' << 8) + 'R'
-#define BANNER              "\nIT - Leiria: Minimum Rate Predictors Lenslet\nencmrp/decmrp version %s (%s)"
+#define BANNER              "\nIT - Leiria: Hierarchical Minimum Rate Predictors\nencmrp/decmrp version %s (%s)"
 #define uint                unsigned int
 #define img_t               unsigned short
 #define cost_t              double
@@ -37,32 +37,20 @@
 // MRP Common
 #define DEPTH               8
 #define QUADTREE_DEPTH      4
-#define BASE_BSIZE          4
+#define BASE_BSIZE          8
 #define MAX_BSIZE           32
 #define MIN_BSIZE           (MAX_BSIZE >> QUADTREE_DEPTH)
 #define MAX_CLASS           63
 #define NUM_CLASS           -1
 #define NUM_GROUP           16
 #define INTRA_PRD_ORDER     -1
-#define MI_PRD_ORDER        1
+#define SAI_PRD_ORDER        1
 #define COEF_PRECISION      6
 #define MAX_COEF            (2 << COEF_PRECISION)
 #define MAX_UPARA           512
 #define MAX_ITERATION       100
 #define EXTRA_ITERATION     10
 #define OPT_SIDEINFO
-
-#define INTRA_PRED          0
-#define MI_UP_PRED          1
-#define MI_LEFT_PRED        2
-#define MI_LDIAG_PRED       3
-#define MI_RDIAG_PRED       4
-#define MI_BORDERS_PRED     5
-
-#define UP                  0
-#define LEFT                1
-#define LDIAG               2
-#define RDIAG               3
 
 #define HEIGHT              0
 #define WIDTH               1
@@ -82,6 +70,10 @@
 #define MIA                 0
 #define PVS                 1
 #define SAI                 2
+
+// Hierarchical coding
+#define SAI_REFERENCES             4
+#define SAI_DISTANCE_THRESHOLD     5
 
 // Entropy coding
 typedef struct {
@@ -123,11 +115,19 @@ typedef struct {
     int y, x;
 } POINT;
 
+// Store the SAI number and its distance
+typedef struct
+{
+    int sai;
+    int coordinates[2];
+    double distance;
+} SAIDISTANCE;
+
 // Encoder
 typedef struct {
     int ts[2]; // View dimensions
-    int vu[2]; // Views array dimensions
 
+    int no_refsai; // Number of reference SAIs available
     int delta; // Distance between the reference frame and the current one
     int depth; // Bit depth of the input image/sequence
     int maxval; // Image maximum value
@@ -136,7 +136,7 @@ typedef struct {
 
     int full_prd_order;
     int prd_order; // Order of the predictors (number of pixels to use)
-    int mi_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
+    int sai_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
 
     int coef_precision; // Precision of the coefficients
     int num_pmodel; // Number of probability models
@@ -147,32 +147,23 @@ typedef struct {
     int optimize_loop; // First or second optimization loop
     int **predictor; // Stores the prediction coefficients for all classes
     int **th; // Indicates the threshold values used to quantize the weighted sum of neighboring residues, to be used on the context coding.
-    int ****upara; // Context for the residue encoding, without the quantization.
-    int ****prd; // Prediction value for each pixel
-    int ****err; // Matrix that keeps residue values after the prediction.
-    int ****org; // Original video/image
-    int ****encval; // Pointer to the error (in set_cost_model()) and later to the image real values (in set_cost_rate()).
+    int **upara; // Context for the residue encoding, without the quantization.
+    int **prd; // Prediction value for each pixel
+    int ***err; // Matrix that keeps residue values after the prediction.
+    int ***org; // Original video/image
+    int **encval; // Pointer to the error (in set_cost_model()) and later to the image real values (in set_cost_rate()).
 
     int *intra_ctx_weight; // Keeps the weights used for the residue encoding context.
+    int *sai_ref_ctx_weight[SAI_REFERENCES]; // Keeps the weights used for the residue encoding context.
 
-    int *mi_borders_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *mi_up_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *mi_left_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *mi_ldiag_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *mi_rdiag_ctx_weight; // Keeps the weights used for the residue encoding context.
-
-    int *****intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-
-    int *****mi_up_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int *****mi_left_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int *****mi_ldiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int *****mi_rdiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int ***sai_ref_roff[SAI_REFERENCES]; // Auxiliary structure used to scan the image for neighboring pixels.
 
     int qtctx[QUADTREE_DEPTH << 3]; // Frequency counter of the segmentation flag context for the whole image.
-    char ****qtmap[QUADTREE_DEPTH]; // Segmentation flags for the quadtree partitioning of the image's prediction.
+    char **qtmap[QUADTREE_DEPTH]; // Segmentation flags for the quadtree partitioning of the image's prediction.
 
-    char ****class; // Keeps the class of each pixel
-    char ****group; // keeps the group, i.e. the quantized context used for residue entropy coding.
+    char **class; // Keeps the class of each pixel
+    char **group; // keeps the group, i.e. the quantized context used for residue entropy coding.
 
     char **uquant; // Table used for the quantification of the context variable u.
     int etype; // Error type for the error conversion table
@@ -198,7 +189,6 @@ typedef struct {
 // Decoder
 typedef struct {
     int ts[2]; // View dimensions
-    int vu[2]; // Views array dimensions
 
     int maxval;
     int delta;
@@ -211,13 +201,9 @@ typedef struct {
     int prd_order;
     int mi_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
 
-    int *****intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-
-    int *****mi_up_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int *****mi_left_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int *****mi_ldiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-    int *****mi_rdiag_roff; // Auxiliary structure used to scan the image for neighboring pixels.
-
+    int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
+    int ***sai_ref_roff[SAI_REFERENCES]; // Auxiliary structure used to scan the image for neighboring pixels.
+    
     int num_pmodel;
     int pm_accuracy;
     int maxprd;
@@ -225,17 +211,13 @@ typedef struct {
     int f_huffman;
     int quadtree_depth;
     int **predictor;
-    int ****err;
+    int ***err;
 
     int *intra_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *mi_borders_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *mi_up_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *mi_left_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *mi_rdiag_ctx_weight; // Keeps the weights used for the residue encoding context.
-    int *mi_ldiag_ctx_weight; // Keeps the weights used for the residue encoding context.
+    int *sai_ref_ctx_weight[SAI_REFERENCES]; // Keeps the weights used for the residue encoding context.
 
-    char ****qtmap[QUADTREE_DEPTH];
-    char ****class;
+    char **qtmap[QUADTREE_DEPTH];
+    char **class;
 
     char **uquant;
     int *pm_idx;
@@ -274,9 +256,9 @@ void write_yuv(LF4D *, char *, int, int, int);
 
 LF4D *read_yuv(char *, int, int, int, int, int, int, int, int);
 
-int *****init_ref_offset(int[2], int[2], int, int);
+int ***init_ref_offset(int[2], int, int);
 
-void free_ref_offset(int[2], int[2], int, int, int *****);
+void free_ref_offset(const int[2], int, int, int ***);
 
 int *init_ctx_weight(int, int, int);
 
@@ -284,11 +266,9 @@ int e2E(int, int, int, int);
 
 int E2e(int, int, int, int);
 
-void mtf_classlabel(char ****, int *, int, int, int, int, int, int, int);
+void mtf_classlabel(char **, int *, int, int, int, int, int);
 
 double cpu_time(void);
-
-int **select_bref(int);
 
 char *cat_str(char *, char *, int);
 
