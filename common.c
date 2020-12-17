@@ -325,12 +325,6 @@ LF4D *read_yuv(char *filename, int v, int u, int t, int s, int depth, int endian
     //Open file
     fp = fileopen(filename, "rb");
 
-    // Check if image dimensions are correct (It has to be multiple of BASE_BSIZE)
-//    if ((width % BASE_BSIZE) || (height % BASE_BSIZE)) {
-//        fprintf(stderr, "Image width and height must be multiples of %d!\n", BASE_BSIZE);
-//        exit(1);
-//    }
-
     fread(stream, sizeof(unsigned char), elements, fp);
     stream_ptr = stream;
 
@@ -394,6 +388,8 @@ LF4D *read_yuv(char *filename, int v, int u, int t, int s, int depth, int endian
 
             break;
     }
+
+    free(stream);
 
     fclose(fp);
 
@@ -914,4 +910,21 @@ char *int2bin(int a, int buf_size) {
     }
 
     return buffer;
+}
+
+// Convert the frame number to coordinates in VxU
+void frame2coordinates(int *coordinates, int frame, const int U) {
+    coordinates[0] = frame / U;
+    coordinates[1] = frame % U;
+}
+
+// Compare SAI distance for the sort function
+int compare_distance(const void *a, const void *b) {
+    SAIDISTANCE *saidist_a = *((SAIDISTANCE**) a);
+    SAIDISTANCE *saidist_b = *((SAIDISTANCE**) b);
+
+    double diff = saidist_a->distance - saidist_b->distance;
+    int signal = diff < 0 ? -1 : diff > 0 ? 1 : 0;
+
+    return (signal);
 }

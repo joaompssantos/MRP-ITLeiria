@@ -116,8 +116,7 @@ typedef struct {
 } POINT;
 
 // Store the SAI number and its distance
-typedef struct
-{
+typedef struct {
     int sai;
     int coordinates[2];
     double distance;
@@ -190,6 +189,7 @@ typedef struct {
 typedef struct {
     int ts[2]; // View dimensions
 
+    int no_refsai; // Number of reference SAIs available
     int maxval;
     int delta;
     int depth; // Bit depth of the input image/sequence
@@ -199,7 +199,7 @@ typedef struct {
 
     int full_prd_order;
     int prd_order;
-    int mi_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
+    int sai_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
 
     int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
     int ***sai_ref_roff[SAI_REFERENCES]; // Auxiliary structure used to scan the image for neighboring pixels.
@@ -212,6 +212,7 @@ typedef struct {
     int quadtree_depth;
     int **predictor;
     int ***err;
+    img_t ***org; // Original video/image
 
     int *intra_ctx_weight; // Keeps the weights used for the residue encoding context.
     int *sai_ref_ctx_weight[SAI_REFERENCES]; // Keeps the weights used for the residue encoding context.
@@ -303,5 +304,9 @@ void rc_finishenc(FILE *, RANGECODER *);
 int rc_decode(FILE *, RANGECODER *, PMODEL *, int, int);
 
 void rc_startdec(FILE *, RANGECODER *);
+
+void frame2coordinates(int *, int, int);
+
+int compare_distance(const void *, const void *);
 
 #endif //MRP_H
