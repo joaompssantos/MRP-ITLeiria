@@ -7,9 +7,6 @@
 #include "mrp.h"
 #include "mrp_config.h"
 
-extern POINT dyx[];
-extern POINT idyx[];
-extern POINT tridyx[];
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
 
@@ -35,34 +32,39 @@ uint getbits(FILE *fp, int n) {
 }
 
 int read_class(FILE *fp) {
-    return(getbits(fp, 8));
+    return((int) getbits(fp, 8));
 }
 
-DECODER *init_decoder(FILE *fp, const int *vu, const int *ts, int maxval, int num_comp, int num_group, int prd_order,
-                      const int *mi_prd_order, int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel,
-                      int pm_accuracy, int delta, int depth, char *debug_path) {
+void read_hilevel(int *hilevel, int *frame, FILE *fp) {
+    *hilevel = (int) getbits(fp, 8);
+    *frame = (int) getbits(fp, 8);
+}
+
+DECODER *init_decoder(FILE *fp, const int *ts, int maxval, int num_class, int num_comp, int num_group, int prd_order,
+                      const int *sai_prd_order, int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel,
+                      int pm_accuracy, int delta, int depth, int frame, LF4D *lf, LF4D *save_err, int no_refsai,
+                      int *reference_list, char *debug_path) {
     DECODER *dec;
     int i;
+    int sai_coord[2] = {0, 0};
+    frame2coordinates(sai_coord, frame, lf->u);
 
     dec = (DECODER *) alloc_mem(sizeof(DECODER));
 
-    dec->vu[HEIGHT] = vu[HEIGHT];
-    dec->vu[WIDTH] = vu[WIDTH];
     dec->ts[HEIGHT] = ts[HEIGHT];
     dec->ts[WIDTH] = ts[WIDTH];
 
     dec->maxval = maxval;
     dec->num_comp = num_comp;
     dec->num_group = num_group;
+    dec->no_refsai = no_refsai;
 
     dec->prd_order = prd_order;
-    dec->mi_prd_order[UP] = mi_prd_order[UP];
-    dec->mi_prd_order[LEFT] = mi_prd_order[LEFT];
-    dec->mi_prd_order[RDIAG] = mi_prd_order[RDIAG];
-    dec->mi_prd_order[LDIAG] = mi_prd_order[LDIAG];
-
-    dec->full_prd_order = dec->prd_order + dec->mi_prd_order[UP] + dec->mi_prd_order[LEFT] + dec->mi_prd_order[RDIAG] +
-                          dec->mi_prd_order[LDIAG];
+    dec->full_prd_order = dec->prd_order;
+    for (i = 0; i < dec->no_refsai; i++) {
+        dec->sai_prd_order[i] = sai_prd_order[i];
+        dec->full_prd_order += dec->sai_prd_order[i];
+    }
 
     dec->num_pmodel = num_pmodel;
     dec->coef_precision = coef_precision;
@@ -81,52 +83,44 @@ DECODER *init_decoder(FILE *fp, const int *vu, const int *ts, int maxval, int nu
         dec->debug_path = NULL;
     }
 
-    dec->num_class = read_class(fp);
+    dec->num_class = num_class;
 
     dec->predictor = (int **) alloc_2d_array(dec->num_class, dec->full_prd_order, sizeof(int));
 
-    dec->err = (int ****) alloc_4d_array(dec->vu[HEIGHT] + 1, dec->vu[WIDTH], dec->ts[HEIGHT], dec->ts[WIDTH], sizeof(int));
-    dec->err[dec->vu[HEIGHT]][0][0][0] = (dec->maxval + 1) >> 2;
+    // Memory allocation for the original image
+    dec->org = (img_t ***) alloc_3d_array(dec->no_refsai + 1, dec->ts[HEIGHT] + 1, dec->ts[WIDTH], sizeof(img_t));
+    // Memory allocation for the error structure
+    dec->err = (int ***) alloc_3d_array(dec->no_refsai + 1, dec->ts[HEIGHT] + 1, dec->ts[WIDTH], sizeof(int));
+
+    // Auxiliary values
+    dec->org[0][dec->ts[HEIGHT]][0] = (dec->maxval + 1) >> 1;
+    dec->err[0][dec->ts[HEIGHT]][0] = (dec->maxval + 1) >> 2;
+
+    // Copy reference images to encoder struct, initialize group array
+    for (i = 0; i < dec->no_refsai; i++) {
+        for (int t = 0; t < dec->ts[HEIGHT]; t++) {
+            for (int s = 0; s < dec->ts[WIDTH]; s++) {
+                frame2coordinates(sai_coord, reference_list[i], lf->u);
+
+                dec->org[i + 1][t][s] = lf->val[sai_coord[0]][sai_coord[1]][t][s];
+                dec->err[i + 1][t][s] = save_err->val[sai_coord[0]][sai_coord[1]][t][s];
+            }
+        }
+
+        // Auxiliary values
+        dec->org[i][dec->ts[HEIGHT]][0] = (dec->maxval + 1) >> 1;
+        dec->err[i][dec->ts[HEIGHT]][0] = (dec->maxval + 1) >> 2;
+    }
 
     //Initiation of the reference offset
-    dec->intra_roff = init_ref_offset(dec->vu, dec->ts, INTRA_PRED, dec->prd_order);
+    dec->intra_roff = init_ref_offset(dec->ts, 0, dec->prd_order);
 
     // Keeps the weights used for the residue encoding context
-    dec->intra_ctx_weight = init_ctx_weight(INTRA_PRED, dec->prd_order, dec->delta);
+    dec->intra_ctx_weight = init_ctx_weight(0, dec->prd_order, dec->delta);
 
-    if (dec->mi_prd_order[UP] > 0) {
-        dec->mi_up_roff = init_ref_offset(dec->vu, dec->ts, MI_UP_PRED, dec->mi_prd_order[UP]);
-        dec->mi_up_ctx_weight = init_ctx_weight(MI_UP_PRED, dec->mi_prd_order[UP], dec->delta);
-
-        dec->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, dec->mi_prd_order[UP], dec->delta);
-    }
-
-    if (dec->mi_prd_order[LEFT] > 0) {
-        dec->mi_left_roff = init_ref_offset(dec->vu, dec->ts, MI_LEFT_PRED, dec->mi_prd_order[LEFT]);
-        dec->mi_left_ctx_weight = init_ctx_weight(MI_LEFT_PRED, dec->mi_prd_order[LEFT], dec->delta);
-
-        if (dec->mi_prd_order[LEFT] > dec->mi_prd_order[UP]) {
-            dec->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, dec->mi_prd_order[LEFT], dec->delta);
-        }
-    }
-
-    if (dec->mi_prd_order[LDIAG] > 0) {
-        dec->mi_ldiag_roff = init_ref_offset(dec->vu, dec->ts, MI_LDIAG_PRED, dec->mi_prd_order[LDIAG]);
-        dec->mi_ldiag_ctx_weight = init_ctx_weight(MI_LDIAG_PRED, dec->mi_prd_order[LDIAG], dec->delta);
-
-        if (dec->mi_prd_order[LDIAG] > dec->mi_prd_order[UP] && dec->mi_prd_order[LDIAG] > dec->mi_prd_order[LEFT]) {
-            dec->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, dec->mi_prd_order[LDIAG], dec->delta);
-        }
-    }
-
-    if (dec->mi_prd_order[RDIAG] > 0) {
-        dec->mi_rdiag_roff = init_ref_offset(dec->vu, dec->ts, MI_RDIAG_PRED, dec->mi_prd_order[RDIAG]);
-        dec->mi_rdiag_ctx_weight = init_ctx_weight(MI_RDIAG_PRED, dec->mi_prd_order[RDIAG], dec->delta);
-
-        if (dec->mi_prd_order[RDIAG] > dec->mi_prd_order[UP] && dec->mi_prd_order[RDIAG] > dec->mi_prd_order[LEFT] &&
-            dec->mi_prd_order[RDIAG] > dec->mi_prd_order[LDIAG]) {
-            dec->mi_borders_ctx_weight = init_ctx_weight(MI_BORDERS_PRED, dec->mi_prd_order[RDIAG], dec->delta);
-        }
+    for (i = 0; i < dec->no_refsai; i++) {
+        dec->sai_ref_roff[i] = init_ref_offset(dec->ts, i + 1, dec->sai_prd_order[i]);
+        dec->sai_ref_ctx_weight[i] = init_ctx_weight(i + 1, dec->sai_prd_order[i], dec->delta);
     }
 
     if (dec->f_huffman == 0) {
@@ -136,36 +130,27 @@ DECODER *init_decoder(FILE *fp, const int *vu, const int *ts, int maxval, int nu
 
     // Quadtree map
     if (dec->quadtree_depth > 0) {
-        int v, u, t, s, vv, uu, tt, ss;
+        int t, s, tt, ss;
 
-        vv = (dec->vu[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
-        uu = (dec->vu[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
         tt = (dec->ts[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
         ss = (dec->ts[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
 
         for (i = dec->quadtree_depth - 1; i >= 0; i--) {
-            dec->qtmap[i] = (char ****) alloc_4d_array(vv, uu, tt, ss, sizeof(char));
+            dec->qtmap[i] = (char **) alloc_2d_array(tt, ss, sizeof(char));
 
-            for (v = 0; v < vv; v++) {
-                for (u = 0; u < uu; u++) {
-                    for (t = 0; t < tt; t++) {
-                        for (s = 0; s < ss; s++) {
-                            dec->qtmap[i][v][u][t][s] = 0;
-                        }
-                    }
+            for (t = 0; t < tt; t++) {
+                for (s = 0; s < ss; s++) {
+                    dec->qtmap[i][t][s] = 0;
                 }
             }
 
-            vv <<= 1;
-            uu <<= 1;
             tt <<= 1;
             ss <<= 1;
         }
     }
 
     // Class and uquant arrays
-    dec->class = (char ****) alloc_4d_array(dec->vu[HEIGHT], dec->vu[WIDTH], dec->ts[HEIGHT], dec->ts[WIDTH], sizeof(char));
-
+    dec->class = (char **) alloc_2d_array(dec->ts[HEIGHT], dec->ts[WIDTH], sizeof(char));
     dec->uquant = (char **) alloc_2d_array(dec->num_class, MAX_UPARA + 1, sizeof(char));
 
     if (dec->num_pmodel > 1) {
@@ -195,35 +180,16 @@ void free_decoder(DECODER *dec) {
     int i, j, gr, num_subpm;
 
     free(dec->predictor);
+    free(dec->org);
     free(dec->err);
 
     free(dec->intra_ctx_weight);
-    free_ref_offset(dec->vu, dec->ts, INTRA_PRED, dec->prd_order, dec->intra_roff);
+    free_ref_offset(dec->ts, 0, dec->prd_order, dec->intra_roff);
 
-    if(dec->mi_prd_order[UP] > 0) {
-        free(dec->mi_up_ctx_weight);
-        free_ref_offset(dec->vu, dec->ts, MI_UP_PRED, dec->mi_prd_order[UP], dec->mi_up_roff);
+    for (i = 0; i < dec->no_refsai; i++) {
+        free(dec->sai_ref_ctx_weight[i]);
+        free_ref_offset(dec->ts, i + 1, dec->sai_prd_order[i], dec->sai_ref_roff[i]);
     }
-
-    if(dec->mi_prd_order[LEFT] > 0) {
-        free(dec->mi_left_ctx_weight);
-        free_ref_offset(dec->vu, dec->ts, MI_LEFT_PRED, dec->mi_prd_order[LEFT], dec->mi_left_roff);
-    }
-
-    if(dec->mi_prd_order[LDIAG] > 0) {
-        free(dec->mi_ldiag_ctx_weight);
-        free_ref_offset(dec->vu, dec->ts, MI_LDIAG_PRED, dec->mi_prd_order[LDIAG], dec->mi_ldiag_roff);
-    }
-
-    if(dec->mi_prd_order[RDIAG] > 0) {
-        free(dec->mi_rdiag_ctx_weight);
-        free_ref_offset(dec->vu, dec->ts, MI_RDIAG_PRED, dec->mi_prd_order[RDIAG], dec->mi_rdiag_roff);
-    }
-
-    if (dec->mi_prd_order[UP] > 0 || dec->mi_prd_order[LEFT] > 0 || dec->mi_prd_order[LDIAG] > 0 ||
-        dec->mi_prd_order[RDIAG] > 0)
-        free(dec->mi_borders_ctx_weight);
-
 
     if (dec->quadtree_depth > 0) {
         for (i = dec->quadtree_depth - 1; i >= 0; i--) {
@@ -263,12 +229,13 @@ void free_decoder(DECODER *dec) {
         free(dec->rc);
     }
 
+    free(dec->debug_path);
     free(dec);
 }
 
 void read_header(FILE *fp, int vu[2], int ts[2], int *maxval, int *depth, int *num_comp, int *num_group, int *prd_order,
-                 int mi_prd_order[4], int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman,
-                 int *quadtree_depth, int *delta, int *hist_bytes) {
+                 int *sai_prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman,
+                 int *quadtree_depth, int *delta, int *hist_bytes, int *hilevels) {
     int i = 0;
 
     if (getbits(fp, 16) != MAGIC_NUMBER) {
@@ -276,28 +243,28 @@ void read_header(FILE *fp, int vu[2], int ts[2], int *maxval, int *depth, int *n
         exit(1);
     }
 
-    vu[HEIGHT] = getbits(fp, 16);
-    vu[WIDTH] = getbits(fp, 16);
-    ts[HEIGHT] = getbits(fp, 16);
-    ts[WIDTH] = getbits(fp, 16);
-    *maxval = getbits(fp, 16);
-    *depth = getbits(fp, 6);
-    *num_comp = getbits(fp, 4);
-    *num_group = getbits(fp, 6);
+    vu[HEIGHT] = (int) getbits(fp, 16);
+    vu[WIDTH]  = (int) getbits(fp, 16);
+    ts[HEIGHT] = (int) getbits(fp, 16);
+    ts[WIDTH]  = (int) getbits(fp, 16);
+    *maxval    = (int) getbits(fp, 16);
+    *depth     = (int) getbits(fp, 6);
+    *num_comp  = (int) getbits(fp, 4);
+    *num_group = (int) getbits(fp, 6);
+    *hilevels  = (int) getbits(fp, 8);
+    *prd_order = (int) getbits(fp, 8);
 
-    *prd_order = getbits(fp, 8);
-
-    for (i = 0; i < 4; i++) {
-        mi_prd_order[i] = getbits(fp, 8);
+    for (i = 0; i < SAI_REFERENCES; i++) {
+        sai_prd_order[i] = (int) getbits(fp, 8);
     }
 
-    *delta = getbits(fp, 8);
-    *num_pmodel = getbits(fp, 6) + 1;
-    *coef_precision = getbits(fp, 4) + 1;
-    *pm_accuracy = getbits(fp, 4) - 1;
-    *f_huffman = getbits(fp, 1);
+    *delta          = (int) getbits(fp, 8);
+    *num_pmodel     = (int) getbits(fp, 6) + 1;
+    *coef_precision = (int) getbits(fp, 4) + 1;
+    *pm_accuracy    = (int) getbits(fp, 4) - 1;
+    *f_huffman      = (int) getbits(fp, 1);
     *quadtree_depth = (getbits(fp, 1)) ? QUADTREE_DEPTH : -1;
-    *hist_bytes = getbits(fp, 16);
+    *hist_bytes     = (int) getbits(fp, 16);
 }
 
 int decode_vlc(FILE *fp, VLC *vlc) {
@@ -469,38 +436,29 @@ void decode_threshold(FILE *fp, DECODER *dec) {
     }
 }
 
-void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tlv, int tlu, int tlt, int tls, int blksize,
-                    int width, int level) {
-    int i, cl, v, u, t, s, brv, bru, brt, brs, ctx;
-    char ****qtmap;
+void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tlt, int tls, int blksize, int width, int level) {
+    int i, cl, t, s, brt, brs, ctx;
+    char **qtmap;
     PMODEL *pm;
 
-    brv = (tlv + blksize < dec->vu[HEIGHT]) ? (tlv + blksize) : dec->vu[HEIGHT];
-    bru = (tlu + blksize < dec->vu[WIDTH]) ? (tlu + blksize) : dec->vu[WIDTH];
     brt = (tlt + blksize < dec->ts[HEIGHT]) ? (tlt + blksize) : dec->ts[HEIGHT];
     brs = (tls + blksize < dec->ts[WIDTH]) ? (tls + blksize) : dec->ts[WIDTH];
 
-    if (tlv >= brv || tlu >= bru || tlt >= brt || tls >= brs) return;
+    if (tlt >= brt || tls >= brs) return;
 
     if (level > 0) {
         ctx = 0;
         qtmap = dec->qtmap[level - 1];
 
-        v = (tlv / MIN_BSIZE) >> level;
-        u = (tlu / MIN_BSIZE) >> level;
         t = (tlt / MIN_BSIZE) >> level;
         s = (tls / MIN_BSIZE) >> level;
 
-        if (v > 0 && qtmap[v - 1][u][t][s] == 1) ctx++;
-
-        if (u > 0 && qtmap[v][u - 1][t][s] == 1) ctx++;
-
         if (t > 0) {
-            if (qtmap[v][u][t - 1][s] == 1) ctx++;
-            if (brs < width && qtmap[v][u][t - 1][s + 1] == 1) ctx++;
+            if (qtmap[t - 1][s] == 1) ctx++;
+            if (brs < width && qtmap[t - 1][s + 1] == 1) ctx++;
         }
 
-        if (s > 0 && qtmap[v][u][t][s - 1] == 1) ctx++;
+        if (s > 0 && qtmap[t][s - 1] == 1) ctx++;
 
         ctx = ((level - 1) * 4 + ctx) << 1;
 
@@ -513,33 +471,15 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tlv, int 
         }
 
         if (i == 1) {
-            qtmap[v][u][t][s] = 1;
+            qtmap[t][s] = 1;
 
             blksize >>= 1;
 
             // v and u
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt, tls + blksize, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt + blksize, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu, tlt + blksize, tls + blksize, blksize, brs, level - 1);
-
-            // v and u + blksize
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu + blksize, tlt, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu + blksize, tlt, tls + blksize, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu + blksize, tlt + blksize, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv, tlu + blksize, tlt + blksize, tls + blksize, blksize, brs, level - 1);
-
-            // v + blksize and u
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu, tlt, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu, tlt, tls + blksize, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu, tlt + blksize, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu, tlt + blksize, tls + blksize, blksize, brs, level - 1);
-
-            // v + blksize and u + blksize
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu + blksize, tlt, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu + blksize, tlt, tls + blksize, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu + blksize, tlt + blksize, tls, blksize, width, level - 1);
-            decode_qtindex(fp, dec, vlc, cpm, tlv + blksize, tlu + blksize, tlt + blksize, tls + blksize, blksize, brs, level - 1);
+            decode_qtindex(fp, dec, vlc, cpm, tlt, tls, blksize, width, level - 1);
+            decode_qtindex(fp, dec, vlc, cpm, tlt, tls + blksize, blksize, width, level - 1);
+            decode_qtindex(fp, dec, vlc, cpm, tlt + blksize, tls, blksize, width, level - 1);
+            decode_qtindex(fp, dec, vlc, cpm, tlt + blksize, tls + blksize, blksize, brs, level - 1);
 
             return;
         }
@@ -552,25 +492,21 @@ void decode_qtindex(FILE *fp, DECODER *dec, VLC *vlc, PMODEL *cpm, int tlv, int 
         i = rc_decode(fp, dec->rc, cpm, 0, cpm->size);
     }
 
-    mtf_classlabel(dec->class, dec->mtfbuf, tlv, tlu, tlt, tls, blksize, width, dec->num_class);
+    mtf_classlabel(dec->class, dec->mtfbuf, tlt, tls, blksize, width, dec->num_class);
 
     for (cl = 0; cl < dec->num_class; cl++) {
         if (dec->mtfbuf[cl] == i) break;
     }
 
-    for (v = tlv; v < brv; v++) {
-        for (u = tlu; u < bru; u++) {
-            for (t = tlt; t < brt; t++) {
-                for (s = tls; s < brs; s++) {
-                    dec->class[v][u][t][s] = (char) cl;
-                }
-            }
+    for (t = tlt; t < brt; t++) {
+        for (s = tls; s < brs; s++) {
+            dec->class[t][s] = (char) cl;
         }
     }
 }
 
 void decode_class(FILE *fp, DECODER *dec) {
-    int i, j, v, u, t, s, blksize, level;
+    int i, j, t, s, blksize, level;
     VLC *vlc;
     PMODEL *pm, cpm[1];
 
@@ -668,13 +604,9 @@ void decode_class(FILE *fp, DECODER *dec) {
         dec->mtfbuf[i] = i;
     }
 
-    for (v = 0; v < dec->vu[HEIGHT]; v += blksize) {
-        for (u = 0; u < dec->vu[WIDTH]; u += blksize) {
-            for (t = 0; t < dec->ts[HEIGHT]; t += blksize) {
-                for (s = 0; s < dec->ts[WIDTH]; s += blksize) {
-                    decode_qtindex(fp, dec, vlc, cpm, v, u, t, s, blksize, dec->ts[WIDTH], level);
-                }
-            }
+    for (t = 0; t < dec->ts[HEIGHT]; t += blksize) {
+        for (s = 0; s < dec->ts[WIDTH]; s += blksize) {
+            decode_qtindex(fp, dec, vlc, cpm, t, s, blksize, dec->ts[WIDTH], level);
         }
     }
 
@@ -686,39 +618,21 @@ void decode_class(FILE *fp, DECODER *dec) {
     }
 }
 
-int calc_udec(DECODER *dec, int v, int u, int t, int s) {
-    int uu, k, *err_p;
+int calc_udec(DECODER *dec, int t, int s) {
+    int uu, k, r, *err_p;
     int *intra_wt_p;
-    int *mi_up_wt_p = NULL, *mi_left_wt_p = NULL, *mi_ldiag_wt_p = NULL, *mi_rdiag_wt_p = NULL;
     int *intra_roff_p = NULL;
-    int *mi_up_roff_p = NULL, *mi_left_roff_p = NULL, *mi_ldiag_roff_p = NULL, *mi_rdiag_roff_p = NULL;
+    int *sai_wt_p[SAI_REFERENCES];
+    int *sai_roff_p[SAI_REFERENCES];
 
-    err_p = &dec->err[v][u][t][s];
+    err_p = &dec->err[0][t][s];
 
-    intra_roff_p = dec->intra_roff[v][u][t][s];
+    intra_roff_p = dec->intra_roff[t][s];
     intra_wt_p = dec->intra_ctx_weight;
 
-    if (dec->mi_prd_order[UP] > 0) {
-        mi_up_roff_p = dec->mi_up_roff[v][u][t][s];
-
-        mi_up_wt_p = (v < 1) ? dec->mi_borders_ctx_weight : dec->mi_up_ctx_weight;
-    }
-
-    if (dec->mi_prd_order[LEFT] > 0) {
-        mi_left_roff_p = dec->mi_left_roff[v][u][t][s];
-
-        mi_left_wt_p = (u < 1) ? dec->mi_borders_ctx_weight : dec->mi_left_ctx_weight;
-    }
-
-    if (dec->mi_prd_order[LDIAG] > 0) {
-        mi_ldiag_roff_p = dec->mi_ldiag_roff[v][u][t][s];
-
-        mi_ldiag_wt_p = (v < 1 || u < 1) ? dec->mi_borders_ctx_weight : dec->mi_ldiag_ctx_weight;
-    }
-
-    if (dec->mi_prd_order[RDIAG] > 0) {
-        mi_rdiag_roff_p = dec->mi_rdiag_roff[v][u][t][s];
-        mi_rdiag_wt_p = (v < 1 || u > dec->vu[WIDTH] - 1) ? dec->mi_borders_ctx_weight : dec->mi_rdiag_ctx_weight;
+    for (r = 0; r < dec->no_refsai; r++) {
+        sai_roff_p[r] = dec->sai_ref_roff[r][t][s];
+        sai_wt_p[r] = dec->sai_ref_ctx_weight[r];
     }
 
     uu = 0;
@@ -727,20 +641,10 @@ int calc_udec(DECODER *dec, int v, int u, int t, int s) {
         uu += err_p[*intra_roff_p++] * (*intra_wt_p++);
     }
 
-    for (k = 0; k < dec->mi_prd_order[UP]; k++) {
-        uu += err_p[*mi_up_roff_p++] * (*mi_up_wt_p++);
-    }
-
-    for (k = 0; k < dec->mi_prd_order[LEFT]; k++) {
-        uu += err_p[*mi_left_roff_p++] * (*mi_left_wt_p++);
-    }
-
-    for (k = 0; k < dec->mi_prd_order[LDIAG]; k++) {
-        uu += err_p[*mi_ldiag_roff_p++] * (*mi_ldiag_wt_p++);
-    }
-
-    for (k = 0; k < dec->mi_prd_order[RDIAG]; k++) {
-        uu += err_p[*mi_rdiag_roff_p++] * (*mi_rdiag_wt_p++);
+    for (r = 0; r< dec->no_refsai; r++) {
+        for (k = 0; k < dec->sai_prd_order[r]; k++) {
+            uu += err_p[*sai_roff_p[r]++] * (*sai_wt_p[r]++);
+        }
     }
 
     uu >>= 6;
@@ -750,19 +654,19 @@ int calc_udec(DECODER *dec, int v, int u, int t, int s) {
     return (uu);
 }
 
-int calc_prd(img_t ****org, DECODER *dec, int cl, int v, int u, int t, int s) {
-    int k, prd, *coef_p;
+int calc_prd(DECODER *dec, int cl, int t, int s) {
+    int k, r, prd, *coef_p;
     img_t *org_p;
     int *intra_roff_p = NULL;
-    int *mi_up_roff_p = NULL, *mi_left_roff_p = NULL, *mi_ldiag_roff_p = NULL, *mi_rdiag_roff_p = NULL;
+    int *sai_roff_p[SAI_REFERENCES];
 
-    intra_roff_p = dec->intra_roff[v][u][t][s];
-    if (dec->mi_prd_order[UP] > 0) mi_up_roff_p = dec->mi_up_roff[v][u][t][s];
-    if (dec->mi_prd_order[LEFT] > 0) mi_left_roff_p = dec->mi_left_roff[v][u][t][s];
-    if (dec->mi_prd_order[LDIAG] > 0) mi_ldiag_roff_p = dec->mi_ldiag_roff[v][u][t][s];
-    if (dec->mi_prd_order[RDIAG] > 0) mi_rdiag_roff_p = dec->mi_rdiag_roff[v][u][t][s];
+    intra_roff_p = dec->intra_roff[t][s];
 
-    org_p = &org[v][u][t][s];
+    for (r = 0; r < dec->no_refsai; r++) {
+        sai_roff_p[r] = dec->sai_ref_roff[r][t][s];
+    }
+
+    org_p = &dec->org[0][t][s];
     coef_p = dec->predictor[cl];
 
     prd = 0;
@@ -771,20 +675,10 @@ int calc_prd(img_t ****org, DECODER *dec, int cl, int v, int u, int t, int s) {
         prd += org_p[*intra_roff_p++] * (*coef_p++);
     }
 
-    for (k = 0; k < dec->mi_prd_order[UP]; k++) {
-        prd += org_p[*mi_up_roff_p++] * (*coef_p++);
-    }
-
-    for (k = 0; k < dec->mi_prd_order[LEFT]; k++) {
-        prd += org_p[*mi_left_roff_p++] * (*coef_p++);
-    }
-
-    for (k = 0; k < dec->mi_prd_order[LDIAG]; k++) {
-        prd += org_p[*mi_ldiag_roff_p++] * (*coef_p++);
-    }
-
-    for (k = 0; k < dec->mi_prd_order[RDIAG]; k++) {
-        prd += org_p[*mi_rdiag_roff_p++] * (*coef_p++);
+    for (r = 0; r < dec->no_refsai; r++) {
+        for (k = 0; k < dec->sai_prd_order[r]; k++) {
+            prd += org_p[*sai_roff_p[r]++] * (*coef_p++);
+        }
     }
 
     if (prd < 0) prd = 0;
@@ -793,57 +687,43 @@ int calc_prd(img_t ****org, DECODER *dec, int cl, int v, int u, int t, int s) {
     return (prd);
 }
 
-LF4D *decode_image(FILE *fp, DECODER *dec) {
-    int v, u, t, s, cl, gr, prd, uu, e, E, p;
-    LF4D *lf = NULL;
-
-    // TODO: consider add org to decoder
-    img_t ****org = (img_t ****) alloc_4d_array(dec->vu[HEIGHT] + 1, dec->vu[WIDTH], dec->ts[HEIGHT], dec->ts[WIDTH],
-                                                sizeof(img_t));
-    org[dec->vu[HEIGHT]][0][0][0] = (img_t) (dec->maxval + 1) >> 1;
+void decode_image(FILE *fp, DECODER *dec) {
+    int t, s, cl, gr, prd, uu, e, E, p;
 
     if (dec->f_huffman == 1) {
         VLC *vlc;
         dec->vlcs = init_vlcs(dec->pmodels, dec->num_group, 1);
 
-        for (v = 0; v < dec->vu[HEIGHT]; v++) {
-            for (u = 0; u < dec->vu[WIDTH]; u++) {
-                for (t = 0; t < dec->ts[HEIGHT]; t++) {
-                    for (s = 0; s < dec->ts[WIDTH]; s++) {
-                        cl = dec->class[v][u][t][s];
-                        uu = calc_udec(dec, v, u, t, s);
-                        gr = dec->uquant[cl][uu];
-                        prd = calc_prd(org, dec, cl, v, u, t, s);
-                        prd >>= (dec->coef_precision - 1);
-                        p = (prd + 1) >> 1;
-                        vlc = &dec->vlcs[gr][0];
-                        dec->err[v][u][t][s] = E = decode_vlc(fp, vlc);
-                        e = E2e(E, p, prd & 1, dec->maxval);
-                        org[v][u][t][s] = (img_t) (p + e);
-                    }
-                }
+        for (t = 0; t < dec->ts[HEIGHT]; t++) {
+            for (s = 0; s < dec->ts[WIDTH]; s++) {
+                cl = dec->class[t][s];
+                uu = calc_udec(dec, t, s);
+                gr = dec->uquant[cl][uu];
+                prd = calc_prd(dec, cl, t, s);
+                prd >>= (dec->coef_precision - 1);
+                p = (prd + 1) >> 1;
+                vlc = &dec->vlcs[gr][0];
+                dec->err[0][t][s] = E = decode_vlc(fp, vlc);
+                e = E2e(E, p, prd & 1, dec->maxval);
+                dec->org[0][t][s] = (img_t) (p + e);
             }
         }
     }
     else {
         PMODEL *pm;
         if (dec->pm_accuracy < 0) {
-            for (v = 0; v < dec->vu[HEIGHT]; v++) {
-                for (u = 0; u < dec->vu[WIDTH]; u++) {
-                    for (t = 0; t < dec->ts[HEIGHT]; t++) {
-                        for (s = 0; s < dec->ts[WIDTH]; s++) {
-                            cl = dec->class[v][u][t][s];
-                            uu = calc_udec(dec, v, u, t, s);
-                            gr = dec->uquant[cl][uu];
-                            prd = calc_prd(org, dec, cl, v, u, t, s);
-                            prd >>= (dec->coef_precision - 1);
-                            p = (prd + 1) >> 1;
-                            pm = dec->pmodels[gr][0];
-                            dec->err[v][u][t][s] = E = rc_decode(fp, dec->rc, pm, 0, pm->size);
-                            e = E2e(E, p, prd & 1, dec->maxval);
-                            org[v][u][t][s] = (img_t) (p + e);
-                        }
-                    }
+            for (t = 0; t < dec->ts[HEIGHT]; t++) {
+                for (s = 0; s < dec->ts[WIDTH]; s++) {
+                    cl = dec->class[t][s];
+                    uu = calc_udec(dec, t, s);
+                    gr = dec->uquant[cl][uu];
+                    prd = calc_prd(dec, cl, t, s);
+                    prd >>= (dec->coef_precision - 1);
+                    p = (prd + 1) >> 1;
+                    pm = dec->pmodels[gr][0];
+                    dec->err[0][t][s] = E = rc_decode(fp, dec->rc, pm, 0, pm->size);
+                    e = E2e(E, p, prd & 1, dec->maxval);
+                    dec->org[0][t][s] = (img_t) (p + e);
                 }
             }
         }
@@ -852,44 +732,24 @@ LF4D *decode_image(FILE *fp, DECODER *dec) {
             mask = (1 << dec->pm_accuracy) - 1;
             shift = dec->coef_precision - dec->pm_accuracy;
 
-            for (v = 0; v < dec->vu[HEIGHT]; v++) {
-                for (u = 0; u < dec->vu[WIDTH]; u++) {
-                    for (t = 0; t < dec->ts[HEIGHT]; t++) {
-                        for (s = 0; s < dec->ts[WIDTH]; s++) {
-                            cl = dec->class[v][u][t][s];
-                            uu = calc_udec(dec, v, u, t, s);
-                            gr = dec->uquant[cl][uu];
-                            prd = calc_prd(org, dec, cl, v, u, t, s);
-                            base = (dec->maxprd - prd + (1 << shift) / 2) >> shift;
-                            pm = dec->pmodels[gr][0] + (base & mask);
-                            base >>= dec->pm_accuracy;
-                            p = rc_decode(fp, dec->rc, pm, base, base + dec->maxval + 1) - base;
-                            org[v][u][t][s] = (img_t) p;
-                            prd >>= (dec->coef_precision - 1);
-                            e = (p << 1) - prd;
-                            dec->err[v][u][t][s] = (e > 0) ? (e - 1) : (-e);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    lf = alloc_lf4d(dec->vu[HEIGHT], dec->vu[WIDTH], dec->ts[HEIGHT], dec->ts[WIDTH], dec->maxval);
-
-    for (v = 0; v < dec->vu[HEIGHT]; v++) {
-        for (u = 0; u < dec->vu[WIDTH]; u++) {
             for (t = 0; t < dec->ts[HEIGHT]; t++) {
                 for (s = 0; s < dec->ts[WIDTH]; s++) {
-                    lf->val[v][u][t][s] = org[v][u][t][s];
+                    cl = dec->class[t][s];
+                    uu = calc_udec(dec, t, s);
+                    gr = dec->uquant[cl][uu];
+                    prd = calc_prd(dec, cl, t, s);
+                    base = (dec->maxprd - prd + (1 << shift) / 2) >> shift;
+                    pm = dec->pmodels[gr][0] + (base & mask);
+                    base >>= dec->pm_accuracy;
+                    p = rc_decode(fp, dec->rc, pm, base, base + dec->maxval + 1) - base;
+                    dec->org[0][t][s] = (img_t) p;
+                    prd >>= (dec->coef_precision - 1);
+                    e = (p << 1) - prd;
+                    dec->err[0][t][s] = (e > 0) ? (e - 1) : (-e);
                 }
             }
         }
     }
-
-    free(org);
-
-    return (lf);
 }
 
 /*------------------------- decode_lookuptable -------------------------*
@@ -1078,15 +938,16 @@ LF4D *histogram_unpacking(LF4D *lf, const int *backward_table) {
 }
 
 // Write classes to file
-void debug_predictors(DECODER *dec) {
+void debug_predictors(DECODER *dec, int frame) {
     if (dec->debug_path != NULL) {
         char *predictor_file = (char *) alloc_mem(
                 (strlen(dec->debug_path) + strlen("/predictors.txt\0") + 1) * sizeof(char));
 
         sprintf(predictor_file, "%s/predictors.txt", dec->debug_path);
 
-        FILE *debug_fp = fopen(predictor_file, "w");
+        FILE *debug_fp = fopen(predictor_file, "a");
 
+        fprintf(debug_fp, "SAI: %d\n", frame);
         fprintf(debug_fp, "#CLASS\t\tCOEFFICIENTS");
 
         for (int cl = 0; cl < dec->num_class; cl++) {
@@ -1096,112 +957,79 @@ void debug_predictors(DECODER *dec) {
             }
         }
 
+        fprintf(debug_fp, "\n");
+
         fclose(debug_fp);
         free(predictor_file);
     }
 }
 
 // Write partition to file
-void debug_partition(DECODER *dec, LF4D *lf, int endianness) {
-    int d, i, j, k, l, v, u, t, s;
-
-    img_t *qt_lf_ptr[3];
+void debug_partition(DECODER *dec, int frame) {
+    int d, k, i, j, z;
+    unsigned short byte;
 
     if (dec->debug_path != NULL) {
         char *partition_img = (char *) alloc_mem(
-                (strlen(dec->debug_path) + strlen("/partition_0000x0000_10bpp_LE_YUV444p.yuv\0")) * sizeof(char));
+                (strlen(dec->debug_path) + strlen("/partition_0000x0000_10bpp_LE_YUV444p.yuv") + 1) * sizeof(char));
 
-        LF4D *qt_lf[3];
-        for (k = 0; k < 3; k++) {
-            qt_lf[k] = alloc_lf4d(dec->vu[HEIGHT], dec->vu[WIDTH], dec->ts[HEIGHT], dec->ts[WIDTH], (int) pow(2, dec->depth) - 1);
-            qt_lf_ptr[k] = &qt_lf[k]->val[0][0][0][0];
-        }
+        img_t ***qt_img = (img_t ***) alloc_3d_array(3, dec->ts[HEIGHT], dec->ts[WIDTH], sizeof(img_t));
+
+        int elements = dec->ts[HEIGHT] * dec->ts[WIDTH] * 3 * (dec->depth == 8 ? 1 : 2);
+        unsigned char *ptr, *qt_stream = (unsigned char *) alloc_mem(elements * sizeof(unsigned char));
 
         uint scale = (uint) floor(pow(2, dec->depth) / dec->num_class);
 
-        for (v = 0; v < dec->vu[HEIGHT]; v++) {
-            for (u = 0; u < dec->vu[WIDTH]; u++) {
-                for (t = 0; t < dec->ts[HEIGHT]; t++) {
-                    for (s = 0; s < dec->ts[WIDTH]; s++) {
-                        *qt_lf_ptr[0]++ = lf->val[v][u][t][s];
+        for (i = 0; i < dec->ts[HEIGHT]; i++) {
+            for (j = 0; j < dec->ts[WIDTH]; j++) {
+                qt_img[0][i][j] = dec->org[0][i][j];
 
-                        *qt_lf_ptr[1]++ = dec->class[v][u][t][s] * scale;
-                        *qt_lf_ptr[2]++ = dec->class[v][u][t][s] * scale;
-                    }
-                }
+                qt_img[1][i][j] = dec->class[i][j] * scale;
+                qt_img[2][i][j] = dec->class[i][j] * scale;
             }
         }
 
         if (dec->quadtree_depth > 0) {
-            uint blksize = MAX_BSIZE;
+            int blksize = MAX_BSIZE;
 
-            // TODO: Rever e tentar fazer bonito
+            // TODO: Rever e fazer bonito
             for (d = dec->quadtree_depth - 1; d >= 0; d--) {
-                for (v = 0; v < dec->vu[HEIGHT]; v += blksize) {
-                    for (u = 0; u < dec->vu[WIDTH]; u += blksize) {
-                        for (t = 0; t < dec->ts[HEIGHT]; t += blksize) {
-                            for (s = 0; s < dec->ts[WIDTH]; s += blksize) {
-                                for (k = v; k < (v + blksize < dec->vu[HEIGHT] ? v + blksize : dec->vu[HEIGHT]); k++) {
-                                    for (l = u;
-                                         l < (u + blksize < dec->vu[WIDTH] ? u + blksize : dec->vu[WIDTH]); l++) {
-                                        if ((dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
-                                             d == dec->quadtree_depth - 1) ||
-                                            (dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 0 &&
-                                             d < dec->quadtree_depth - 1 &&
-                                             dec->qtmap[d + 1][v / (blksize * 2)][u / (blksize * 2)][t / (blksize * 2)][
-                                                     s / (blksize * 2)] == 1)) {
-                                            if (t + blksize - 1 < dec->ts[HEIGHT]) {
-                                                for (j = s; j < (s + blksize < dec->ts[WIDTH] ? s + blksize
-                                                                                              : dec->ts[WIDTH]); j++) {
-                                                    qt_lf[0]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (s + blksize - 1 < dec->ts[WIDTH]) {
-                                                for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize
-                                                                                               : dec->ts[HEIGHT]); i++) {
-                                                    qt_lf[0]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                        }
-                                        if (d == 0 &&
-                                            dec->qtmap[d][v / blksize][u / blksize][t / blksize][s / blksize] == 1) {
-                                            if (t + blksize / 2 - 1 < dec->ts[HEIGHT]) {
-                                                for (j = s; j < (s + blksize < dec->ts[WIDTH] ? s + blksize
-                                                                                              : dec->ts[WIDTH]); j++) {
-                                                    qt_lf[0]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][t + blksize / 2 - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (t + blksize - 1 < dec->ts[HEIGHT]) {
-                                                for (j = s; j < (s + blksize < dec->ts[WIDTH] ? s + blksize
-                                                                                              : dec->ts[WIDTH]); j++) {
-                                                    qt_lf[0]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][t + blksize - 1][j] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (s + blksize / 2 - 1 < dec->ts[WIDTH]) {
-                                                for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize
-                                                                                               : dec->ts[HEIGHT]); i++) {
-                                                    qt_lf[0]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][i][s + blksize / 2 - 1] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                            if (s + blksize - 1 < dec->ts[WIDTH]) {
-                                                for (i = t; i < (t + blksize < dec->ts[HEIGHT] ? t + blksize
-                                                                                               : dec->ts[HEIGHT]); i++) {
-                                                    qt_lf[0]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[1]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                    qt_lf[2]->val[k][l][i][s + blksize - 1] = (img_t) qt_lf[0]->maxval;
-                                                }
-                                            }
-                                        }
+                for (i = 0; i < dec->ts[HEIGHT]; i += blksize) {
+                    for (j = 0; j < dec->ts[WIDTH]; j += blksize) {
+                        for (k = 0; k < 2; k++) {
+                            if ((dec->qtmap[d][i / blksize][j / blksize] == 0 && d == dec->quadtree_depth - 1) ||
+                                (dec->qtmap[d][i / blksize][j / blksize] == 0 && d < dec->quadtree_depth - 1 &&
+                                 dec->qtmap[d + 1][i / (blksize * 2)][j / (blksize * 2)] == 1)) {
+                                if (i + blksize - 1 < dec->ts[HEIGHT]) {
+                                    for (z = j; z < (j + blksize < dec->ts[WIDTH] ? j + blksize : dec->ts[WIDTH]); z++) {
+                                        qt_img[k][i + blksize - 1][z] = (img_t) dec->maxval;
+                                    }
+                                }
+                                if (j + blksize - 1 < dec->ts[WIDTH]) {
+                                    for (z = i; z < (i + blksize < dec->ts[HEIGHT] ? i + blksize : dec->ts[HEIGHT]); z++) {
+                                        qt_img[k][z][j + blksize - 1] = (img_t) dec->maxval;
+                                    }
+                                }
+                            }
+                            if (d == 0 && dec->qtmap[d][i / blksize][j / blksize] == 1) {
+                                if (i + blksize / 2 - 1 < dec->ts[HEIGHT]) {
+                                    for (z = j; z < (j + blksize < dec->ts[WIDTH] ? j + blksize : dec->ts[WIDTH]); z++) {
+                                        qt_img[k][i + blksize / 2 - 1][z] = (img_t) dec->maxval;
+                                    }
+                                }
+                                if (i + blksize - 1 < dec->ts[HEIGHT]) {
+                                    for (z = j; z < (j + blksize < dec->ts[WIDTH] ? j + blksize : dec->ts[WIDTH]); z++) {
+                                        qt_img[k][i + blksize - 1][z] = (img_t) dec->maxval;
+                                    }
+                                }
+                                if (j + blksize / 2 - 1 < dec->ts[WIDTH]) {
+                                    for (z = i; z < (i + blksize < dec->ts[HEIGHT] ? i + blksize : dec->ts[HEIGHT]); z++) {
+                                        qt_img[k][z][j + blksize / 2 - 1] = (img_t) dec->maxval;
+                                    }
+                                }
+                                if (j + blksize - 1 < dec->ts[WIDTH]) {
+                                    for (z = i; z < (i + blksize < dec->ts[HEIGHT] ? i + blksize : dec->ts[HEIGHT]); z++) {
+                                        qt_img[k][z][j + blksize - 1] = (img_t) dec->maxval;
                                     }
                                 }
                             }
@@ -1211,53 +1039,89 @@ void debug_partition(DECODER *dec, LF4D *lf, int endianness) {
 
                 blksize >>= 1u;
             }
+        }
 
-            for (v = 0; v < dec->vu[HEIGHT]; v++) {
-                for (u = 0; u < dec->vu[WIDTH]; u++) {
-                    for (t = 0; t < dec->ts[HEIGHT]; t++) {
-                        qt_lf[0]->val[v][u][t][dec->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[1]->val[v][u][t][dec->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[2]->val[v][u][t][dec->ts[WIDTH] - 1] = (img_t) qt_lf[0]->maxval;
+        ptr = qt_stream;
+        for (k = 0; k < 3; k++) {
+            for (i = 0; i < dec->ts[HEIGHT]; i++) {
+                for (j = 0; j < dec->ts[WIDTH]; j++) {
+                    if (dec->depth > 8) {
+                        byte = reverse_endianness(qt_img[k][i][j], LITTLE_ENDIANNESS);
+
+                        *ptr++ = (byte >> 8u) & 0x00FFu;
+                        *ptr++ = byte & 0x00FFu;
                     }
-                    for (s = 0; s < dec->ts[WIDTH]; s++) {
-                        qt_lf[0]->val[v][u][dec->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[1]->val[v][u][dec->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
-                        qt_lf[2]->val[v][u][dec->ts[HEIGHT] - 1][s] = (img_t) qt_lf[0]->maxval;
+                    else {
+                        *ptr++ = qt_img[k][i][j];
                     }
                 }
             }
         }
 
-        // Quadtree partition image name
-        sprintf(partition_img, "%s/partition_%dx%d_%dbpp_LE_YUV444p.yuv", dec->debug_path,
-                dec->vu[WIDTH] * dec->ts[WIDTH], dec->vu[HEIGHT] * dec->ts[HEIGHT], dec->depth);
+        sprintf(partition_img, "%s/partition_%dx%d_%dbpp_LE_YUV444p.yuv", dec->debug_path, dec->ts[WIDTH], dec->ts[HEIGHT],
+                dec->depth);
 
-        // Write image to file
-        for (k = 0; k < 3; k++) {
-            write_yuv(qt_lf[k], partition_img, dec->depth, endianness, SAI);
-        }
+        FILE *debug_fp = fopen(partition_img, "ab");
 
+        fwrite(qt_stream, sizeof(unsigned char), elements, debug_fp);
+
+        fclose(debug_fp);
+
+        free(qt_stream);
         free(partition_img);
+        free(qt_img);
 
-        for (k = 0; k < 3; k++) {
-            safefree_lf4d(&qt_lf[k]);
+        // Quadtree map
+        if (dec->quadtree_depth > 0) {
+            char qtmap[1000];
+            sprintf(qtmap, "%s/qtmap.txt", dec->debug_path);
+
+            debug_fp = fopen(qtmap, "a");
+
+            uint x, y, xx, yy;
+
+            yy = (dec->ts[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
+            xx = (dec->ts[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
+
+            fprintf(debug_fp, "SAI: %d\n", frame);
+            fprintf(debug_fp, "#LEVEL\t\tPARTITION\n");
+
+            for (i = dec->quadtree_depth - 1; i >= 0; i--) {
+                fprintf(debug_fp, "%d\t\t\t", i);
+                for (y = 0; y < yy; y++) {
+                    for (x = 0; x < xx; x++) {
+                        fprintf(debug_fp, " %d", dec->qtmap[i][y][x]);
+                    }
+                }
+
+                fprintf(debug_fp, "\n");
+
+                yy <<= 1u;
+                xx <<= 1u;
+            }
+
+            fclose(debug_fp);
         }
     }
 }
 
 int main(int argc, char **argv) {
-    int i;
-    int vu[2], ts[2], maxval, depth, num_comp, num_group, endianness = LITTLE_ENDIANNESS;
+    int i, r;
+    int vu[2], ts[2], num_class, maxval, depth, num_comp, num_group, endianness = LITTLE_ENDIANNESS;
     int num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, hist_bytes;
     int *backward_table = NULL;
     int prd_order = 0;
-    int mi_prd_order[4] = {0, 0, 0, 0};
+    int sai_prd_order[SAI_REFERENCES] = {0, 0, 0, 0};
     int format = SAI;
+    int no_hilevels = 0, no_refsai_candidates = 0, no_refsai = 0, curr_frame = 0, curr_hilevel = 0, next_hilevel = 0;
+    int **hilevels = NULL, *reference_list = NULL;
+    SAIDISTANCE **reference_candidates = NULL;
+    int sai_coord[2] = {0, 0};
     char *format_name = NULL;
     int debug = 0;
     char *debug_path = NULL;
 
-    LF4D *lf = NULL;
+    LF4D *lf = NULL, *save_err = NULL;
     DECODER *dec = NULL;
     char *infile, *outfile;
     FILE *fp;
@@ -1329,9 +1193,9 @@ int main(int argc, char **argv) {
         printf("-E num      Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
         printf("-d          Create extra debug output (coefficients, partitions, etc.)\n");
         printf("-r str      Light field file format [%s]. Supported formats:\n", "SAI");
-        printf("                MIA; --> Not yet implemented\n"
-               "                PVS;\n"
-               "                SAI.\n");
+        printf("                MIA; --> Not yet implemented\n");
+        printf("                PVS;\n");
+        printf("                SAI.\n");
         printf("infile:     Input file\n");
         printf("outfile:    Output file\n");
         exit(0);
@@ -1345,8 +1209,17 @@ int main(int argc, char **argv) {
     }
 
     fp = fileopen(infile, "rb");
-    read_header(fp, vu, ts, &maxval, &depth, &num_comp, &num_group, &prd_order, mi_prd_order, &num_pmodel,
-                &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &hist_bytes);
+
+    // Read header
+    read_header(fp, vu, ts, &maxval, &depth, &num_comp, &num_group, &prd_order, sai_prd_order, &num_pmodel,
+                &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &hist_bytes, &no_hilevels);
+
+    // Alloc memory for the hierarchical information
+    hilevels = (int **) alloc_2d_array(no_hilevels, vu[HEIGHT] * vu[WIDTH] + 1, sizeof(int));
+    for (i = 0; i < no_hilevels; i++) hilevels[i][0] = 0;
+    reference_candidates = (SAIDISTANCE **) alloc_mem((vu[HEIGHT] * vu[WIDTH]) * sizeof(SAIDISTANCE *));
+    for (r = 0; r < vu[HEIGHT] * vu[WIDTH]; r++) reference_candidates[r] = (SAIDISTANCE *) alloc_mem(sizeof(SAIDISTANCE));
+    reference_list = (int *) alloc_mem(SAI_REFERENCES * sizeof(int));
 
     // Create directory to store debug information
     if (debug == 1) {
@@ -1375,6 +1248,11 @@ int main(int argc, char **argv) {
         backward_table = decode_lookuptable(fp, hist_bytes, (int) pow(2, depth));
     }
 
+    // Allocate memory for the decoded image
+    lf = alloc_lf4d(vu[HEIGHT], vu[WIDTH], ts[HEIGHT], ts[WIDTH], (int) (pow(2, depth) - 1));
+    // Allocate memory to save the error structure
+    save_err = alloc_lf4d(vu[HEIGHT], vu[WIDTH], ts[HEIGHT], ts[WIDTH], (int) (pow(2, depth) - 1));
+
     printf("\nMRP-Video Decoder\n\n");
     // Print file characteristics to screen
     printf("%s (%d x %d x %d x %d x %d) -> %s\n", infile, vu[HEIGHT], vu[WIDTH], ts[HEIGHT], ts[WIDTH], depth, outfile);
@@ -1386,39 +1264,104 @@ int main(int argc, char **argv) {
     }
     // Print prediction parameters to screen
     printf("Prediction order:\n\tFrame I: %d\n\n", prd_order);
-
-    printf("LF Prediction order: %d %d %d %d ", mi_prd_order[UP], mi_prd_order[LEFT], mi_prd_order[LDIAG],
-           mi_prd_order[RDIAG]);
+    printf("LF Prediction order: ");
+    for (r = 0; r < SAI_REFERENCES; r++) printf("%d ", sai_prd_order[r]);
     printf("(4DLF dimensions: %d x %d x %d x %d)\n\n", vu[HEIGHT], vu[WIDTH], ts[HEIGHT], ts[WIDTH]);
 
-    //// Start of the encoding process
-    printf("Process started");
+    // Loop all SAIs
+    for (int s = 0; s < vu[HEIGHT] * vu[WIDTH]; s++) {
+        num_class = read_class(fp);
+        read_hilevel(&next_hilevel, &curr_frame, fp);
 
-    // Creates new DECODER structure
-    dec = init_decoder(fp, vu, ts, maxval, num_comp, num_group, prd_order, mi_prd_order, coef_precision, f_huffman,
-                       quadtree_depth, num_pmodel, pm_accuracy, delta, depth, debug_path);
+        printf("Decoding SAI %d, Hi Level %d", curr_frame, next_hilevel);
 
-    decode_class(fp, dec);
+        if (curr_hilevel != next_hilevel) {
+            no_refsai_candidates = 0;
 
-    decode_predictor(fp, dec);
+            // Loop previous hierarchical levels to get the reference SAI candidates
+            for (int hh = 0; hh < next_hilevel; hh++) {
+                for (int f = 1; f <= hilevels[hh][0]; f++) {
+                    // Store the reference SAI number on the reference_candidates structure
+                    reference_candidates[no_refsai_candidates]->sai = hilevels[hh][f];
 
-    if (debug == 1) {
-        debug_predictors(dec);
+                    // Convert the SAI number to coordinates in the angular dimensions array
+                    frame2coordinates(reference_candidates[no_refsai_candidates++]->coordinates, hilevels[hh][f], vu[WIDTH]);
+                }
+            }
+        }
+
+        curr_hilevel = next_hilevel;
+
+        hilevels[curr_hilevel][0]++;
+        hilevels[curr_hilevel][hilevels[curr_hilevel][0]] = curr_frame;
+
+        no_refsai = 0;
+
+        // Get the coordinates of the current SAI
+        frame2coordinates(sai_coord, curr_frame, vu[WIDTH]);
+
+        if (curr_hilevel > 0 && no_refsai_candidates > 0) {
+            // Calculate the distance of the reference candidates to the current SAI
+            for (i = 0; i < no_refsai_candidates; i++) {
+                reference_candidates[i]->distance = sqrt(pow(reference_candidates[i]->coordinates[0] - sai_coord[0], 2) + pow(reference_candidates[i]->coordinates[1] - sai_coord[1], 2));
+            }
+
+            // Sort the reference candidates by growing distance
+            qsort(reference_candidates, no_refsai_candidates, sizeof(SAIDISTANCE *), compare_distance);
+
+            // Select up to SAI_REFERENCES provided the distance is lower than SAI_DISTANCE_THRESHOLD
+            int reference_limit = no_refsai_candidates > SAI_REFERENCES ? SAI_REFERENCES : no_refsai_candidates;
+
+            for (i = 0; i < reference_limit; i++) {
+                if (reference_candidates[i]->distance < SAI_DISTANCE_THRESHOLD) {
+                    reference_list[no_refsai++] = reference_candidates[i]->sai;
+                }
+            }
+
+            printf(" (Refs:");
+            for (r = 0; r < no_refsai; r++) printf(" %d", reference_list[r]);
+            printf(")");
+        }
+        printf(":\n");
+
+        //// Start of the decoding process
+        printf("    Process started");
+
+        // Creates new DECODER structure
+        dec = init_decoder(fp, ts, maxval, num_class, num_comp, num_group, prd_order, sai_prd_order, coef_precision,
+                           f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta, depth, curr_frame, lf, save_err,
+                           no_refsai, reference_list, debug_path);
+
+        decode_class(fp, dec);
+
+        decode_predictor(fp, dec);
+
+        if (debug == 1) {
+            debug_predictors(dec, curr_frame);
+        }
+
+        decode_threshold(fp, dec);
+
+        dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
+
+        decode_image(fp, dec);
+
+        if (debug == 1) {
+            debug_partition(dec, curr_frame);
+        }
+
+        printf(" --> Process completed\n");
+
+        // Save the decoded image and the residuals into the 4D structure
+        for (int t = 0; t < dec->ts[HEIGHT]; t++) {
+            for (int ss = 0; ss < dec->ts[WIDTH]; ss++) {
+                lf->val[sai_coord[0]][sai_coord[1]][t][ss] = dec->org[0][t][ss];
+                save_err->val[sai_coord[0]][sai_coord[1]][t][ss] = dec->err[0][t][ss];
+            }
+        }
+
+        free_decoder(dec);
     }
-
-    decode_threshold(fp, dec);
-
-    dec->pmodels = init_pmodels(dec->num_group, dec->num_pmodel, dec->pm_accuracy, dec->pm_idx, dec->sigma, dec->maxval + 1);
-
-    lf = decode_image(fp, dec);
-
-    if (debug == 1) {
-        debug_partition(dec, lf, endianness);
-
-        free(debug_path);
-    }
-
-    printf(" --> Process completed\n");
 
     if (backward_table != NULL) {
         LF4D *unpacked = histogram_unpacking(lf, backward_table);
@@ -1431,8 +1374,19 @@ int main(int argc, char **argv) {
         write_yuv(lf, outfile, depth, endianness, format);
     }
 
-    free_decoder(dec);
+    if (debug == 1) {
+        free(debug_path);
+    }
+
+    for (r = 0; r < vu[HEIGHT] * vu[WIDTH]; r++) {
+        free(reference_candidates[r]);
+    }
+    free(reference_candidates);
+    free(reference_list);
+    free(hilevels);
+
     safefree_lf4d(&lf);
+    safefree_lf4d(&save_err);
 
     safefree((void **) &backward_table);
 
