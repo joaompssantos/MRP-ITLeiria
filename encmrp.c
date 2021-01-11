@@ -2762,7 +2762,7 @@ int **read_hicfg(char *filename, int no_sai, int *no_hilevels) {
     int level = 0, frame = 0, f = 0, used = 0;
     size_t bufsize = 0;
     char *buffer = NULL, *ptr = NULL;
-    char delim[] = " ,", comment[] = "#";
+    char delim[] = "\t ,", comment[] = "#";
 
     // Open file for read
     FILE *fid = fopen(filename, "r");
