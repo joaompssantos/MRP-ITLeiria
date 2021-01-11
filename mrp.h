@@ -73,7 +73,7 @@
 
 // Hierarchical coding
 #define SAI_REFERENCES             4
-#define SAI_DISTANCE_THRESHOLD     5
+#define SAI_DISTANCE_THRESHOLD     8
 
 // Entropy coding
 typedef struct {

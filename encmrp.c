@@ -504,7 +504,7 @@ void set_cost_model(ENCODER *enc, int f_mmse) {
             pm->cost[k] = (float) (a + b * c * c);
         }
 
-        pm->subcost[0] = 0.0;
+        pm->subcost[0] = 0.0f;
     }
 
     for (k = 0; k <= enc->maxprd; k++) {
@@ -568,7 +568,7 @@ void set_cost_rate(ENCODER *enc) {
                     pm->cost[k] = enc->vlcs[gr][pm->id].len[k];
                 }
 
-                pm->subcost[0] = 0.0;
+                pm->subcost[0] = 0.0f;
             }
             else if (enc->pm_accuracy < 0) {
                 for (k = 0; k < pm->size; k++) {
@@ -622,7 +622,7 @@ void predict_region(ENCODER *enc, int tlt, int tls, int brt, int brs) {
     int *intra_roff_p = NULL, **intra_roff_pp = NULL;
     int *sai_roff_p[SAI_REFERENCES], **sai_roff_pp[SAI_REFERENCES];
 
-    for (int r = 0; r < enc->no_refsai; r++) {
+    for (r = 0; r < enc->no_refsai; r++) {
         sai_roff_p[r] = NULL;
         sai_roff_pp[r] = NULL;
     }
@@ -2587,7 +2587,7 @@ int* histogram_check(LF4D *lf, int depth) {
 /*------------------------- histogram_packing -------------------------*
  |  Function histogram_packing
  |
- |  Purpose: Peforms the histogram packing and checks if the
+ |  Purpose: Performs the histogram packing and checks if the
  |			 total variation is lower
  |
  |  Parameters:
@@ -2758,7 +2758,7 @@ int encode_lookuptable(FILE *fp, const int *forward_table, int size) {
 
 // Read hierarchical encoding configuration file
 int **read_hicfg(char *filename, int no_sai, int *no_hilevels) {
-    int **hilevels;
+    int **hilevels = NULL;
     int level = 0, frame = 0, f = 0, used = 0;
     size_t bufsize = 0;
     char *buffer = NULL, *ptr = NULL;
@@ -3240,13 +3240,10 @@ int main(int argc, char **argv) {
                 case 'E':
                     endianness = (int) strtol(argv[++i], NULL, 10);
 
-                    if (endianness == 0) {
-                        endianness = LITTLE_ENDIANNESS;
-                    }
-                    else if (endianness == 1) {
+                    if (endianness == 1) {
                         endianness = BIG_ENDIANNESS;
                     }
-                    else if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
+                    else if (endianness == 0 || (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS)) {
                         endianness = LITTLE_ENDIANNESS;
                     }
 
@@ -3346,7 +3343,7 @@ int main(int argc, char **argv) {
         printf("    -J 2 * num  Views dimensions (in pixels) [%c %c]\n", 'H', 'W');
         printf("    -K 2 * num  Dimensions of the array of views [%c %c]\n", 'H', 'W');
         printf("    -L 5 * num  Prediction order (1 * Intra, 4 * Inter) [%d ", INTRA_PRD_ORDER);
-        for (int r = 0; r < SAI_REFERENCES; r++) printf("%d", SAI_PRD_ORDER);
+        for (r = 0; r < SAI_REFERENCES; r++) printf("%d", SAI_PRD_ORDER);
         printf("]\n");
         printf("    -c str      Hierarchical encoding configuration file\n");
         printf("    -b num      Bit depth [%d]\n", depth);
@@ -3417,9 +3414,13 @@ int main(int argc, char **argv) {
         // Check if the directory exists and in that case deletes it
         struct stat sb;
         if (stat(debug_path, &sb) == 0 && (uint) S_IFDIR & sb.st_mode) {
-            char aux[1000];
-            sprintf(aux, "rm -r %s", debug_path);
-            (void) system(aux);
+            char remove_command[1000];
+            sprintf(remove_command, "rm -r %s", debug_path);
+
+            if (system(remove_command) == -1) {
+                fprintf(stderr, "The program was unable to remove the debug path.\n");
+                exit(EXIT_FAILURE);
+            }
         }
 
         // Creates debug path

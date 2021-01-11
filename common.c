@@ -198,25 +198,6 @@ LF4D *alloc_lf4d( int v, int u, int t, int s, int maxval) {
     return (lf);
 }
 
-// Function to copy LF4D
-LF4D *copy_yuv(LF4D *lf) {
-    int i, j, k, l;
-
-    LF4D *new_lf = alloc_lf4d(lf->v, lf->u, lf->t, lf->s, lf->maxval);
-
-    for (i = 0; i < lf->v; i++) {
-        for (j = 0; j < lf->u; j++) {
-            for (k = 0; k < lf->t; k++) {
-                for (l = 0; l < lf->s; l++) {
-                    new_lf->val[i][j][k][l] = lf->val[i][j][k][l];
-                }
-            }
-        }
-    }
-
-    return (new_lf);
-}
-
 // Function to reverse the endianness of a unsigned short
 unsigned short reverse_endianness (unsigned short s, int endianness) {
     unsigned char c1, c2;
@@ -319,13 +300,16 @@ LF4D *read_yuv(char *filename, int v, int u, int t, int s, int depth, int endian
     FILE *fp;
 
 
-    int elements = v * u * t * s * (depth == 8 ? 1 : 2);
+    unsigned long elements = v * u * t * s * (depth == 8 ? 1 : 2);
     unsigned char *stream_ptr, *stream = (unsigned char *) alloc_mem(elements * sizeof(unsigned char));
 
     //Open file
     fp = fileopen(filename, "rb");
 
-    fread(stream, sizeof(unsigned char), elements, fp);
+    if (fread(stream, sizeof(unsigned char), elements, fp) != elements) {
+        fprintf(stderr, "An error occurred while reading the image from file.\n");
+        exit(EXIT_FAILURE);
+    }
     stream_ptr = stream;
 
     if (endianness == LITTLE_ENDIANNESS) {
@@ -506,7 +490,7 @@ int ***init_intra_ref_offset(int ts[2], int prd_order) {
 // TODO: fix functions headers
 int ***init_sai_ref_offset(int ts[2], int prd_order, int distance) {
     int ***roff, *ptr;
-    int t, s, ds, dt, k, base = 0;
+    int t, s, ds, dt, k, base;
 
     int min_ds, max_ds, min_dt, max_dt;
     min_ds = max_ds = min_dt = max_dt = 0;
@@ -814,11 +798,11 @@ void mtf_classlabel(char **class, int *mtfbuf, int t, int s, int bsize, int widt
             ref[0] = ref[1] = ref[2] = 0;
         }
         else {
-            ref[0] = ref[1] = ref[2] = class[t][s - 1];
+            ref[0] = ref[1] = ref[2] = (int) class[t][s - 1];
         }
     }
     else {
-        ref[0] = class[t - 1][s];
+        ref[0] = (int) class[t - 1][s];
         ref[1] = (s == 0) ? class[t - 1][s] : class[t][s - 1];
         ref[2] = (s + bsize >= width) ? class[t - 1][s] : class[t - 1][s + bsize];
         if (ref[1] == ref[2]) {

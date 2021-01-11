@@ -1232,9 +1232,13 @@ int main(int argc, char **argv) {
         // Check if the directory exists and in that case deletes it
         struct stat sb;
         if (stat(debug_path, &sb) == 0 && (uint) S_IFDIR & sb.st_mode) {
-            char aux[1000];
-            sprintf(aux, "rm -r %s", debug_path);
-            (void) system(aux);
+            char remove_command[1000];
+            sprintf(remove_command, "rm -r %s", debug_path);
+
+            if (system(remove_command) == -1) {
+                fprintf(stderr, "The program was unable to remove the debug path.\n");
+                exit(EXIT_FAILURE);
+            }
         }
 
         // Creates debug path
