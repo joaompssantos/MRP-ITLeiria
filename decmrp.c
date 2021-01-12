@@ -1249,6 +1249,44 @@ void debug_partition(DECODER *dec, LF4D *lf, int endianness) {
 //    }
 }
 
+// Write residuals to file
+void debug_err(DECODER *dec, LF4D *lf, int endianness) {
+    if (dec->debug_path != NULL) {
+        char *residuals_img = (char *) alloc_mem(
+                (strlen(dec->debug_path) + strlen("/residuals_0000x0000_10bpp_LE_YUV444p.yuv\0")) * sizeof(char));
+
+        // Quadtree partition image name
+        sprintf(residuals_img, "%s/residuals_%dx%d_%dbpp_LE_GRAY.yuv", dec->debug_path,
+                dec->vu[WIDTH] * dec->ts[WIDTH], dec->vu[HEIGHT] * dec->ts[HEIGHT], dec->depth + 1);
+
+        LF4D *residuals;
+        residuals = alloc_lf4d(dec->vu[HEIGHT], dec->vu[WIDTH], dec->ts[HEIGHT], dec->ts[WIDTH], (int) pow(2, dec->depth + 1) - 1);
+
+        int v, u, t, s, cl, prd, e, p;
+        int mask, shift, base;
+
+        for (v = 0; v < dec->vu[HEIGHT]; v++) {
+            for (u = 0; u < dec->vu[WIDTH]; u++) {
+                for (t = 0; t < dec->ts[HEIGHT]; t++) {
+                    for (s = 0; s < dec->ts[WIDTH]; s++) {
+                        cl = dec->class[v][u][t][s];
+                        prd = calc_prd(lf->val, dec, cl, v, u, t, s);
+                        prd >>= (dec->coef_precision - 1);
+
+                        residuals->val[v][u][t][s] = (((int) lf->val[v][u][t][s] << 1) - prd >> 1) + (int) pow(2, dec->depth) - 1;
+                    }
+                }
+            }
+        }
+
+        // Write image to file
+        write_yuv(residuals, residuals_img, dec->depth + 1, endianness, SAI);
+
+        free(residuals_img);
+        safefree_lf4d(&residuals);
+    }
+}
+
 int main(int argc, char **argv) {
     int i;
     int vu[2], ts[2], maxval, depth, num_comp, num_group, endianness = LITTLE_ENDIANNESS;
@@ -1419,6 +1457,7 @@ int main(int argc, char **argv) {
 
     if (debug == 1) {
         debug_partition(dec, lf, endianness);
+        debug_err(dec, lf, endianness);
 
         free(debug_path);
     }
