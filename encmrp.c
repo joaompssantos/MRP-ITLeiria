@@ -482,7 +482,7 @@ void init_class(ENCODER *enc) {
         }
 
         // Final result of the variance for one block
-        var[k] -= sum * sum / (bsize_vu[HEIGHT] * bsize_vu[WIDTH] * bsize_vu[HEIGHT] * bsize_ts[WIDTH]);
+        var[k] -= sum * sum / (bsize_vu[HEIGHT] * bsize_vu[WIDTH] * bsize_ts[HEIGHT] * bsize_ts[WIDTH]);
         ptr[k] = &(var[k]);
     }
 
@@ -3563,11 +3563,50 @@ void debug_partition(ENCODER *enc, int endianness) {
 //    }
 }
 
+/*// Partition list
+typedef struct leaf LEAF;
+struct leaf {
+    char split;
+
+    LEAF *tl;
+    LEAF *tr;
+    LEAF *bl;
+    LEAF *br;
+};*/
+
+LEAF* copy_tree(LEAF* original) {
+    if (original == NULL) {
+        return NULL;
+    }
+    else {
+        // Allocate the new LEAF in the heap using malloc() & set its data
+        LEAF *new_leaf = (LEAF *) alloc_mem(sizeof(LEAF));
+
+        new_leaf->split = original->split;
+
+        new_leaf->tl = NULL;
+        new_leaf->tr = NULL;
+        new_leaf->bl = NULL;
+        new_leaf->br = NULL;
+
+        if (new_leaf->split != 'N') {
+            new_leaf->tl = copy_tree(original->tl);
+            new_leaf->tr = copy_tree(original->tr);
+            new_leaf->bl = copy_tree(original->bl);
+            new_leaf->br = copy_tree(original->br);
+        }
+
+        return new_leaf;
+    }
+}
+
 int main(int argc, char **argv) {
     // Variable declaration
     cost_t cost, min_cost, side_cost = 0;
-    int i, j, k, v, u, t, s, cl, **prd_save, **th_save, **error = NULL;
-    char ****class_save;
+    int i, j, k, v, u, t, s, cl, **predictor_save, ****prd_save, **th_save, ****encval_save;
+    char ****class_save, ****group_save;
+    LEAF *****partition_tree_save = NULL;
+    PMODEL **pmlist_save = NULL;
     LF4D *lf = NULL;
     ENCODER *enc = NULL;
     double elapse = 0.0;
@@ -3973,7 +4012,7 @@ int main(int argc, char **argv) {
     init_class(enc);
 
     // Auxiliary variables
-    prd_save = (int **) alloc_2d_array(enc->num_class, enc->full_prd_order, sizeof(int));
+    predictor_save = (int **) alloc_2d_array(enc->num_class, enc->full_prd_order, sizeof(int));
     th_save = (int **) alloc_2d_array(enc->num_class, enc->num_group, sizeof(int));
     class_save = (char ****) alloc_4d_array(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
 
@@ -4003,7 +4042,7 @@ int main(int argc, char **argv) {
 
             for (cl = 0; cl < enc->num_class; cl++) {
                 for (k = 0; k < enc->full_prd_order; k++) {
-                    prd_save[cl][k] = enc->predictor[cl][k];
+                    predictor_save[cl][k] = enc->predictor[cl][k];
                 }
 
                 for (k = 0; k < enc->num_group; k++) {
@@ -4029,7 +4068,7 @@ int main(int argc, char **argv) {
 
     for (cl = 0; cl < enc->num_class; cl++) {
         for (k = 0; k < enc->full_prd_order; k++) {
-            enc->predictor[cl][k] = prd_save[cl][k];
+            enc->predictor[cl][k] = predictor_save[cl][k];
         }
 
         for (k = 0; k < enc->num_group; k++) {
@@ -4042,6 +4081,32 @@ int main(int argc, char **argv) {
     cost = calc_cost(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]);
 
     printf("1st optimization --> Cost: %d\n", (int) cost);
+
+    // Backup variables
+    prd_save = (int ****) alloc_4d_array(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(int));
+    encval_save = (int ****) alloc_4d_array(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(int));
+    group_save = (char ****) alloc_4d_array(enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
+    pmlist_save = (PMODEL **) alloc_mem(enc->num_group * sizeof(PMODEL *));
+
+    // Quadtree map
+    if (enc->quadtree_depth > 0) {
+        v = (enc->vu[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
+        u = (enc->vu[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
+        t = (enc->ts[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
+        s = (enc->ts[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
+
+        partition_tree_save = (LEAF *****) alloc_4d_array(v, u, t, s, sizeof(LEAF *));
+
+        for (int vv = 0; vv < v; vv++) {
+            for (int uu = 0; uu < u; uu++) {
+                for (int tt = 0; tt < t; tt++) {
+                    for (int ss = 0; ss < s; ss++) {
+                        partition_tree_save[vv][uu][tt][ss] = NULL;
+                    }
+                }
+            }
+        }
+    }
 
     /* 2nd loop */
     //Loop type
@@ -4064,24 +4129,47 @@ int main(int argc, char **argv) {
             min_cost = cost;
             j = i;
 
-            if (f_optpred) {
-                for (v = 0; v < enc->vu[HEIGHT]; v++) {
-                    for (u = 0; u < enc->vu[WIDTH]; u++) {
-                        for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                            for (s = 0; s < enc->ts[WIDTH]; s++) {
-                                class_save[v][u][t][s] = enc->class[v][u][t][s];
-                            }
+            // Save variables for the optimal case
+            for (v = 0; v < enc->vu[HEIGHT]; v++) {
+                for (u = 0; u < enc->vu[WIDTH]; u++) {
+                    for (t = 0; t < enc->ts[HEIGHT]; t++) {
+                        for (s = 0; s < enc->ts[WIDTH]; s++) {
+                            class_save[v][u][t][s] = enc->class[v][u][t][s];
+                            group_save[v][u][t][s] = enc->group[v][u][t][s];
+                            prd_save[v][u][t][s] = enc->prd[v][u][t][s];
+                            encval_save[v][u][t][s] = enc->encval[v][u][t][s];
                         }
                     }
                 }
+            }
 
-                for (cl = 0; cl < enc->num_class; cl++) {
+            for (cl = 0; cl < enc->num_class; cl++) {
+                if (f_optpred) {
                     for (k = 0; k < enc->full_prd_order; k++) {
-                        prd_save[cl][k] = enc->predictor[cl][k];
+                        predictor_save[cl][k] = enc->predictor[cl][k];
                     }
+                }
 
-                    for (k = 0; k < enc->num_group; k++) {
-                        th_save[cl][k] = enc->th[cl][k];
+                for (k = 0; k < enc->num_group; k++) {
+                    th_save[cl][k] = enc->th[cl][k];
+                    pmlist_save[k] = enc->pmlist[k];
+                }
+            }
+
+            if (enc->quadtree_depth > 0) {
+                v = (enc->vu[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
+                u = (enc->vu[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
+                t = (enc->ts[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
+                s = (enc->ts[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
+
+                for (int vv = 0; vv < v; vv++) {
+                    for (int uu = 0; uu < u; uu++) {
+                        for (int tt = 0; tt < t; tt++) {
+                            for (int ss = 0; ss < s; ss++) {
+                                free_tree(partition_tree_save[vv][uu][tt][ss]);
+                                partition_tree_save[vv][uu][tt][ss] = copy_tree(enc->partition_tree[vv][uu][tt][ss]);
+                            }
+                        }
                     }
                 }
             }
@@ -4097,33 +4185,62 @@ int main(int argc, char **argv) {
         elapse += cpu_time();
     }
 
-    if (f_optpred) {
-        for (v = 0; v < enc->vu[HEIGHT]; v++) {
-            for (u = 0; u < enc->vu[WIDTH]; u++) {
-                for (t = 0; t < enc->ts[HEIGHT]; t++) {
-                    for (s = 0; s < enc->ts[WIDTH]; s++) {
-                        enc->class[v][u][t][s] = class_save[v][u][t][s];
+    // Recover optimal values
+    for (v = 0; v < enc->vu[HEIGHT]; v++) {
+        for (u = 0; u < enc->vu[WIDTH]; u++) {
+            for (t = 0; t < enc->ts[HEIGHT]; t++) {
+                for (s = 0; s < enc->ts[WIDTH]; s++) {
+                    enc->class[v][u][t][s] = class_save[v][u][t][s];
+                    enc->group[v][u][t][s] = group_save[v][u][t][s];
+                    enc->prd[v][u][t][s] = prd_save[v][u][t][s];
+                    enc->encval[v][u][t][s] = encval_save[v][u][t][s];
+                }
+            }
+        }
+    }
+
+    for (cl = 0; cl < enc->num_class; cl++) {
+        if (f_optpred) {
+            for (k = 0; k < enc->full_prd_order; k++) {
+                enc->predictor[cl][k] = predictor_save[cl][k];
+            }
+        }
+
+        i = 0;
+
+        for (k = 0; k < enc->num_group; k++) {
+            enc->th[cl][k] = th_save[cl][k];
+
+            enc->pmlist[k] = pmlist_save[k];
+
+            for (; i < enc->th[cl][k]; i++) {
+                enc->uquant[cl][i] = (char) k;
+            }
+        }
+    }
+
+    if (enc->quadtree_depth > 0) {
+        v = (enc->vu[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
+        u = (enc->vu[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
+        t = (enc->ts[HEIGHT] + MAX_BSIZE - 1) / MAX_BSIZE;
+        s = (enc->ts[WIDTH] + MAX_BSIZE - 1) / MAX_BSIZE;
+
+        for (int vv = 0; vv < v; vv++) {
+            for (int uu = 0; uu < u; uu++) {
+                for (int tt = 0; tt < t; tt++) {
+                    for (int ss = 0; ss < s; ss++) {
+                        free_tree(enc->partition_tree[vv][uu][tt][ss]);
+                        enc->partition_tree[vv][uu][tt][ss] = copy_tree(partition_tree_save[vv][uu][tt][ss]);
+                        free_tree(partition_tree_save[vv][uu][tt][ss]);
                     }
                 }
             }
         }
 
-        for (cl = 0; cl < enc->num_class; cl++) {
-            for (k = 0; k < enc->full_prd_order; k++) {
-                enc->predictor[cl][k] = prd_save[cl][k];
-            }
+        free(partition_tree_save);
+    }
 
-            i = 0;
-
-            for (k = 0; k < enc->num_group; k++) {
-                enc->th[cl][k] = th_save[cl][k];
-
-                for (; i < enc->th[cl][k]; i++) {
-                    enc->uquant[cl][i] = (char) k;
-                }
-            }
-        }
-
+    if (f_optpred) {
         predict_region(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]);
         cost = calc_cost(enc, 0, 0, 0, 0, enc->vu[HEIGHT], enc->vu[WIDTH], enc->ts[HEIGHT], enc->ts[WIDTH]);
         optimize_class(enc);
@@ -4157,6 +4274,10 @@ int main(int argc, char **argv) {
     free(class_save);
     free(prd_save);
     free(th_save);
+    free(group_save);
+    free(encval_save);
+    free(pmlist_save);
+    free(predictor_save);
 
     if (debug == 1) {
         debug_predictors(enc);
@@ -4177,8 +4298,6 @@ int main(int argc, char **argv) {
     fclose(fp);
 
     print_results(res, vu, mi_size, header, class_info, predictors, thresholds, errors);
-
-    free(error);
 
     safefree((void **) &forward_table);
 
