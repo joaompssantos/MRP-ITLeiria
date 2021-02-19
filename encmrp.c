@@ -2790,6 +2790,9 @@ int **read_hicfg(char *filename, int no_sai, int *no_hilevels) {
 
                 // Alloc hierarchical levels array
                 hilevels = (int **) alloc_2d_array(*no_hilevels, no_sai + 1, sizeof(int));
+
+                // Initialize the number of frames in each level as zero, this allows to check if the level was filled
+                for (int l = 0; l < *no_hilevels; l++) hilevels[l][0] = 0;
             }
             else{
                 // Print error message if the configuration file is not properly structured
@@ -2830,7 +2833,7 @@ int **read_hicfg(char *filename, int no_sai, int *no_hilevels) {
         level++;
 
         // Check if the level reached the maximum value
-        if (level == *no_hilevels - 1) break;
+        if (level == *no_hilevels) break;
     }
 
     // Free the memory used by reading the line
@@ -2839,52 +2842,52 @@ int **read_hicfg(char *filename, int no_sai, int *no_hilevels) {
     // Close file
     fclose(fid);
 
-    // Fill the frames of the last hierarchical level
-    // Set number of remaining frames as zero
-    hilevels[*no_hilevels - 1][0] = 0;
-
-    // Count the number of frames used in other hierarchical levels
-    for (level = 0; level < *no_hilevels - 1; level++) {
-        hilevels[*no_hilevels - 1][0] += hilevels[level][0];
-    }
-
-    // Calculate the number of remaining frames
-    hilevels[*no_hilevels - 1][0] = no_sai - hilevels[*no_hilevels - 1][0];
-
-    // Initialize variables
-    f = 0;
-    used = 0;
-
-    // Add the remaining frames number, while checking if it wasn't already used
-    for (frame = 1; frame < hilevels[*no_hilevels - 1][0] + 1; frame++) {
-        // Determine if frame number was already used
+    // Checks if the last level was not defined in the config file and fills it in that case
+    if (hilevels[*no_hilevels - 1][0] == 0) {
+        // Fill the frames of the last hierarchical level
+        // Count the number of frames used in other hierarchical levels
         for (level = 0; level < *no_hilevels - 1; level++) {
-            for (int frame2 = 1; frame2 < hilevels[level][0] + 1; frame2++) {
-                if (hilevels[level][frame2] == f) {
-                    used = 1;
-                    level = *no_hilevels;
-                    break;
+            hilevels[*no_hilevels - 1][0] += hilevels[level][0];
+        }
+
+        // Calculate the number of remaining frames
+        hilevels[*no_hilevels - 1][0] = no_sai - hilevels[*no_hilevels - 1][0];
+
+        // Initialize variables
+        f = 0;
+        used = 0;
+
+        // Add the remaining frames number, while checking if it wasn't already used
+        for (frame = 1; frame < hilevels[*no_hilevels - 1][0] + 1; frame++) {
+            // Determine if frame number was already used
+            for (level = 0; level < *no_hilevels - 1; level++) {
+                for (int frame2 = 1; frame2 < hilevels[level][0] + 1; frame2++) {
+                    if (hilevels[level][frame2] == f) {
+                        used = 1;
+                        level = *no_hilevels;
+                        break;
+                    }
                 }
             }
-        }
 
-        // If the frame number was used skip the number and reset the position
-        if (used == 1) {
-            used = 0;
-            frame--;
+            // If the frame number was used skip the number and reset the position
+            if (used == 1) {
+                used = 0;
+                frame--;
+                f++;
+                continue;
+            }
+
+            // If the frame number was not used store to the last hierarchical level
+            hilevels[*no_hilevels - 1][frame] = f;
+
+            // Increase the frame number
             f++;
-            continue;
         }
 
-        // If the frame number was not used store to the last hierarchical level
-        hilevels[*no_hilevels - 1][frame] = f;
-
-        // Increase the frame number
-        f++;
+        // Add -1 after the last frame as a check the frames have ended
+        hilevels[*no_hilevels - 1][frame + 1] = -1;
     }
-
-    // Add -1 after the last frame as a check the frames have ended
-    hilevels[*no_hilevels - 1][frame + 1] = -1;
 
     // Return the array with the hierarchical levels
     return (hilevels);
