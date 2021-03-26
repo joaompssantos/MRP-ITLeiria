@@ -313,8 +313,8 @@ void free_encoder(ENCODER *enc) {
     free(enc->intra_ctx_weight);
     free_ref_offset(enc->ts, 0, enc->prd_order, enc->intra_roff);
     for (i = 0; i < enc->no_refsai; i++) {
-        free_ref_offset(enc->ts, i + 1, enc->sai_prd_order[i], enc->sai_ref_roff[i]);
         free(enc->sai_ref_ctx_weight[i]);
+        free_ref_offset(enc->ts, i + 1, enc->sai_prd_order[i], enc->sai_ref_roff[i]);
     }
 
     if (enc->f_huffman == 0) {
@@ -1629,7 +1629,7 @@ void remove_emptyclass(ENCODER *enc) {
  |
  |  Returns:  int		--> Returns the number of bits used
  *---------------------------------------------------------------------*/
-int write_header(ENCODER *enc, int *vu, int hilevels, int prd_order, int *sai_prd_order, FILE *fp) {
+int write_header(ENCODER *enc, int *vu, int hilevels, bool use_current, int prd_order, int *sai_prd_order, FILE *fp) {
     int bits, i;
 
     bits =  putbits(fp, 16, MAGIC_NUMBER);
@@ -1639,9 +1639,10 @@ int write_header(ENCODER *enc, int *vu, int hilevels, int prd_order, int *sai_pr
     bits += putbits(fp, 16, (uint) enc->ts[WIDTH]);
     bits += putbits(fp, 16, (uint) enc->maxval);
     bits += putbits(fp, 6,  (uint) enc->depth);
-    bits += putbits(fp, 4,  1);	/* number of components (1 = monochrome) */
+    bits += putbits(fp, 3,  1);	/* number of components (1 = monochrome) */
     bits += putbits(fp, 6,  (uint) enc->num_group);
-    bits += putbits(fp, 8, (uint) hilevels);
+    bits += putbits(fp, 8,  (uint) hilevels);
+    bits += putbits(fp, 1,  (uint) use_current);
     bits += putbits(fp, 8,  (uint) prd_order);
 
     for (i = 0; i < SAI_REFERENCES; i++) {
@@ -1691,7 +1692,7 @@ int write_hilevel(int hilevel, int frame, FILE *fp) {
     int bits;
 
     bits = putbits(fp, 8, (uint) hilevel);
-    bits = putbits(fp, 8, (uint) frame);
+    bits += putbits(fp, 8, (uint) frame);
     return (bits);
 }
 
@@ -3086,10 +3087,9 @@ int main(int argc, char **argv) {
     int max_iteration = MAX_ITERATION;
     int depth = DEPTH;
     int endianness = LITTLE_ENDIANNESS;
-    int chroma = GRAY;
-    char *chroma_name = NULL;
     int no_hilevels = 0, no_refsai_candidates = 0, no_refsai = 0, curr_frame = 0;
     int **hilevels = NULL, *reference_list = NULL;
+    bool use_current = false;
     SAIDISTANCE **reference_candidates = NULL;
     int sai_coord[2] = {0, 0};
     char *infile, *outfile, *cfgfile;
@@ -3172,6 +3172,11 @@ int main(int argc, char **argv) {
 
                     break;
 
+                case 's':
+                    use_current = true;
+
+                    break;
+
                 case 'V':
                     num_pmodel = (int) strtol(argv[++i], NULL, 10);
 
@@ -3246,39 +3251,8 @@ int main(int argc, char **argv) {
                     if (endianness == 1) {
                         endianness = BIG_ENDIANNESS;
                     }
-                    else if (endianness == 0 || (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS)) {
+                    else if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
                         endianness = LITTLE_ENDIANNESS;
-                    }
-
-                    break;
-
-                case 'C':
-                    chroma_name = argv[++i];
-
-                    if (strcmp(chroma_name, "GRAY") == 0) {
-                        chroma = GRAY;
-                    }
-                    else if (strcmp(chroma_name, "444") == 0) {
-                        chroma = S444;
-                    }
-                    else if (strcmp(chroma_name, "422") == 0) {
-                        chroma = S422;
-                    }
-                    else if (strcmp(chroma_name, "411") == 0) {
-                        chroma = S411;
-                    }
-                    else if (strcmp(chroma_name, "420") == 0) {
-                        chroma = S420;
-                    }
-                    else {
-                        printf("Chroma format not recognised: %s.\n", chroma_name);
-                        printf("Supported formats:\n");
-                        printf("\tGRAY;\n");
-                        printf("\t444;\n");
-                        printf("\t422; --> Not yet implemented\n");
-                        printf("\t411; --> Not yet implemented\n");
-                        printf("\t420.\n");
-                        exit(-2);
                     }
 
                     break;
@@ -3349,15 +3323,9 @@ int main(int argc, char **argv) {
         for (r = 0; r < SAI_REFERENCES; r++) printf("%d", SAI_PRD_ORDER);
         printf("]\n");
         printf("    -c str      Hierarchical encoding configuration file\n");
+        printf("    -s          Use the current level causal SAI as reference\n");
         printf("    -b num      Bit depth [%d]\n", depth);
         printf("    -E num      Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
-        printf("    -C str      Chroma format [%s]. Supported formats:\n", "GRAY");
-        printf("                    GRAY;\n");
-        printf("                    444;\n");
-        printf("                    422; --> Not yet implemented\n");
-        printf("                    411; --> Not yet implemented\n");
-        printf("                    420.\n");
-        printf("                    (Notice: Currently MRP is a Luma only encoder. Thus this step is used only to skip the Chromas.)\n");
         printf("    -D num      Distance between views [%d]*\n", delta);
         printf("    -M num      Number of predictors [%d]\n", num_class);
         printf("    -P num      Precision of prediction coefficients (fractional bits) [%d]\n", coef_precision);
@@ -3442,7 +3410,7 @@ int main(int argc, char **argv) {
     reference_list = (int *) alloc_mem(SAI_REFERENCES * sizeof(int));
 
     // Read input file
-    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], sai_size[HEIGHT], sai_size[WIDTH], depth, endianness, chroma, format);
+    lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], sai_size[HEIGHT], sai_size[WIDTH], depth, endianness, format);
     // Perform histogram packing if appropriate
     if (do_histogram_packing == 1) forward_table = histogram_check(lf, depth);
 
@@ -3543,6 +3511,14 @@ int main(int argc, char **argv) {
                 printf(")");
             }
             printf("\n");
+
+            if (use_current) {
+                // Store the reference SAI number on the reference_candidates structure
+                reference_candidates[no_refsai_candidates]->sai = curr_frame;
+
+                // Convert the SAI number to coordinates in the angular dimensions array
+                frame2coordinates(reference_candidates[no_refsai_candidates++]->coordinates, curr_frame, vu[WIDTH]);
+            }
 
             //// Start of the encoding process
             // Creates new ENCODER structure
@@ -3750,7 +3726,7 @@ int main(int argc, char **argv) {
                 print_header = false;
 
                 // Write header to file
-                header = write_header(enc, vu, no_hilevels, prd_order, sai_prd_order, fp);
+                header = write_header(enc, vu, no_hilevels, use_current, prd_order, sai_prd_order, fp);
 
                 // Write histogram packing table to file
                 if (forward_table != NULL) {

@@ -292,10 +292,9 @@ void write_yuv(LF4D *lf, char *filename, int depth, int endianness, int format) 
  |
  |  Returns:  IMAGE* --> returns a video type structure
  *-------------------------------------------------------------------*/
-LF4D *read_yuv(char *filename, int v, int u, int t, int s, int depth, int endianness, int chroma, int format) {
+LF4D *read_yuv(char *filename, int v, int u, int t, int s, int depth, int endianness, int format) {
     int i, j, k, l;
     unsigned int shift_first, shift_second, first, second;
-    double chroma_pass = (chroma == GRAY ? 1 : (chroma == S444 ? 3 : 1.5));
     LF4D *lf;
     FILE *fp;
 

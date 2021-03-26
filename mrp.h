@@ -255,7 +255,7 @@ unsigned short reverse_endianness(unsigned short, int);
 
 void write_yuv(LF4D *, char *, int, int, int);
 
-LF4D *read_yuv(char *, int, int, int, int, int, int, int, int);
+LF4D *read_yuv(char *, int, int, int, int, int, int, int);
 
 int ***init_ref_offset(int[2], int, int);
 

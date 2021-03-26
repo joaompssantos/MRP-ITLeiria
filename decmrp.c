@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdbool.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "mrp.h"
@@ -235,7 +236,7 @@ void free_decoder(DECODER *dec) {
 
 void read_header(FILE *fp, int vu[2], int ts[2], int *maxval, int *depth, int *num_comp, int *num_group, int *prd_order,
                  int *sai_prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman,
-                 int *quadtree_depth, int *delta, int *hist_bytes, int *hilevels) {
+                 int *quadtree_depth, int *delta, int *hist_bytes, int *hilevels, bool *use_current) {
     int i = 0;
 
     if (getbits(fp, 16) != MAGIC_NUMBER) {
@@ -249,9 +250,11 @@ void read_header(FILE *fp, int vu[2], int ts[2], int *maxval, int *depth, int *n
     ts[WIDTH]  = (int) getbits(fp, 16);
     *maxval    = (int) getbits(fp, 16);
     *depth     = (int) getbits(fp, 6);
-    *num_comp  = (int) getbits(fp, 4);
+    *num_comp  = (int) getbits(fp, 3);
     *num_group = (int) getbits(fp, 6);
     *hilevels  = (int) getbits(fp, 8);
+
+    *use_current = (bool) getbits(fp, 1);
     *prd_order = (int) getbits(fp, 8);
 
     for (i = 0; i < SAI_REFERENCES; i++) {
@@ -1115,6 +1118,7 @@ int main(int argc, char **argv) {
     int format = SAI;
     int no_hilevels = 0, no_refsai_candidates = 0, no_refsai = 0, curr_frame = 0, curr_hilevel = 0, next_hilevel = 0;
     int **hilevels = NULL, *reference_list = NULL;
+    bool use_current = false;
     SAIDISTANCE **reference_candidates = NULL;
     int sai_coord[2] = {0, 0};
     char *format_name = NULL;
@@ -1212,7 +1216,7 @@ int main(int argc, char **argv) {
 
     // Read header
     read_header(fp, vu, ts, &maxval, &depth, &num_comp, &num_group, &prd_order, sai_prd_order, &num_pmodel,
-                &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &hist_bytes, &no_hilevels);
+                &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &hist_bytes, &no_hilevels, &use_current);
 
     // Alloc memory for the hierarchical information
     hilevels = (int **) alloc_2d_array(no_hilevels, vu[HEIGHT] * vu[WIDTH] + 1, sizeof(int));
@@ -1327,6 +1331,14 @@ int main(int argc, char **argv) {
             printf(")");
         }
         printf(":\n");
+
+        if (use_current) {
+            // Store the reference SAI number on the reference_candidates structure
+            reference_candidates[no_refsai_candidates]->sai = curr_frame;
+
+            // Convert the SAI number to coordinates in the angular dimensions array
+            frame2coordinates(reference_candidates[no_refsai_candidates++]->coordinates, curr_frame, vu[WIDTH]);
+        }
 
         //// Start of the decoding process
         printf("    Process started");
