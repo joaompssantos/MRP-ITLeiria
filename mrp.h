@@ -75,6 +75,10 @@
 #define SAI_REFERENCES             4
 #define SAI_DISTANCE_THRESHOLD     8
 
+// Disparity estimation
+#define DISP_BSIZE                 8
+#define MAX_DISPARITY              8
+
 // Entropy coding
 typedef struct {
     int size;
@@ -135,7 +139,7 @@ typedef struct {
 
     int full_prd_order;
     int prd_order; // Order of the predictors (number of pixels to use)
-    int sai_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
+    int sai_prd_order; // Order of the predictors (number of pixels to use) in neighbouring micro images
 
     int coef_precision; // Precision of the coefficients
     int num_pmodel; // Number of probability models
@@ -157,6 +161,7 @@ typedef struct {
 
     int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
     int ***sai_ref_roff[SAI_REFERENCES]; // Auxiliary structure used to scan the image for neighboring pixels.
+    int ***disparity_vectors[SAI_REFERENCES]; // Saves the disparity vectors for each reference image.
 
     int qtctx[QUADTREE_DEPTH << 3]; // Frequency counter of the segmentation flag context for the whole image.
     char **qtmap[QUADTREE_DEPTH]; // Segmentation flags for the quadtree partitioning of the image's prediction.
@@ -199,10 +204,11 @@ typedef struct {
 
     int full_prd_order;
     int prd_order;
-    int sai_prd_order[4]; // Order of the predictors (number of pixels to use) in neighbouring micro images
+    int sai_prd_order; // Order of the predictors (number of pixels to use) in neighbouring micro images
 
     int ***intra_roff; // Auxiliary structure used to scan the image for neighboring pixels.
     int ***sai_ref_roff[SAI_REFERENCES]; // Auxiliary structure used to scan the image for neighboring pixels.
+    int ***disparity_vectors[SAI_REFERENCES]; // Saves the disparity vectors for each reference image.
     
     int num_pmodel;
     int pm_accuracy;
@@ -257,7 +263,7 @@ void write_yuv(LF4D *, char *, int, int, int);
 
 LF4D *read_yuv(char *, int, int, int, int, int, int, int);
 
-int ***init_ref_offset(int[2], int, int);
+int ***init_ref_offset(int[2], int, int, int ***, int);
 
 void free_ref_offset(const int[2], int, int, int ***);
 
@@ -274,6 +280,10 @@ double cpu_time(void);
 char *cat_str(char *, char *, int);
 
 char *int2bin(int, int);
+
+int compare_distance(const void *, const void *);
+
+double median(int [], int);
 
 
 /* Huffman */
@@ -294,6 +304,8 @@ PMODEL ***init_pmodels(int, int, int, int *, double *, int);
 
 void set_spmodel(PMODEL *, int, int);
 
+void update_pmodel(PMODEL *, int, int);
+
 /* rc.c */
 RANGECODER *rc_init(void);
 
@@ -306,7 +318,5 @@ int rc_decode(FILE *, RANGECODER *, PMODEL *, int, int);
 void rc_startdec(FILE *, RANGECODER *);
 
 void frame2coordinates(int *, int, int);
-
-int compare_distance(const void *, const void *);
 
 #endif //MRP_H

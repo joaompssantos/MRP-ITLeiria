@@ -13,6 +13,88 @@
 extern double sigma_h[], sigma_a[];
 extern double qtree_prob[];
 
+void find_vector(int *disp_vector, int **org, int **ref, int blk_size[2], int org_t, int org_s, int min_t, int max_t, int min_s, int max_s) {
+    int ssd = 0, min_ssd = INT_MAX;
+
+    // Test org_t, org_s first
+    for (int i = 0; i < blk_size[0]; i++) {
+        for (int j = 0; j < blk_size[1]; j++) {
+            ssd += (ref[org_t + i][org_s + j] - org[org_t + i][org_s + j]) * (ref[org_t + i][org_s + j] - org[org_t + i][org_s + j]);
+        }
+    }
+
+    if (ssd < min_ssd) {
+        disp_vector[0] = disp_vector[1] = 0;
+
+        min_ssd = ssd;
+
+        if (min_ssd == 0) return;
+    }
+
+    // Test all values
+    for (int t = min_t; t < max_t; t++) {
+        for (int s = min_s; s < max_s; s++) {
+            ssd = 0;
+
+            for (int i = 0; i < blk_size[0]; i++) {
+                for (int j = 0; j < blk_size[1]; j++) {
+                    ssd += (ref[t + i][s + j] - org[org_t + i][org_s + j]) * (ref[t + i][s + j] - org[org_t + i][org_s + j]);
+                }
+            }
+
+            if (ssd < min_ssd) {
+                disp_vector[0] = t - org_t;
+                disp_vector[1] = s - org_s;
+
+                min_ssd = ssd;
+
+                if (min_ssd == 0) return;
+            }
+        }
+    }
+}
+
+int ***calc_disparity_vectors (int **org, int **ref, int T, int S, int blk_size, int max_range) {
+    int ***disp_vector = (int ***) alloc_3d_array((int) ceil(T * 1.0 / blk_size), (int) ceil(S * 1.0 / blk_size), 2, sizeof(int));
+    int min_t, max_t, min_s, max_s;
+    int blk_size2d[2];
+
+    for (int t = 0; t < T; t += blk_size) {
+        for (int s = 0; s < S; s += blk_size) {
+            blk_size2d[0] = blk_size2d[1] = blk_size;
+
+            min_t = (t > max_range) ? t - max_range : 0;
+            min_s = (s > max_range) ? s - max_range : 0;
+
+            if (t < T - max_range - blk_size) {
+                max_t =  t + max_range + 1;
+            }
+            else if (T - blk_size + 1 < t) {
+                blk_size2d[0] = T - t;
+                max_t = T - blk_size2d[0] + 1;
+            }
+            else {
+                max_t =  T - blk_size + 1;
+            }
+
+            if (s < S - max_range - blk_size) {
+                max_s =  s + max_range + 1;
+            }
+            else if (S - blk_size + 1 < s) {
+                blk_size2d[1] = S - s;
+                max_s = S - blk_size2d[1] + 1;
+            }
+            else {
+                max_s =  S - blk_size + 1;
+            }
+
+            find_vector(disp_vector[t / blk_size][s / blk_size], org, ref, blk_size2d, t, s, min_t, max_t, min_s, max_s);
+        }
+    }
+
+    return (disp_vector);
+}
+
 // TODO: fix functions headers
 /*---------------------------- init_encoder ------------------------*
  |  Function init_encoder
@@ -42,9 +124,9 @@ extern double qtree_prob[];
  |  Returns:  ENCODER* --> returns a encoder type structure
  *-------------------------------------------------------------------*/
 ENCODER *
-init_encoder(int frame, LF4D *lf, int num_class, int num_group, int prd_order, const int sai_prd_order[4], int coef_precision,
+init_encoder(int frame, LF4D *lf, int num_class, int num_group, int prd_order, const int sai_prd_order, int coef_precision,
              int f_huffman, int quadtree_depth, int num_pmodel, int pm_accuracy, int delta, LF4D *save_err, int no_refsai,
-             int *reference_list, int depth, char *debug_path) {
+             int *reference_list, int depth, char *debug_path, bool use_disp, int disp_blk_size, int disp_max_range) {
     //Declare new encoder struct
     ENCODER *enc;
     int i, j, t, s;
@@ -69,8 +151,8 @@ init_encoder(int frame, LF4D *lf, int num_class, int num_group, int prd_order, c
     enc->prd_order = prd_order; // K
     enc->full_prd_order = enc->prd_order;
     for (i = 0; i < enc->no_refsai; i++) {
-        enc->sai_prd_order[i] = sai_prd_order[i];
-        enc->full_prd_order += enc->sai_prd_order[i];
+        enc->sai_prd_order = sai_prd_order;
+        enc->full_prd_order += enc->sai_prd_order;
     }
 
     enc->coef_precision = coef_precision; // P
@@ -126,17 +208,6 @@ init_encoder(int frame, LF4D *lf, int num_class, int num_group, int prd_order, c
         }
     }
 
-    //Initiation of the reference offset
-    enc->intra_roff = init_ref_offset(enc->ts, 0, enc->prd_order);
-
-    // Keeps the weights used for the residue encoding context
-    enc->intra_ctx_weight = init_ctx_weight(0, enc->prd_order, enc->delta);
-
-    for (i = 0; i < enc->no_refsai; i++) {
-        enc->sai_ref_roff[i] = init_ref_offset(enc->ts, i + 1, enc->sai_prd_order[i]);
-        enc->sai_ref_ctx_weight[i] = init_ctx_weight(i + 1, enc->sai_prd_order[i], enc->delta);
-    }
-
     // Class and group arrays
     enc->class = (char **) alloc_2d_array(enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
     enc->group = (char **) alloc_2d_array(enc->ts[HEIGHT], enc->ts[WIDTH], sizeof(char));
@@ -155,9 +226,10 @@ init_encoder(int frame, LF4D *lf, int num_class, int num_group, int prd_order, c
 
     // Copy reference images to encoder struct, initialize group array
     for (i = 0; i < enc->no_refsai; i++) {
+        frame2coordinates(sai_coord, reference_list[i], lf->u);
+
         for (t = 0; t < enc->ts[HEIGHT]; t++) {
             for (s = 0; s < enc->ts[WIDTH]; s++) {
-                frame2coordinates(sai_coord, reference_list[i], lf->u);
 
                 enc->org[i + 1][t][s] = lf->val[sai_coord[0]][sai_coord[1]][t][s];
                 enc->err[i + 1][t][s] = save_err->val[sai_coord[0]][sai_coord[1]][t][s];
@@ -167,6 +239,28 @@ init_encoder(int frame, LF4D *lf, int num_class, int num_group, int prd_order, c
         // Auxiliary values
         enc->org[i][enc->ts[HEIGHT]][0] = (enc->maxval + 1) >> 1;
         enc->err[i][enc->ts[HEIGHT]][0] = (enc->maxval + 1) >> 2;
+
+        enc->disparity_vectors[i] = NULL;
+        if (use_disp) {
+            enc->disparity_vectors[i] = calc_disparity_vectors(enc->org[0], enc->org[i + 1], enc->ts[HEIGHT], enc->ts[WIDTH], disp_blk_size, disp_max_range);
+        }
+    }
+
+    //Initiation of the reference offset
+    enc->intra_roff = init_ref_offset(enc->ts, 0, enc->prd_order, NULL, 0);
+
+    // Keeps the weights used for the residue encoding context
+    enc->intra_ctx_weight = init_ctx_weight(0, enc->prd_order, enc->delta);
+
+    for (i = 0; i < enc->no_refsai; i++) {
+        if (use_disp) {
+            enc->sai_ref_roff[i] = init_ref_offset(enc->ts, i + 1, enc->sai_prd_order, enc->disparity_vectors[i], disp_blk_size);
+        }
+        else{
+            enc->sai_ref_roff[i] = init_ref_offset(enc->ts, i + 1, enc->sai_prd_order, NULL, 0);
+        }
+
+        enc->sai_ref_ctx_weight[i] = init_ctx_weight(i + 1, enc->sai_prd_order, enc->delta);
     }
 
     // Table used for the quantization of the context variable
@@ -310,11 +404,15 @@ void free_encoder(ENCODER *enc) {
     free(enc->th_cost);
     free(enc->class_cost);
 
+    for (i = 0; i < enc->no_refsai; i++) {
+        if (enc->disparity_vectors[i] != NULL) free(enc->disparity_vectors[i]);
+    }
+
     free(enc->intra_ctx_weight);
     free_ref_offset(enc->ts, 0, enc->prd_order, enc->intra_roff);
     for (i = 0; i < enc->no_refsai; i++) {
         free(enc->sai_ref_ctx_weight[i]);
-        free_ref_offset(enc->ts, i + 1, enc->sai_prd_order[i], enc->sai_ref_roff[i]);
+        free_ref_offset(enc->ts, i + 1, enc->sai_prd_order, enc->sai_ref_roff[i]);
     }
 
     if (enc->f_huffman == 0) {
@@ -620,7 +718,7 @@ void predict_region(ENCODER *enc, int tlt, int tls, int brt, int brs) {
     int *prd_p;
 
     int *intra_roff_p = NULL, **intra_roff_pp = NULL;
-    int *sai_roff_p[SAI_REFERENCES], **sai_roff_pp[SAI_REFERENCES];
+    int *sai_roff_p[enc->no_refsai], **sai_roff_pp[enc->no_refsai];
 
     for (r = 0; r < enc->no_refsai; r++) {
         sai_roff_p[r] = NULL;
@@ -660,7 +758,7 @@ void predict_region(ENCODER *enc, int tlt, int tls, int brt, int brs) {
             }
 
             for (r = 0; r < enc->no_refsai; r++) {
-                for (k = 0; k < enc->sai_prd_order[r]; k++) {
+                for (k = 0; k < enc->sai_prd_order; k++) {
                     prd += org_p[*sai_roff_p[r]++] * (*coef_p++);
                 }
             }
@@ -702,9 +800,9 @@ void predict_region(ENCODER *enc, int tlt, int tls, int brt, int brs) {
 int calc_uenc(ENCODER *enc, int t, int s) {
     int uenc, k, r, *err_p;
     int *intra_wt_p;
-    int *sai_wt_p[SAI_REFERENCES];
+    int *sai_wt_p[enc->no_refsai];
     int *intra_roff_p = NULL;
-    int *sai_roff_p[SAI_REFERENCES];
+    int *sai_roff_p[enc->no_refsai];
 
     intra_roff_p = enc->intra_roff[t][s];
     intra_wt_p = enc->intra_ctx_weight;
@@ -724,7 +822,7 @@ int calc_uenc(ENCODER *enc, int t, int s) {
     }
 
     for (r = 0; r < enc->no_refsai; r++) {
-        for (k = 0; k < enc->sai_prd_order[r]; k++) {
+        for (k = 0; k < enc->sai_prd_order; k++) {
             uenc += err_p[*sai_roff_p[r]++] * (*sai_wt_p[r]++);
         }
     }
@@ -850,10 +948,10 @@ cost_t design_predictor(ENCODER *enc, int f_mmse) {
                 prd_offset = enc->prd_order;
 
                 for (r = 0; r < enc->no_refsai; r++) {
-                    for (i = 0; i < enc->sai_prd_order[r]; i++) {
+                    for (i = 0; i < enc->sai_prd_order; i++) {
                         roff_p[i + prd_offset] = enc->sai_ref_roff[r][t][s][i];
                     }
-                    prd_offset += enc->sai_prd_order[r];
+                    prd_offset += enc->sai_prd_order;
                 }
 
                 // Fills the matrix mat with the reference pixels values
@@ -1186,7 +1284,7 @@ void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tlt, int tls, int 
     int t, s, brt, brs, cl, k, r, prd, *prdbuf_p, *errbuf_p, *coef_p;
     int buf_ptr, org, *org_p;
     int *intra_roff_p = NULL;
-    int *sai_roff_p[SAI_REFERENCES];
+    int *sai_roff_p[enc->no_refsai];
 
     //Check the boundaries of the block (mainly for pictures not multiple of bufsize)
     brt = (tlt + bufsize < enc->ts[HEIGHT]) ? (tlt + bufsize) : enc->ts[HEIGHT];
@@ -1225,7 +1323,7 @@ void set_prdbuf(ENCODER *enc, int **prdbuf, int **errbuf, int tlt, int tls, int 
                     }
 
                     for (r = 0; r < enc->no_refsai; r++) {
-                        for (k = 0; k < enc->sai_prd_order[r]; k++) {
+                        for (k = 0; k < enc->sai_prd_order; k++) {
                             prd += org_p[*sai_roff_p[r]++] * (*coef_p++);
                         }
                     }
@@ -1629,8 +1727,10 @@ void remove_emptyclass(ENCODER *enc) {
  |
  |  Returns:  int		--> Returns the number of bits used
  *---------------------------------------------------------------------*/
-int write_header(ENCODER *enc, int *vu, int hilevels, bool use_current, int prd_order, int *sai_prd_order, FILE *fp) {
-    int bits, i;
+int write_header(ENCODER *enc, int *vu, int hilevels, bool use_current, bool use_disparity, int disp_blk_size,
+                 int max_disparity, int prd_order, int sai_prd_order, int sai_references, int sai_distance_threshold,
+                 FILE *fp) {
+    int bits;
 
     bits =  putbits(fp, 16, MAGIC_NUMBER);
     bits += putbits(fp, 16, (uint) vu[HEIGHT]);
@@ -1639,15 +1739,20 @@ int write_header(ENCODER *enc, int *vu, int hilevels, bool use_current, int prd_
     bits += putbits(fp, 16, (uint) enc->ts[WIDTH]);
     bits += putbits(fp, 16, (uint) enc->maxval);
     bits += putbits(fp, 6,  (uint) enc->depth);
-    bits += putbits(fp, 3,  1);	/* number of components (1 = monochrome) */
+    bits += putbits(fp, 2,  1);	/* number of components (1 = monochrome) */
     bits += putbits(fp, 6,  (uint) enc->num_group);
     bits += putbits(fp, 8,  (uint) hilevels);
     bits += putbits(fp, 1,  (uint) use_current);
-    bits += putbits(fp, 8,  (uint) prd_order);
-
-    for (i = 0; i < SAI_REFERENCES; i++) {
-        bits += putbits(fp, 8, (uint) sai_prd_order[i]);
+    bits += putbits(fp, 1,  (uint) use_disparity);
+    if (use_disparity) {
+        bits += putbits(fp, 8,  (uint) disp_blk_size);
+        bits += putbits(fp, 8,  (uint) max_disparity);
     }
+    bits += putbits(fp, 8, (uint) prd_order);
+    bits += putbits(fp, 8, (uint) sai_prd_order);
+
+    bits += putbits(fp, 4, (uint) sai_references);
+    bits += putbits(fp, 4, (uint) sai_distance_threshold);
 
     bits += putbits(fp, 8,  (uint) enc->delta);
     bits += putbits(fp, 6,  (uint) enc->num_pmodel - 1);
@@ -1693,6 +1798,78 @@ int write_hilevel(int hilevel, int frame, FILE *fp) {
 
     bits = putbits(fp, 8, (uint) hilevel);
     bits += putbits(fp, 8, (uint) frame);
+    return (bits);
+}
+
+/*-------------------------- encode_disparity -------------------------*
+ |  Function encode_disparity
+ |
+ |  Purpose: Writes the the disparity vectors to file
+ |
+ |  Parameters:
+ |      enc		 		--> Encoder struct (IN/OUT)
+ |		fp				--> File to write into (IN)
+ |
+ |  Returns:  int		--> Returns the number of bits used
+ *---------------------------------------------------------------------*/
+int encode_disparity(FILE *fp, ENCODER *enc, int disp_blk_size, int max_disparity) {
+    int bits = 0, count = 0;
+    int ref_vectors[2][3], vector[2];
+    int num_values = 4 * max_disparity + 1;
+
+    PMODEL *pm = &enc->spm;
+    // Uniform initialization of the probability model
+    set_spmodel(pm, num_values, -1);
+
+    for (int r = 0; r < enc->no_refsai; r++) {
+        for (int t = 0; t < ceil(enc->ts[HEIGHT] * 1.0 / disp_blk_size); t++) {
+            for (int s = 0; s < ceil(enc->ts[WIDTH] * 1.0 / disp_blk_size); s++) {
+                count = 0;
+                vector[0] = vector[1] = 0;
+
+                if (s > 0) {
+                    ref_vectors[0][count] = enc->disparity_vectors[r][t][s - 1][0];
+                    ref_vectors[1][count] = enc->disparity_vectors[r][t][s - 1][1];
+
+                    count++;
+                }
+
+                if (t > 0) {
+                    ref_vectors[0][count] = enc->disparity_vectors[r][t - 1][s][0];
+                    ref_vectors[1][count] = enc->disparity_vectors[r][t - 1][s][1];
+
+                    count++;
+                }
+
+                if (t > 1 && s < ceil(enc->ts[WIDTH] * 1.0 / disp_blk_size)) {
+                    ref_vectors[0][count] = enc->disparity_vectors[r][t - 1][s + 1][0];
+                    ref_vectors[1][count] = enc->disparity_vectors[r][t - 1][s + 1][1];
+
+                    count++;
+                }
+
+                if (count > 0) {
+                    vector[0] = enc->disparity_vectors[r][t][s][0] - floor(median(ref_vectors[0], count)) + 2 * max_disparity;
+                    vector[1] = enc->disparity_vectors[r][t][s][1] - floor(median(ref_vectors[1], count)) + 2 * max_disparity;
+                }
+                else {
+                    vector[0] = enc->disparity_vectors[r][t][s][0] + 2 * max_disparity;
+                    vector[1] = enc->disparity_vectors[r][t][s][1] + 2 * max_disparity;
+                }
+
+                rc_encode(fp, enc->rc, pm->cumfreq[vector[0]], pm->freq[vector[0]], pm->cumfreq[pm->size]);
+                update_pmodel(pm, vector[0], num_values);
+
+                rc_encode(fp, enc->rc, pm->cumfreq[vector[1]], pm->freq[vector[1]], pm->cumfreq[pm->size]);
+                update_pmodel(pm, vector[1], num_values);
+            }
+        }
+    }
+
+    bits = enc->rc->code;
+    enc->rc->code = 0;
+
+//    printf("MD bits: %d (%3.2f)\n", bits, bits * 1.0 / enc->ts[HEIGHT] / enc->ts[WIDTH]);
     return (bits);
 }
 
@@ -2381,8 +2558,8 @@ char *remove_ext (char* mystr, char dot, char sep) {
     return retstr;
 }
 
-void print_results(FILE *res, int no_hilevels, int **hilevels, const int *vu, const int *ts, int header, int *class_info,
-                   int *predictors, int *thresholds, int *errors) {
+void print_results(FILE *res, int no_hilevels, int **hilevels, const int *vu, const int *ts, int header, int *dvectors,
+                   int *class_info, int *predictors, int *thresholds, int *errors) {
     int rate = 0, total_bits = 0;
 
     printf("\n---------------------------------\n");
@@ -2399,12 +2576,13 @@ void print_results(FILE *res, int no_hilevels, int **hilevels, const int *vu, co
             // Results output
             printf("---------------------------------\n");
             printf("SAI [%03d]\n", hilevels[h][f]);
+            printf("disp. vectors\t :%10d bits\n", dvectors[hilevels[h][f]]);
             printf("class info\t :%10d bits\n", class_info[hilevels[h][f]]);
             printf("predictors\t :%10d bits\n", predictors[hilevels[h][f]]);
             printf("thresholds\t :%10d bits\n", thresholds[hilevels[h][f]]);
             printf("pred. errors\t :%10d bits\n", errors[hilevels[h][f]]);
 
-            rate = class_info[hilevels[h][f]] + predictors[hilevels[h][f]] + thresholds[hilevels[h][f]] + errors[hilevels[h][f]];
+            rate = dvectors[hilevels[h][f]] + class_info[hilevels[h][f]] + predictors[hilevels[h][f]] + thresholds[hilevels[h][f]] + errors[hilevels[h][f]];
 
             total_bits += rate;
 
@@ -3062,52 +3240,102 @@ void debug_partition(ENCODER *enc, int frame) {
     }
 }
 
+void print_help(int intra_prd_order, int sai_prd_order, int sai_references, int sai_distance_threshold, int disp_bsize,
+                int max_disparity, int depth, int delta, int num_class, int coef_precision, int num_pmodel,
+                int pm_accuracy, int max_iteration) {
+    printf(BANNER"\n", MRP_VERSION, MRP_VERSION_DATE);
+    printf("usage: encmrp [options] infile outfile\n");
+    printf("options:\n");
+    printf("    -J 2 * num  Views dimensions (in pixels) [%c %c]*\n", 'H', 'W');
+    printf("    -K 2 * num  Dimensions of the array of views [%c %c]*\n", 'H', 'W');
+    printf("    -L 2 * num  Prediction order (Intra, Inter) [%d %d]\n", intra_prd_order, sai_prd_order);
+    printf("    -c str      Hierarchical encoding configuration file*\n");
+    printf("    -S num      Number of reference SAIs [%d]\n", sai_references);
+    printf("    -T num      Maximum reference SAI distance [%d]\n", sai_distance_threshold);
+    printf("    -v          Use disparity compensation\n");
+    printf("    -B 2 * num  Set the block size and the maximum disparity for the disparity compensation [%d %d]\n",
+           disp_bsize, max_disparity);
+    printf("    -s          Use the current level causal SAI as reference\n");
+    printf("    -b num      Bit depth [%d]\n", depth);
+    printf("    -E num      Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
+    printf("    -D num      Distance between views [%d]\n", delta);
+    printf("    -M num      Number of predictors [%d]\n", num_class);
+    printf("    -P num      Precision of prediction coefficients (fractional bits) [%d]\n", coef_precision);
+    printf("    -V num      Number of probability models [%d]\n", num_pmodel);
+    printf("    -A num      Accuracy of probability models [%d]\n", pm_accuracy);
+    printf("    -I num      Maximum number of iterations [%d]\n", max_iteration);
+    printf("    -m          Use MMSE predictors\n");
+    printf("    -h          Use Huffman coding\n");
+    printf("    -f          Fixed block-size for adaptive prediction\n");
+    printf("    -u          Deactivate the histogram packing procedures\n");
+    printf("    -d          Create extra debug output (coefficients, partitions, etc.)\n");
+    printf("    -r str      Light field file format [%s]*. Supported formats:\n", "SAI");
+    printf("                    MIA; --> Not yet implemented\n");
+    printf("                    PVS;\n");
+    printf("                    SAI.\n");
+    printf("infile:     	Input file (must be in a raw YUV format)\n");
+    printf("outfile:    	Output file\n");
+    printf("\nNote: * stands for a mandatory option.\n");
+}
+
 int main(int argc, char **argv) {
     // Variable declaration
     cost_t cost, min_cost, side_cost = 0;
-    int i, j, k, r, t, s, cl, **prd_save, **th_save, **encval_save, **err_save;
-    char **class_save, **qtmap_save[QUADTREE_DEPTH], **group_save;
-    PMODEL **pmlist_save = NULL;
-    LF4D *lf = NULL, *save_err = NULL;
-    ENCODER *enc = NULL;
+    int i, j, k, r, t, s, cl;
     double elapse = 0.0;
-    int f_mmse = 0;
-    int f_huffman = 0;
-    int do_histogram_packing = 1;
-    int *forward_table = NULL;
-    int quadtree_depth = QUADTREE_DEPTH;
-    int num_class = NUM_CLASS;
-    int num_group = NUM_GROUP;
+
+    // Variables that can be set by the user
     int sai_size[2] = {0, 0};
     int vu[2] = {0, 0};
-    int prd_order = 0, sai_prd_order[SAI_REFERENCES] = {0, 0, 0, 0};
+    int prd_order = INTRA_PRD_ORDER, sai_prd_order = SAI_PRD_ORDER;
+    int sai_references = SAI_REFERENCES, sai_distance_threshold = SAI_DISTANCE_THRESHOLD;
+    char *cfgfile = NULL;
+    bool use_disp = false;
+    int disp_bsize = DISP_BSIZE, max_disparity = MAX_DISPARITY;
+    bool use_current = false;
+    int depth = DEPTH;
+    int endianness = LITTLE_ENDIANNESS;
+    int delta = 1;
+    int num_class = NUM_CLASS;
     int coef_precision = COEF_PRECISION;
     int num_pmodel = NUM_PMODEL;
     int pm_accuracy = PM_ACCURACY;
     int max_iteration = MAX_ITERATION;
-    int depth = DEPTH;
-    int endianness = LITTLE_ENDIANNESS;
-    int no_hilevels = 0, no_refsai_candidates = 0, no_refsai = 0, curr_frame = 0;
-    int **hilevels = NULL, *reference_list = NULL;
-    bool use_current = false;
-    SAIDISTANCE **reference_candidates = NULL;
-    int sai_coord[2] = {0, 0};
-    char *infile, *outfile, *cfgfile;
-    char resfile[1000];
-    int format = SAI;
-    char *format_name = NULL;
+    int f_mmse = 0;
+    int f_huffman = 0;
+    int quadtree_depth = QUADTREE_DEPTH;
+    int do_histogram_packing = 1, *forward_table = NULL;
     int debug = 0;
     char *debug_path = NULL;
-    FILE *fp, *res;
+    int format = SAI;
+    char *format_name = NULL;
+    char *infile = NULL, *outfile = NULL;
+
+    // Variables for the hierarchical structure
+    int no_hilevels = 0, no_refsai_candidates = 0, no_refsai = 0, curr_frame = 0;
+    int **hilevels = NULL, *reference_list = NULL;
+    SAIDISTANCE **reference_candidates = NULL;
+    int sai_coord[2] = {0, 0};
+
+    // Backup variables
+    int **prd_save, **th_save, **encval_save, **err_save;
+    char **class_save, **qtmap_save[QUADTREE_DEPTH], **group_save;
+    PMODEL **pmlist_save = NULL;
+    LF4D *save_err = NULL;
 
     //Print results variables
     bool print_header = true;
-    int header = 0, *class_info, *predictors, *thresholds, *errors;
-    int delta = 1;
+    int header = 0, *dvectors, *class_info, *predictors, *thresholds, *errors;
+
+    // Other variables
+    int num_group = NUM_GROUP;
+    LF4D *lf = NULL;
+    ENCODER *enc = NULL;
+    char resfile[1000];
+    FILE *fp, *res;
 
     cpu_time();
     setbuf(stdout, 0);
-    infile = outfile = cfgfile = NULL;
 
     // Read input parameters
     for (i = 1; i < argc; i++) {
@@ -3136,29 +3364,108 @@ int main(int argc, char **argv) {
 
                     break;
 
-                case 'M':
-                    num_class = (int) strtol(argv[++i], NULL, 10);
-
-                    if (num_class <= 0 || num_class > 63) {
-                        num_class = NUM_CLASS;
-                    }
-
-                    break;
-
                 case 'L':
-                    // TODO: prd_order[0] and mi_prd_order can't be 1 for some reason...
+                    // TODO: prd_order[0] and sai_prd_order can't be 1 for some reason...
                     prd_order = (int) strtol(argv[++i], NULL, 10);
 
                     if (prd_order <= -2 || prd_order == 0 || prd_order > 72) {
                         prd_order = INTRA_PRD_ORDER;
                     }
 
-                    for (j = 0; j < 4; j++) {
-                        sai_prd_order[j] = (int) strtol(argv[++i], NULL, 10);
+                    sai_prd_order = (int) strtol(argv[++i], NULL, 10);
 
-                        if ( sai_prd_order[j] < 0 || sai_prd_order[j] > 41) {
-                            sai_prd_order[j] = SAI_PRD_ORDER;
-                        }
+                    if ( sai_prd_order < 0 || sai_prd_order > 41) {
+                        sai_prd_order = SAI_PRD_ORDER;
+                    }
+
+                    break;
+
+                case 'c':
+                    cfgfile = argv[++i];
+
+                    break;
+
+                case 'S':
+                    sai_references = (int) strtol(argv[++i], NULL, 10);
+
+                    if (sai_references <= 0) {
+                        sai_references = 0;
+                    }
+
+                    break;
+
+                case 'T':
+                    sai_distance_threshold = (int) strtol(argv[++i], NULL, 10);
+
+                    if (sai_distance_threshold <= 0) {
+                        sai_references = 0;
+                    }
+
+                    break;
+
+                case 'v':
+                    use_disp = true;
+
+                    break;
+
+                case 'B':
+                    disp_bsize = (int) strtol(argv[++i], NULL, 10);
+
+                    if (disp_bsize < 1) {
+                        disp_bsize = DISP_BSIZE;
+                    }
+
+                    max_disparity = (int) strtol(argv[++i], NULL, 10);
+
+                    if (max_disparity < 1) {
+                        max_disparity = MAX_DISPARITY;
+                    }
+
+                    break;
+
+                case 's':
+                    use_current = true;
+
+                    break;
+
+                case 'b':
+                    depth = (int) strtol(argv[++i], NULL, 10);
+
+                    if (depth < 8) {
+                        depth = DEPTH;
+                    }
+                    else if (depth > 16) {
+                        depth = 16;
+                    }
+
+                    break;
+
+                case 'E':
+                    endianness = (int) strtol(argv[++i], NULL, 10);
+
+                    if (endianness == 1) {
+                        endianness = BIG_ENDIANNESS;
+                    }
+                    else if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
+                        endianness = LITTLE_ENDIANNESS;
+                    }
+
+                    break;
+
+                case 'D':
+                    delta = (int) strtol(argv[++i], NULL, 10);
+
+                    if (delta <= 0) {
+                        delta = 1;
+                    }
+
+                    break;
+
+                case 'M':
+                    num_class = (int) strtol(argv[++i], NULL, 10);
+
+                    if (num_class <= 0 || num_class > 63) {
+                        num_class = NUM_CLASS;
                     }
 
                     break;
@@ -3169,11 +3476,6 @@ int main(int argc, char **argv) {
                     if (coef_precision <= 0 || coef_precision > 16) {
                         coef_precision = COEF_PRECISION;
                     }
-
-                    break;
-
-                case 's':
-                    use_current = true;
 
                     break;
 
@@ -3224,39 +3526,6 @@ int main(int argc, char **argv) {
 
                     break;
 
-                case 'D':
-                    delta = (int) strtol(argv[++i], NULL, 10);
-
-                    if (delta <= 0) {
-                        delta = 1;
-                    }
-
-                    break;
-
-                case 'b':
-                    depth = (int) strtol(argv[++i], NULL, 10);
-
-                    if (depth < 8) {
-                        depth = DEPTH;
-                    }
-                    else if (depth > 16) {
-                        depth = 16;
-                    }
-
-                    break;
-
-                case 'E':
-                    endianness = (int) strtol(argv[++i], NULL, 10);
-
-                    if (endianness == 1) {
-                        endianness = BIG_ENDIANNESS;
-                    }
-                    else if (endianness != LITTLE_ENDIANNESS && endianness != BIG_ENDIANNESS) {
-                        endianness = LITTLE_ENDIANNESS;
-                    }
-
-                    break;
-
                 case 'd':
                     debug = 1;
 
@@ -3287,11 +3556,6 @@ int main(int argc, char **argv) {
 
                     break;
 
-                case 'c':
-                    cfgfile = argv[++i];
-
-                    break;
-
                 default:
                     fprintf(stderr, "Unknown option: %s!\n", argv[i]);
                     exit (1);
@@ -3314,36 +3578,8 @@ int main(int argc, char **argv) {
 
     // Help and version
     if (infile == NULL || outfile == NULL || cfgfile == NULL) {
-        printf(BANNER"\n", MRP_VERSION, MRP_VERSION_DATE);
-        printf("usage: encmrp [options] infile outfile\n");
-        printf("options:\n");
-        printf("    -J 2 * num  Views dimensions (in pixels) [%c %c]\n", 'H', 'W');
-        printf("    -K 2 * num  Dimensions of the array of views [%c %c]\n", 'H', 'W');
-        printf("    -L 5 * num  Prediction order (1 * Intra, 4 * Inter) [%d ", INTRA_PRD_ORDER);
-        for (r = 0; r < SAI_REFERENCES; r++) printf("%d", SAI_PRD_ORDER);
-        printf("]\n");
-        printf("    -c str      Hierarchical encoding configuration file\n");
-        printf("    -s          Use the current level causal SAI as reference\n");
-        printf("    -b num      Bit depth [%d]\n", depth);
-        printf("    -E num      Endianness: little-endian = 0, big-endian = 1. Default: %s\n", "little-endian");
-        printf("    -D num      Distance between views [%d]*\n", delta);
-        printf("    -M num      Number of predictors [%d]\n", num_class);
-        printf("    -P num      Precision of prediction coefficients (fractional bits) [%d]\n", coef_precision);
-        printf("    -V num      Number of probability models [%d]\n", num_pmodel);
-        printf("    -A num      Accuracy of probability models [%d]\n", pm_accuracy);
-        printf("    -I num      Maximum number of iterations [%d]\n", max_iteration);
-        printf("    -m          Use MMSE predictors\n");
-        printf("    -h          Use Huffman coding\n");
-        printf("    -f          Fixed block-size for adaptive prediction\n");
-        printf("    -u          Deactivate the histogram packing procedures\n");
-        printf("    -d          Create extra debug output (coefficients, partitions, etc.)\n");
-        printf("    -r str      Light field file format [%s]. Supported formats:\n", "SAI");
-        printf("                    MIA; --> Not yet implemented\n");
-        printf("                    PVS;\n");
-        printf("                    SAI.\n");
-        printf("infile:     	Input file (must be in a raw YUV format)\n");
-        printf("outfile:    	Output file\n");
-        printf("\nNote: * stands for a mandatory option.\n");
+        print_help(prd_order, sai_prd_order, sai_references, sai_distance_threshold, disp_bsize, max_disparity,
+                   depth, delta, num_class, coef_precision, num_pmodel, pm_accuracy, max_iteration);
         exit(0);
     }
 
@@ -3407,7 +3643,7 @@ int main(int argc, char **argv) {
     for (r = 0; r < vu[HEIGHT] * vu[WIDTH]; r++) {
         reference_candidates[r] = (SAIDISTANCE *) alloc_mem(sizeof(SAIDISTANCE));
     }
-    reference_list = (int *) alloc_mem(SAI_REFERENCES * sizeof(int));
+    reference_list = (int *) alloc_mem(sai_references * sizeof(int));
 
     // Read input file
     lf = read_yuv(infile, vu[HEIGHT], vu[WIDTH], sai_size[HEIGHT], sai_size[WIDTH], depth, endianness, format);
@@ -3429,17 +3665,19 @@ int main(int argc, char **argv) {
 
     printf("LF Prediction order: ");
     printf("%d | ", prd_order);
-    for (r = 0; r < SAI_REFERENCES; r++) printf("%d ", sai_prd_order[r]);
+    for (r = 0; r < sai_references; r++) printf("%d ", sai_prd_order);
     printf("(4DLF dimensions: %d x %d x %d x %d)\n\n", vu[HEIGHT], vu[WIDTH], sai_size[HEIGHT], sai_size[WIDTH]);
 
 
     //Allocation of print results variables
     errors 	   = (int *) alloc_mem(vu[HEIGHT] * vu[WIDTH] * sizeof(int));
+    dvectors   = (int *) alloc_mem(vu[HEIGHT] * vu[WIDTH] * sizeof(int));
     class_info = (int *) alloc_mem(vu[HEIGHT] * vu[WIDTH] * sizeof(int));
     predictors = (int *) alloc_mem(vu[HEIGHT] * vu[WIDTH] * sizeof(int));
     thresholds = (int *) alloc_mem(vu[HEIGHT] * vu[WIDTH] * sizeof(int));
     for (int f = 0; f < vu[HEIGHT] * vu[WIDTH]; f++) {
         errors[f] = 0;
+        dvectors[f] = 0;
         class_info[f] = 0;
         predictors[f] = 0;
         thresholds[f] = 0;
@@ -3497,11 +3735,11 @@ int main(int argc, char **argv) {
                 // Sort the reference candidates by growing distance
                 qsort(reference_candidates, no_refsai_candidates, sizeof(SAIDISTANCE *), compare_distance);
 
-                // Select up to SAI_REFERENCES provided the distance is lower than SAI_DISTANCE_THRESHOLD
-                int reference_limit = no_refsai_candidates > SAI_REFERENCES ? SAI_REFERENCES : no_refsai_candidates;
+                // Select up to sai_references provided the distance is lower than sai_distance_threshold
+                int reference_limit = no_refsai_candidates > sai_references ? sai_references : no_refsai_candidates;
 
                 for (i = 0; i < reference_limit; i++) {
-                    if (reference_candidates[i]->distance < SAI_DISTANCE_THRESHOLD) {
+                    if (reference_candidates[i]->distance < sai_distance_threshold) {
                         reference_list[no_refsai++] = reference_candidates[i]->sai;
                     }
                 }
@@ -3523,7 +3761,7 @@ int main(int argc, char **argv) {
             //// Start of the encoding process
             // Creates new ENCODER structure
             enc = init_encoder(curr_frame, lf, num_class, num_group, prd_order, sai_prd_order, coef_precision, f_huffman, quadtree_depth,
-                               num_pmodel, pm_accuracy, delta, save_err, no_refsai, reference_list, depth, debug_path);
+                               num_pmodel, pm_accuracy, delta, save_err, no_refsai, reference_list, depth, debug_path, use_disp, disp_bsize, max_disparity); // TODO: make the new variables variable
 
             // Set cost model
             set_cost_model(enc, f_mmse);
@@ -3726,7 +3964,8 @@ int main(int argc, char **argv) {
                 print_header = false;
 
                 // Write header to file
-                header = write_header(enc, vu, no_hilevels, use_current, prd_order, sai_prd_order, fp);
+                header = write_header(enc, vu, no_hilevels, use_current, use_disp, disp_bsize, max_disparity, prd_order,
+                                      sai_prd_order, sai_references, sai_distance_threshold, fp);
 
                 // Write histogram packing table to file
                 if (forward_table != NULL) {
@@ -3746,6 +3985,8 @@ int main(int argc, char **argv) {
             if (enc->f_huffman == 0) {
                 enc->rc = rc_init();
             }
+
+            if (use_disp && no_refsai > 0) dvectors[curr_frame] += encode_disparity(fp, enc, disp_bsize, max_disparity);
 
             class_info[curr_frame] += encode_class(fp, enc);
             predictors[curr_frame] = encode_predictor(fp, enc);
@@ -3791,8 +4032,9 @@ int main(int argc, char **argv) {
     safefree_lf4d(&lf);
     safefree_lf4d(&save_err);
 
-    print_results(res, no_hilevels, hilevels, vu, sai_size, header, class_info, predictors, thresholds, errors);
+    print_results(res, no_hilevels, hilevels, vu, sai_size, header, dvectors, class_info, predictors, thresholds, errors);
 
+    free(dvectors);
     free(class_info);
     free(predictors);
     free(thresholds);

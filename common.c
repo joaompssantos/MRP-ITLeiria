@@ -487,17 +487,15 @@ int ***init_intra_ref_offset(int ts[2], int prd_order) {
 }
 
 // TODO: fix functions headers
-int ***init_sai_ref_offset(int ts[2], int prd_order, int distance) {
+int ***init_sai_ref_offset(int ts[2], int prd_order, int distance, int ***disparity_vectors, int disp_blk_size) {
     int ***roff, *ptr;
+    int dvector[2], disparity = 0;
     int t, s, ds, dt, k, base;
 
     int min_ds, max_ds, min_dt, max_dt;
     min_ds = max_ds = min_dt = max_dt = 0;
 
     roff = (int ***) alloc_2d_array(ts[HEIGHT], ts[WIDTH], sizeof(int *));
-
-    // Base for reference template placement
-    base = ts[WIDTH] * (ts[HEIGHT] + 1) * distance;
 
     //Values to check for special cases
     for (k = 0; k < prd_order - 1; k++) {
@@ -510,14 +508,32 @@ int ***init_sai_ref_offset(int ts[2], int prd_order, int distance) {
         if (ds > max_ds) max_ds = ds;
     }
 
+    // TODO: make this better if it works
     // Cycle that runs for all the pixels
-    for (t = 0; t < ts[HEIGHT]; t++) {
-        for (s = 0; s < ts[WIDTH]; s++) {
+    for (int tmp_t = 0; tmp_t < ts[HEIGHT]; tmp_t++) {
+        for (int tmp_s = 0; tmp_s < ts[WIDTH]; tmp_s++) {
             ptr = (int *) alloc_mem((prd_order) * sizeof(int));
 
-            if (t == 0) {
+            if (disparity_vectors != NULL) {
+                dvector[0] = disparity_vectors[tmp_t / disp_blk_size][tmp_s / disp_blk_size][0];
+                dvector[1] = disparity_vectors[tmp_t / disp_blk_size][tmp_s / disp_blk_size][1];
+
+                t = tmp_t + dvector[0];
+                s = tmp_s + dvector[1];
+                
+                disparity = dvector[1] + (dvector[0] * ts[WIDTH]);
+            }
+            else {
+                t = tmp_t;
+                s = tmp_s;
+            }
+
+            // Base for reference template placement
+            base = ts[WIDTH] * (ts[HEIGHT] + 1) * distance + disparity;
+
+            if (t == 0 || t + min_dt <= 0) {
                 if (s == 0) {
-                    roff[t][s] = ptr;
+                    roff[tmp_t][tmp_s] = ptr;
                     *ptr++ = base;
 
                     for (k = 0; k < prd_order - 1; k++) {
@@ -532,8 +548,8 @@ int ***init_sai_ref_offset(int ts[2], int prd_order, int distance) {
                         }
                     }
                 }
-                else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
-                    roff[t][s] = ptr;
+                else {
+                    roff[tmp_t][tmp_s] = ptr;
                     *ptr++ = base;
 
                     for (k = 0; k < prd_order - 1; k++) {
@@ -547,75 +563,23 @@ int ***init_sai_ref_offset(int ts[2], int prd_order, int distance) {
                             *ptr++ = dt * ts[WIDTH] + ds + base;
                         }
                     }
-                }
-                else {
-                    roff[t][s] = roff[t][s - 1];
-                    free(ptr);
-                }
-            }
-            else if (t + min_dt <= 0) {
-                if (s == 0) {
-                    roff[t][s] = ptr;
-                    *ptr++ = base;
-
-                    for (k = 0; k < prd_order - 1; k++) {
-                        dt = idyx[k].y;
-                        ds = idyx[k].x;
-
-                        if (t + dt < 0 || s + ds < 0) {
-                            *ptr++ = base;
-                        }
-                        else {
-                            *ptr++ = dt * ts[WIDTH] + ds + base;
-                        }
-                    }
-                }
-                else if (s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
-                    roff[t][s] = ptr;
-                    *ptr++ = base;
-
-                    for (k = 0; k < prd_order - 1; k++) {
-                        dt = idyx[k].y;
-                        ds = idyx[k].x;
-
-                        if (t + dt < 0 || s + ds < 0 || s + ds >= ts[WIDTH]) {
-                            *ptr++ = base;
-                        }
-                        else {
-                            *ptr++ = dt * ts[WIDTH] + ds + base;
-                        }
-                    }
-                }
-                else {
-                    roff[t][s] = roff[t][s - 1];
-                    free(ptr);
-                }
-            }
-            else if (t + max_dt >= ts[HEIGHT]) {
-                if (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH]) {
-                    roff[t][s] = ptr;
-                    *ptr++ = base;
-
-                    for (k = 0; k < prd_order - 1; k++) {
-                        dt = idyx[k].y;
-                        ds = idyx[k].x;
-
-                        if (t + dt >= ts[HEIGHT] || s + ds < 0 || s + ds >= ts[WIDTH]) {
-                            *ptr++ = base;
-                        }
-                        else {
-                            *ptr++ = dt * ts[WIDTH] + ds + base;
-                        }
-                    }
-                }
-                else {
-                    roff[t][s] = roff[t][s - 1];
-                    free(ptr);
                 }
             }
             else {
-                roff[t][s] = roff[t - 1][s];
-                free(ptr);
+                roff[tmp_t][tmp_s] = ptr;
+                *ptr++ = base;
+
+                for (k = 0; k < prd_order - 1; k++) {
+                    dt = idyx[k].y;
+                    ds = idyx[k].x;
+
+                    if (t + dt >= ts[HEIGHT] || s + ds < 0 || s + ds >= ts[WIDTH]) {
+                        *ptr++ = base;
+                    }
+                    else {
+                        *ptr++ = dt * ts[WIDTH] + ds + base;
+                    }
+                }
             }
         }
     }
@@ -636,7 +600,7 @@ int ***init_sai_ref_offset(int ts[2], int prd_order, int distance) {
  |
  |  Returns:  int*** --> Array with the references offset
  *-------------------------------------------------------------------*/
-int ***init_ref_offset(int ts[2], int type, int prd_order) {
+int ***init_ref_offset(int ts[2], int type, int prd_order, int ***disparity, int disp_blk_size) {
     if (type < 0 || type > SAI_REFERENCES) {
         fprintf(stderr, "Wrong usage of init_ref_offset function!\n");
         exit(-10);
@@ -648,7 +612,7 @@ int ***init_ref_offset(int ts[2], int type, int prd_order) {
         roff = init_intra_ref_offset(ts, prd_order);
     }
     else {
-        roff = init_sai_ref_offset(ts, prd_order, type);
+        roff = init_sai_ref_offset(ts, prd_order, type, disparity, disp_blk_size);
     }
 
     return (roff);
@@ -683,7 +647,7 @@ void free_ref_offset(const int ts[2], int type, int prd_order, int ***roff) {
                 //Conditions to check which references are available for each pixel
                 if ((t == 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH])) ||
                     (t + min_dt <= 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH]))) {
-                    free(roff[t][s]);
+                        free(roff[t][s]);
                 }
             }
         }
@@ -705,12 +669,7 @@ void free_ref_offset(const int ts[2], int type, int prd_order, int ***roff) {
         //Cycle that runs for all the pixels
         for (t = 0; t < ts[HEIGHT]; t++) {
             for (s = 0; s < ts[WIDTH]; s++) {
-                //Conditions to check which references are available for each pixel
-                if ((t == 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH])) ||
-                    (t + min_dt <= 0 && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH])) ||
-                    (t + max_dt >= ts[HEIGHT] && (s == 0 || s + min_ds <= 0 || s + max_ds >= ts[WIDTH]))) {
-                    free(roff[t][s]);
-                }
+                free(roff[t][s]);
             }
         }
 
@@ -910,4 +869,30 @@ int compare_distance(const void *a, const void *b) {
     int signal = diff < 0 ? -1 : diff > 0 ? 1 : 0;
 
     return (signal);
+}
+
+// Function for calculating median as seen in: https://en.wikiversity.org/wiki/C_Source_Code/Find_the_median_and_mean
+double median(int vector[], int n) {
+    int temp;
+    int i, j;
+
+    // the following two loops sort the array vector in ascending order
+    for(i = 0; i < n - 1; i++) {
+        for(j = i + 1; j < n; j++) {
+            if(vector[j] < vector[i]) {
+                // swap elements
+                temp = vector[i];
+                vector[i] = vector[j];
+                vector[j] = temp;
+            }
+        }
+    }
+
+    if(n % 2 == 0) {
+        // if there is an even number of elements, return mean of the two elements in the middle
+        return((vector[n / 2] + vector[n / 2 - 1]) / 2.0);
+    } else {
+        // else return the element in the middle
+        return vector[n / 2];
+    }
 }

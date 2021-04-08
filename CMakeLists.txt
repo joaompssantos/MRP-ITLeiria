@@ -13,13 +13,13 @@ cmake_minimum_required(VERSION 3.16)
 set(PROJECT_NAME "HiMRP")
 project(${PROJECT_NAME})
 
-set(MRP_VERSION_MAJOR "0")
-set(MRP_VERSION_MINOR "1")
+set(MRP_VERSION_MAJOR "1")
+set(MRP_VERSION_MINOR "0")
 set(MRP_VERSION_PATCH "0")
 set(MRP_VERSION "${MRP_VERSION_MAJOR}.${MRP_VERSION_MINOR}.${MRP_VERSION_PATCH}")
 set(MRP_VERSION_STRING "${MRP_VERSION}")
 
-set(MRP_VERSION_DATE "December 2020")
+set(MRP_VERSION_DATE "April 2021")
 
 ######################################################################################
 # Variables

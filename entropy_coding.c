@@ -379,3 +379,11 @@ void set_spmodel(PMODEL *pm, int size, int m) {
         pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
     }
 }
+
+void update_pmodel(PMODEL *pm, int value, int num_values) {
+    pm->freq[value]++;
+
+    for (int i = value; i < num_values; i++) {
+        pm->cumfreq[i + 1] = pm->cumfreq[i] + pm->freq[i];
+    }
+}

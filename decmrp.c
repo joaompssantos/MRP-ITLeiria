@@ -41,10 +41,66 @@ void read_hilevel(int *hilevel, int *frame, FILE *fp) {
     *frame = (int) getbits(fp, 8);
 }
 
+void decode_disparity(FILE *fp, DECODER *dec, int disp_blk_size, int max_disparity) {
+    int count = 0;
+    int ref_vectors[2][3];
+    int num_values = 4 * max_disparity + 1;
+
+    PMODEL *pm = &dec->spm;
+    // Uniform initialization of the probability model
+    set_spmodel(pm, num_values, -1);
+
+    for (int r = 0; r < dec->no_refsai; r++) {
+        dec->disparity_vectors[r] = (int ***) alloc_3d_array((int) ceil(dec->ts[HEIGHT] * 1.0 / disp_blk_size), (int) ceil(dec->ts[WIDTH] * 1.0 / disp_blk_size), 2, sizeof(int));
+
+        for (int t = 0; t < ceil(dec->ts[HEIGHT] * 1.0 / disp_blk_size); t++) {
+            for (int s = 0; s < ceil(dec->ts[WIDTH] * 1.0 / disp_blk_size); s++) {
+                count = 0;
+
+                if (s > 0) {
+                    ref_vectors[0][count] = dec->disparity_vectors[r][t][s - 1][0];
+                    ref_vectors[1][count] = dec->disparity_vectors[r][t][s - 1][1];
+
+                    count++;
+                }
+
+                if (t > 0) {
+                    ref_vectors[0][count] = dec->disparity_vectors[r][t - 1][s][0];
+                    ref_vectors[1][count] = dec->disparity_vectors[r][t - 1][s][1];
+
+                    count++;
+                }
+
+                if (t > 1 && s < ceil(dec->ts[WIDTH] * 1.0 / disp_blk_size)) {
+                    ref_vectors[0][count] = dec->disparity_vectors[r][t - 1][s + 1][0];
+                    ref_vectors[1][count] = dec->disparity_vectors[r][t - 1][s + 1][1];
+
+                    count++;
+                }
+
+                dec->disparity_vectors[r][t][s][0] = rc_decode(fp, dec->rc, pm, 0, num_values);
+                update_pmodel(pm, dec->disparity_vectors[r][t][s][0], num_values);
+
+                dec->disparity_vectors[r][t][s][1] = rc_decode(fp, dec->rc, pm, 0, num_values);
+                update_pmodel(pm, dec->disparity_vectors[r][t][s][1], num_values);
+
+                if (count > 0) {
+                    dec->disparity_vectors[r][t][s][0] = dec->disparity_vectors[r][t][s][0] + floor(median(ref_vectors[0], count)) - 2 * max_disparity;
+                    dec->disparity_vectors[r][t][s][1] = dec->disparity_vectors[r][t][s][1] + floor(median(ref_vectors[1], count)) - 2 * max_disparity;
+                }
+                else {
+                    dec->disparity_vectors[r][t][s][0] = dec->disparity_vectors[r][t][s][0] - 2 * max_disparity;
+                    dec->disparity_vectors[r][t][s][1] = dec->disparity_vectors[r][t][s][1] - 2 * max_disparity;
+                }
+            }
+        }
+    }
+}
+
 DECODER *init_decoder(FILE *fp, const int *ts, int maxval, int num_class, int num_comp, int num_group, int prd_order,
-                      const int *sai_prd_order, int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel,
+                      int sai_prd_order, int coef_precision, int f_huffman, int quadtree_depth, int num_pmodel,
                       int pm_accuracy, int delta, int depth, int frame, LF4D *lf, LF4D *save_err, int no_refsai,
-                      int *reference_list, char *debug_path) {
+                      int *reference_list, char *debug_path, bool use_disp, int disp_blk_size, int max_disparity) {
     DECODER *dec;
     int i;
     int sai_coord[2] = {0, 0};
@@ -63,8 +119,8 @@ DECODER *init_decoder(FILE *fp, const int *ts, int maxval, int num_class, int nu
     dec->prd_order = prd_order;
     dec->full_prd_order = dec->prd_order;
     for (i = 0; i < dec->no_refsai; i++) {
-        dec->sai_prd_order[i] = sai_prd_order[i];
-        dec->full_prd_order += dec->sai_prd_order[i];
+        dec->sai_prd_order = sai_prd_order;
+        dec->full_prd_order += dec->sai_prd_order;
     }
 
     dec->num_pmodel = num_pmodel;
@@ -99,9 +155,10 @@ DECODER *init_decoder(FILE *fp, const int *ts, int maxval, int num_class, int nu
 
     // Copy reference images to encoder struct, initialize group array
     for (i = 0; i < dec->no_refsai; i++) {
+        frame2coordinates(sai_coord, reference_list[i], lf->u);
+
         for (int t = 0; t < dec->ts[HEIGHT]; t++) {
             for (int s = 0; s < dec->ts[WIDTH]; s++) {
-                frame2coordinates(sai_coord, reference_list[i], lf->u);
 
                 dec->org[i + 1][t][s] = lf->val[sai_coord[0]][sai_coord[1]][t][s];
                 dec->err[i + 1][t][s] = save_err->val[sai_coord[0]][sai_coord[1]][t][s];
@@ -111,22 +168,38 @@ DECODER *init_decoder(FILE *fp, const int *ts, int maxval, int num_class, int nu
         // Auxiliary values
         dec->org[i][dec->ts[HEIGHT]][0] = (dec->maxval + 1) >> 1;
         dec->err[i][dec->ts[HEIGHT]][0] = (dec->maxval + 1) >> 2;
+
+        // Initialization
+        dec->disparity_vectors[i] = NULL;
     }
 
     //Initiation of the reference offset
-    dec->intra_roff = init_ref_offset(dec->ts, 0, dec->prd_order);
+    dec->intra_roff = init_ref_offset(dec->ts, 0, dec->prd_order, NULL, 0);
 
     // Keeps the weights used for the residue encoding context
     dec->intra_ctx_weight = init_ctx_weight(0, dec->prd_order, dec->delta);
 
-    for (i = 0; i < dec->no_refsai; i++) {
-        dec->sai_ref_roff[i] = init_ref_offset(dec->ts, i + 1, dec->sai_prd_order[i]);
-        dec->sai_ref_ctx_weight[i] = init_ctx_weight(i + 1, dec->sai_prd_order[i], dec->delta);
-    }
-
     if (dec->f_huffman == 0) {
         dec->rc = rc_init();
         rc_startdec(fp, dec->rc);
+    }
+
+    dec->spm.freq = alloc_mem((MAX_SYMBOL * 2 + 1) * sizeof(uint));
+    dec->spm.cumfreq = &(dec->spm.freq[MAX_SYMBOL]);
+
+    if (dec->no_refsai > 0 && use_disp) {
+        decode_disparity(fp, dec, disp_blk_size, max_disparity);
+    }
+
+    for (i = 0; i < dec->no_refsai; i++) {
+        if (use_disp) {
+            dec->sai_ref_roff[i] = init_ref_offset(dec->ts, i + 1, dec->sai_prd_order, dec->disparity_vectors[i], disp_blk_size);
+        }
+        else{
+            dec->sai_ref_roff[i] = init_ref_offset(dec->ts, i + 1, dec->sai_prd_order, NULL, 0);
+        }
+
+        dec->sai_ref_ctx_weight[i] = init_ctx_weight(i + 1, dec->sai_prd_order, dec->delta);
     }
 
     // Quadtree map
@@ -161,9 +234,6 @@ DECODER *init_decoder(FILE *fp, const int *ts, int maxval, int num_class, int nu
         dec->pm_idx = NULL;
     }
 
-    dec->spm.freq = alloc_mem((MAX_SYMBOL * 2 + 1) * sizeof(uint));
-    dec->spm.cumfreq = &(dec->spm.freq[MAX_SYMBOL]);
-
     //Huffman coding
     if (dec->f_huffman == 1) {
         dec->sigma = sigma_h;
@@ -184,12 +254,16 @@ void free_decoder(DECODER *dec) {
     free(dec->org);
     free(dec->err);
 
+    for (i = 0; i < dec->no_refsai; i++) {
+        if (dec->disparity_vectors[i] != NULL) free(dec->disparity_vectors[i]);
+    }
+
     free(dec->intra_ctx_weight);
     free_ref_offset(dec->ts, 0, dec->prd_order, dec->intra_roff);
 
     for (i = 0; i < dec->no_refsai; i++) {
         free(dec->sai_ref_ctx_weight[i]);
-        free_ref_offset(dec->ts, i + 1, dec->sai_prd_order[i], dec->sai_ref_roff[i]);
+        free_ref_offset(dec->ts, i + 1, dec->sai_prd_order, dec->sai_ref_roff[i]);
     }
 
     if (dec->quadtree_depth > 0) {
@@ -236,9 +310,8 @@ void free_decoder(DECODER *dec) {
 
 void read_header(FILE *fp, int vu[2], int ts[2], int *maxval, int *depth, int *num_comp, int *num_group, int *prd_order,
                  int *sai_prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman,
-                 int *quadtree_depth, int *delta, int *hist_bytes, int *hilevels, bool *use_current) {
-    int i = 0;
-
+                 int *quadtree_depth, int *delta, int *hist_bytes, int *hilevels, bool *use_current, bool *use_disp,
+                 int *disp_blk_size, int *max_disparity, int *sai_references, int *sai_distance_threshold) {
     if (getbits(fp, 16) != MAGIC_NUMBER) {
         fprintf(stderr, "Not a compressed file!\n");
         exit(1);
@@ -250,16 +323,21 @@ void read_header(FILE *fp, int vu[2], int ts[2], int *maxval, int *depth, int *n
     ts[WIDTH]  = (int) getbits(fp, 16);
     *maxval    = (int) getbits(fp, 16);
     *depth     = (int) getbits(fp, 6);
-    *num_comp  = (int) getbits(fp, 3);
+    *num_comp  = (int) getbits(fp, 2);
     *num_group = (int) getbits(fp, 6);
     *hilevels  = (int) getbits(fp, 8);
 
     *use_current = (bool) getbits(fp, 1);
-    *prd_order = (int) getbits(fp, 8);
-
-    for (i = 0; i < SAI_REFERENCES; i++) {
-        sai_prd_order[i] = (int) getbits(fp, 8);
+    *use_disp = (bool) getbits(fp, 1);
+    if (*use_disp == 1) {
+        *disp_blk_size = (int) getbits(fp, 8);
+        *max_disparity = (int) getbits(fp, 8);
     }
+    *prd_order      = (int) getbits(fp, 8);
+    *sai_prd_order  = (int) getbits(fp, 8);
+
+    *sai_references         = (int) getbits(fp, 4);
+    *sai_distance_threshold = (int) getbits(fp, 4);
 
     *delta          = (int) getbits(fp, 8);
     *num_pmodel     = (int) getbits(fp, 6) + 1;
@@ -625,8 +703,8 @@ int calc_udec(DECODER *dec, int t, int s) {
     int uu, k, r, *err_p;
     int *intra_wt_p;
     int *intra_roff_p = NULL;
-    int *sai_wt_p[SAI_REFERENCES];
-    int *sai_roff_p[SAI_REFERENCES];
+    int *sai_wt_p[dec->no_refsai];
+    int *sai_roff_p[dec->no_refsai];
 
     err_p = &dec->err[0][t][s];
 
@@ -645,7 +723,7 @@ int calc_udec(DECODER *dec, int t, int s) {
     }
 
     for (r = 0; r< dec->no_refsai; r++) {
-        for (k = 0; k < dec->sai_prd_order[r]; k++) {
+        for (k = 0; k < dec->sai_prd_order; k++) {
             uu += err_p[*sai_roff_p[r]++] * (*sai_wt_p[r]++);
         }
     }
@@ -661,7 +739,7 @@ int calc_prd(DECODER *dec, int cl, int t, int s) {
     int k, r, prd, *coef_p;
     img_t *org_p;
     int *intra_roff_p = NULL;
-    int *sai_roff_p[SAI_REFERENCES];
+    int *sai_roff_p[dec->no_refsai];
 
     intra_roff_p = dec->intra_roff[t][s];
 
@@ -679,7 +757,7 @@ int calc_prd(DECODER *dec, int cl, int t, int s) {
     }
 
     for (r = 0; r < dec->no_refsai; r++) {
-        for (k = 0; k < dec->sai_prd_order[r]; k++) {
+        for (k = 0; k < dec->sai_prd_order; k++) {
             prd += org_p[*sai_roff_p[r]++] * (*coef_p++);
         }
     }
@@ -1114,11 +1192,13 @@ int main(int argc, char **argv) {
     int num_pmodel, coef_precision, pm_accuracy, f_huffman, quadtree_depth, delta, hist_bytes;
     int *backward_table = NULL;
     int prd_order = 0;
-    int sai_prd_order[SAI_REFERENCES] = {0, 0, 0, 0};
+    int sai_prd_order = 0;
+    int sai_references, sai_distance_threshold;
     int format = SAI;
     int no_hilevels = 0, no_refsai_candidates = 0, no_refsai = 0, curr_frame = 0, curr_hilevel = 0, next_hilevel = 0;
     int **hilevels = NULL, *reference_list = NULL;
-    bool use_current = false;
+    bool use_current = false, use_disp = false;
+    int disp_blk_size = 0, max_disparity = 0;
     SAIDISTANCE **reference_candidates = NULL;
     int sai_coord[2] = {0, 0};
     char *format_name = NULL;
@@ -1215,15 +1295,16 @@ int main(int argc, char **argv) {
     fp = fileopen(infile, "rb");
 
     // Read header
-    read_header(fp, vu, ts, &maxval, &depth, &num_comp, &num_group, &prd_order, sai_prd_order, &num_pmodel,
-                &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &hist_bytes, &no_hilevels, &use_current);
+    read_header(fp, vu, ts, &maxval, &depth, &num_comp, &num_group, &prd_order, &sai_prd_order, &num_pmodel,
+                &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &hist_bytes, &no_hilevels,
+                &use_current, &use_disp, &disp_blk_size, &max_disparity, &sai_references, &sai_distance_threshold);
 
     // Alloc memory for the hierarchical information
     hilevels = (int **) alloc_2d_array(no_hilevels, vu[HEIGHT] * vu[WIDTH] + 1, sizeof(int));
     for (i = 0; i < no_hilevels; i++) hilevels[i][0] = 0;
     reference_candidates = (SAIDISTANCE **) alloc_mem((vu[HEIGHT] * vu[WIDTH]) * sizeof(SAIDISTANCE *));
     for (r = 0; r < vu[HEIGHT] * vu[WIDTH]; r++) reference_candidates[r] = (SAIDISTANCE *) alloc_mem(sizeof(SAIDISTANCE));
-    reference_list = (int *) alloc_mem(SAI_REFERENCES * sizeof(int));
+    reference_list = (int *) alloc_mem(sai_references * sizeof(int));
 
     // Create directory to store debug information
     if (debug == 1) {
@@ -1271,9 +1352,9 @@ int main(int argc, char **argv) {
         printf("Histogram packing on\n\n");
     }
     // Print prediction parameters to screen
-    printf("Prediction order:\n\tFrame I: %d\n\n", prd_order);
     printf("LF Prediction order: ");
-    for (r = 0; r < SAI_REFERENCES; r++) printf("%d ", sai_prd_order[r]);
+    printf("%d | ", prd_order);
+    for (r = 0; r < sai_references; r++) printf("%d ", sai_prd_order);
     printf("(4DLF dimensions: %d x %d x %d x %d)\n\n", vu[HEIGHT], vu[WIDTH], ts[HEIGHT], ts[WIDTH]);
 
     // Loop all SAIs
@@ -1317,11 +1398,11 @@ int main(int argc, char **argv) {
             // Sort the reference candidates by growing distance
             qsort(reference_candidates, no_refsai_candidates, sizeof(SAIDISTANCE *), compare_distance);
 
-            // Select up to SAI_REFERENCES provided the distance is lower than SAI_DISTANCE_THRESHOLD
-            int reference_limit = no_refsai_candidates > SAI_REFERENCES ? SAI_REFERENCES : no_refsai_candidates;
+            // Select up to sai_references provided the distance is lower than sai_distance_threshold
+            int reference_limit = no_refsai_candidates > sai_references ? sai_references : no_refsai_candidates;
 
             for (i = 0; i < reference_limit; i++) {
-                if (reference_candidates[i]->distance < SAI_DISTANCE_THRESHOLD) {
+                if (reference_candidates[i]->distance < sai_distance_threshold) {
                     reference_list[no_refsai++] = reference_candidates[i]->sai;
                 }
             }
@@ -1346,7 +1427,7 @@ int main(int argc, char **argv) {
         // Creates new DECODER structure
         dec = init_decoder(fp, ts, maxval, num_class, num_comp, num_group, prd_order, sai_prd_order, coef_precision,
                            f_huffman, quadtree_depth, num_pmodel, pm_accuracy, delta, depth, curr_frame, lf, save_err,
-                           no_refsai, reference_list, debug_path);
+                           no_refsai, reference_list, debug_path, use_disp, disp_blk_size, max_disparity);
 
         decode_class(fp, dec);
 
