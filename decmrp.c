@@ -310,8 +310,8 @@ void free_decoder(DECODER *dec) {
 
 void read_header(FILE *fp, int vu[2], int ts[2], int *maxval, int *depth, int *num_comp, int *num_group, int *prd_order,
                  int *sai_prd_order, int *num_pmodel, int *coef_precision, int *pm_accuracy, int *f_huffman,
-                 int *quadtree_depth, int *delta, int *hist_bytes, int *hilevels, bool *use_current, bool *use_disp,
-                 int *disp_blk_size, int *max_disparity, int *sai_references, int *sai_distance_threshold) {
+                 int *quadtree_depth, int *delta, int *hist_bytes, int *hilevels, int *no_ra_regions, bool *use_current,
+                 bool *use_disp, int *disp_blk_size, int *max_disparity, int *sai_references, int *sai_distance_threshold) {
     if (getbits(fp, 16) != MAGIC_NUMBER) {
         fprintf(stderr, "Not a compressed file!\n");
         exit(1);
@@ -327,6 +327,7 @@ void read_header(FILE *fp, int vu[2], int ts[2], int *maxval, int *depth, int *n
     *num_group = (int) getbits(fp, 6);
     *hilevels  = (int) getbits(fp, 8);
 
+    *no_ra_regions = (int) getbits(fp, 8);
     *use_current = (bool) getbits(fp, 1);
     *use_disp = (bool) getbits(fp, 1);
     if (*use_disp == 1) {
@@ -1197,6 +1198,7 @@ int main(int argc, char **argv) {
     int format = SAI;
     int no_hilevels = 0, no_refsai_candidates = 0, no_refsai = 0, curr_frame = 0, curr_hilevel = 0, next_hilevel = 0;
     int **hilevels = NULL, *reference_list = NULL;
+    int no_ra_regions = 0;
     bool use_current = false, use_disp = false;
     int disp_blk_size = 0, max_disparity = 0;
     SAIDISTANCE **reference_candidates = NULL;
@@ -1297,7 +1299,7 @@ int main(int argc, char **argv) {
     // Read header
     read_header(fp, vu, ts, &maxval, &depth, &num_comp, &num_group, &prd_order, &sai_prd_order, &num_pmodel,
                 &coef_precision, &pm_accuracy, &f_huffman, &quadtree_depth, &delta, &hist_bytes, &no_hilevels,
-                &use_current, &use_disp, &disp_blk_size, &max_disparity, &sai_references, &sai_distance_threshold);
+                &no_ra_regions, &use_current, &use_disp, &disp_blk_size, &max_disparity, &sai_references, &sai_distance_threshold);
 
     // Alloc memory for the hierarchical information
     hilevels = (int **) alloc_2d_array(no_hilevels, vu[HEIGHT] * vu[WIDTH] + 1, sizeof(int));
@@ -1390,6 +1392,8 @@ int main(int argc, char **argv) {
         frame2coordinates(sai_coord, curr_frame, vu[WIDTH]);
 
         if (curr_hilevel > 0 && no_refsai_candidates > 0) {
+            int curr_ra_region = 0, ref_ra_region = 0;
+
             // Calculate the distance of the reference candidates to the current SAI
             for (i = 0; i < no_refsai_candidates; i++) {
                 reference_candidates[i]->distance = sqrt(pow(reference_candidates[i]->coordinates[0] - sai_coord[0], 2) + pow(reference_candidates[i]->coordinates[1] - sai_coord[1], 2));
@@ -1402,7 +1406,14 @@ int main(int argc, char **argv) {
             int reference_limit = no_refsai_candidates > sai_references ? sai_references : no_refsai_candidates;
 
             for (i = 0; i < reference_limit; i++) {
-                if (reference_candidates[i]->distance < sai_distance_threshold) {
+                if (no_ra_regions > 0) {
+                    curr_ra_region = get_random_access_region(no_ra_regions, vu, sai_coord[HEIGHT], sai_coord[WIDTH],NULL);
+                    ref_ra_region = get_random_access_region(no_ra_regions, vu, reference_candidates[i]->coordinates[HEIGHT],
+                                                             reference_candidates[i]->coordinates[WIDTH], sai_coord);
+                }
+
+                if (reference_candidates[i]->distance < sai_distance_threshold &&
+                    (no_ra_regions == 0 || (no_ra_regions > 0 && curr_ra_region == ref_ra_region))) {
                     reference_list[no_refsai++] = reference_candidates[i]->sai;
                 }
             }

@@ -281,9 +281,13 @@ char *cat_str(char *, char *, int);
 
 char *int2bin(int, int);
 
+void frame2coordinates(int *, int, int);
+
 int compare_distance(const void *, const void *);
 
 double median(int [], int);
+
+int get_random_access_region(int, const int [2], int, int, int [2]);
 
 
 /* Huffman */
@@ -316,7 +320,5 @@ void rc_finishenc(FILE *, RANGECODER *);
 int rc_decode(FILE *, RANGECODER *, PMODEL *, int, int);
 
 void rc_startdec(FILE *, RANGECODER *);
-
-void frame2coordinates(int *, int, int);
 
 #endif //MRP_H

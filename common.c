@@ -896,3 +896,151 @@ double median(int vector[], int n) {
         return vector[n / 2];
     }
 }
+
+int get_random_access_region(int no_ra_regions, const int vu[2], int v, int u, int vu_curr[2]) {
+    int ra_regions2[13][13] = {
+            { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0},
+            { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0},
+            { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0},
+            { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0},
+            { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0},
+            { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0},
+            {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+            { 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1},
+            { 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1},
+            { 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1},
+            { 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1},
+            { 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1},
+            { 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1},
+    };
+
+    int ra_regions4[13][13] = {
+            { 0,  0,  0,  0,  0,  0, -1,  1,  1,  1,  1,  1,  1},
+            { 0,  0,  0,  0,  0,  0, -1,  1,  1,  1,  1,  1,  1},
+            { 0,  0,  0,  0,  0,  0, -1,  1,  1,  1,  1,  1,  1},
+            { 0,  0,  0,  0,  0,  0, -1,  1,  1,  1,  1,  1,  1},
+            { 0,  0,  0,  0,  0,  0, -1,  1,  1,  1,  1,  1,  1},
+            { 0,  0,  0,  0,  0,  0, -1,  1,  1,  1,  1,  1,  1},
+            {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+            { 2,  2,  2,  2,  2,  2, -1,  3,  3,  3,  3,  3,  3},
+            { 2,  2,  2,  2,  2,  2, -1,  3,  3,  3,  3,  3,  3},
+            { 2,  2,  2,  2,  2,  2, -1,  3,  3,  3,  3,  3,  3},
+            { 2,  2,  2,  2,  2,  2, -1,  3,  3,  3,  3,  3,  3},
+            { 2,  2,  2,  2,  2,  2, -1,  3,  3,  3,  3,  3,  3},
+            { 2,  2,  2,  2,  2,  2, -1,  3,  3,  3,  3,  3,  3},
+    };
+
+    int ra_regions5[13][13] = {
+            { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0},
+            { 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  3},
+            { 1,  1,  1,  0,  0,  0,  0,  0,  0,  0,  0,  3,  3},
+            { 1,  1,  1,  0,  0,  0,  0,  0,  0,  0,  3,  3,  3},
+            { 1,  1,  1,  1,  2,  2,  2,  2,  2,  3,  3,  3,  3},
+            { 1,  1,  1,  1,  2,  2,  2,  2,  2,  3,  3,  3,  3},
+            { 1,  1,  1,  1,  2,  2,  2,  2,  2,  3,  3,  3,  3},
+            { 1,  1,  1,  1,  2,  2,  2,  2,  2,  3,  3,  3,  3},
+            { 1,  1,  1,  1,  2,  2,  2,  2,  2,  3,  3,  3,  3},
+            { 1,  1,  1,  4,  4,  4,  4,  4,  4,  4,  3,  3,  3},
+            { 1,  1,  4,  4,  4,  4,  4,  4,  4,  4,  3,  3,  3},
+            { 1,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  3},
+            { 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4},
+    };
+
+    int ra_regions9[13][13] = {
+            { 0,  0,  0,  0,  1,  1,  1,  1,  1,  2,  2,  2,  2},
+            { 0,  0,  0,  0,  1,  1,  1,  1,  1,  2,  2,  2,  2},
+            { 0,  0,  0,  0,  1,  1,  1,  1,  1,  2,  2,  2,  2},
+            { 0,  0,  0,  0,  1,  1,  1,  1,  1,  2,  2,  2,  2},
+            { 3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,  5},
+            { 3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,  5},
+            { 3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,  5},
+            { 3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,  5},
+            { 3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,  5},
+            { 6,  6,  6,  6,  7,  7,  7,  7,  7,  8,  8,  8,  8},
+            { 6,  6,  6,  6,  7,  7,  7,  7,  7,  8,  8,  8,  8},
+            { 6,  6,  6,  6,  7,  7,  7,  7,  7,  8,  8,  8,  8},
+            { 6,  6,  6,  6,  7,  7,  7,  7,  7,  8,  8,  8,  8},
+    };
+
+    int vu_stride[2];
+    int ra_region, curr_ra_region;
+
+    vu_stride[HEIGHT] = (vu[HEIGHT] == 13) ? 0 : 2;
+    vu_stride[WIDTH] = (vu[WIDTH] == 13) ? 0 : 2;
+
+    switch (no_ra_regions) {
+        case 2:
+            ra_region = ra_regions2[v + vu_stride[HEIGHT]][u + vu_stride[WIDTH]];
+            break;
+
+        case 4:
+            ra_region = ra_regions4[v + vu_stride[HEIGHT]][u + vu_stride[WIDTH]];
+            break;
+
+        case 5:
+            ra_region = ra_regions5[v + vu_stride[HEIGHT]][u + vu_stride[WIDTH]];
+            break;
+
+        case 9:
+            ra_region = ra_regions9[v + vu_stride[HEIGHT]][u + vu_stride[WIDTH]];
+            break;
+
+        default:
+            fprintf(stderr, "Something went wrong. Wrong number of Random Access Regions: %d.\n", no_ra_regions);
+            exit(-9);
+    }
+
+    if (vu_curr != NULL) {
+        curr_ra_region = get_random_access_region(no_ra_regions, vu, vu_curr[HEIGHT], vu_curr[WIDTH], NULL);
+
+        if (ra_region != -1 && curr_ra_region == -1) {
+            if (no_ra_regions == 2) {
+                ra_region = -1;
+            }
+            else {
+                if ((vu_curr[HEIGHT] == vu[HEIGHT] / 2 &&
+                     ((vu_curr[WIDTH] <= vu[WIDTH] / 2 && u < vu[WIDTH] / 2) ||
+                      (vu_curr[WIDTH] >= vu[WIDTH] / 2 && u > vu[WIDTH] / 2))) ||
+                    ((vu_curr[WIDTH] == vu[WIDTH] / 2 &&
+                      ((vu_curr[HEIGHT] <= vu[HEIGHT] / 2 && u < vu[HEIGHT] / 2) ||
+                       (vu_curr[HEIGHT] >= vu[HEIGHT] / 2 && u > vu[HEIGHT] / 2)))) ||
+                    ((vu_curr[HEIGHT] == vu[HEIGHT] / 2 && vu_curr[WIDTH] == vu[WIDTH] / 2))) {
+                    ra_region = -1;
+                }
+            }
+        }
+        else if (ra_region == -1) {
+            if (curr_ra_region == -1) {
+                if (no_ra_regions == 4 && ((vu_curr[HEIGHT] > vu[HEIGHT] / 2 && v < vu[HEIGHT] / 2) ||
+                                           (vu_curr[HEIGHT] < vu[HEIGHT] / 2 && v > vu[HEIGHT] / 2))) {
+                    ra_region = 10;
+                }
+            }
+            else {
+                if (no_ra_regions == 2) {
+                    ra_region = curr_ra_region;
+                }
+                else {
+                    if (curr_ra_region == 0 && ((v == vu[HEIGHT] / 2 && vu_curr[WIDTH] <= vu[WIDTH] / 2) ||
+                                                (v == vu[WIDTH] / 2 && vu_curr[HEIGHT] <= vu[HEIGHT] / 2))) {
+                        ra_region = 0;
+                    }
+                    else if (curr_ra_region == 1 && ((v == vu[HEIGHT] / 2 && vu_curr[WIDTH] >= vu[WIDTH] / 2) ||
+                                                     (v == vu[WIDTH] / 2 && vu_curr[HEIGHT] <= vu[HEIGHT] / 2))) {
+                        ra_region = 1;
+                    }
+                    else if (curr_ra_region == 2 && ((v == vu[HEIGHT] / 2 && vu_curr[WIDTH] <= vu[WIDTH] / 2) ||
+                                                     (v == vu[WIDTH] / 2 && vu_curr[HEIGHT] >= vu[HEIGHT] / 2))) {
+                        ra_region = 2;
+                    }
+                    else if (curr_ra_region == 3 && ((v == vu[HEIGHT] / 2 && vu_curr[WIDTH] >= vu[WIDTH] / 2) ||
+                                                     (v == vu[WIDTH] / 2 && vu_curr[HEIGHT] >= vu[HEIGHT] / 2))) {
+                        ra_region = 3;
+                    }
+                }
+            }
+        }
+    }
+
+    return ra_region;
+}

@@ -1727,7 +1727,7 @@ void remove_emptyclass(ENCODER *enc) {
  |
  |  Returns:  int		--> Returns the number of bits used
  *---------------------------------------------------------------------*/
-int write_header(ENCODER *enc, int *vu, int hilevels, bool use_current, bool use_disparity, int disp_blk_size,
+int write_header(ENCODER *enc, int *vu, int hilevels, int no_ra_regions, bool use_current, bool use_disparity, int disp_blk_size,
                  int max_disparity, int prd_order, int sai_prd_order, int sai_references, int sai_distance_threshold,
                  FILE *fp) {
     int bits;
@@ -1742,6 +1742,7 @@ int write_header(ENCODER *enc, int *vu, int hilevels, bool use_current, bool use
     bits += putbits(fp, 2,  1);	/* number of components (1 = monochrome) */
     bits += putbits(fp, 6,  (uint) enc->num_group);
     bits += putbits(fp, 8,  (uint) hilevels);
+    bits += putbits(fp, 8,  (uint) no_ra_regions);
     bits += putbits(fp, 1,  (uint) use_current);
     bits += putbits(fp, 1,  (uint) use_disparity);
     if (use_disparity) {
@@ -2944,7 +2945,7 @@ int **read_hicfg(char *filename, int no_sai, int *no_hilevels) {
     char delim[] = "\t ,", comment[] = "#";
 
     // Open file for read
-    FILE *fid = fopen(filename, "r");
+    FILE *fid = fileopen(filename, "r");
 
     // Loop file lines
     while ((getline(&buffer, &bufsize, fid)) != -1) {
@@ -3250,6 +3251,7 @@ void print_help(int intra_prd_order, int sai_prd_order, int sai_references, int 
     printf("    -K 2 * num  Dimensions of the array of views [%c %c]*\n", 'H', 'W');
     printf("    -L 2 * num  Prediction order (Intra, Inter) [%d %d]\n", intra_prd_order, sai_prd_order);
     printf("    -c str      Hierarchical encoding configuration file*\n");
+    printf("    -R num      Number of Random Access regions in {0, 2, 4, 5, 9} [0]\n");
     printf("    -S num      Number of reference SAIs [%d]\n", sai_references);
     printf("    -T num      Maximum reference SAI distance [%d]\n", sai_distance_threshold);
     printf("    -v          Use disparity compensation\n");
@@ -3292,6 +3294,7 @@ int main(int argc, char **argv) {
     char *cfgfile = NULL;
     bool use_disp = false;
     int disp_bsize = DISP_BSIZE, max_disparity = MAX_DISPARITY;
+    int no_ra_regions = 0;
     bool use_current = false;
     int depth = DEPTH;
     int endianness = LITTLE_ENDIANNESS;
@@ -3382,6 +3385,16 @@ int main(int argc, char **argv) {
 
                 case 'c':
                     cfgfile = argv[++i];
+
+                    break;
+
+                case 'R':
+                    no_ra_regions = (int) strtol(argv[++i], NULL, 10);
+
+                    if (no_ra_regions != 0 && no_ra_regions != 2 && no_ra_regions != 4 && no_ra_regions != 5 && no_ra_regions != 9) {
+                        fprintf(stderr, "Wrong number of Random Access Regions %d.\n", no_ra_regions);
+                        exit(-9);
+                    }
 
                     break;
 
@@ -3727,6 +3740,8 @@ int main(int argc, char **argv) {
             frame2coordinates(sai_coord, curr_frame, vu[WIDTH]);
 
             if (h > 0 && no_refsai_candidates > 0) {
+                int curr_ra_region = 0, ref_ra_region = 0;
+
                 // Calculate the distance of the reference candidates to the current SAI
                 for (i = 0; i < no_refsai_candidates; i++) {
                     reference_candidates[i]->distance = sqrt(pow(reference_candidates[i]->coordinates[0] - sai_coord[0], 2) + pow(reference_candidates[i]->coordinates[1] - sai_coord[1], 2));
@@ -3739,7 +3754,14 @@ int main(int argc, char **argv) {
                 int reference_limit = no_refsai_candidates > sai_references ? sai_references : no_refsai_candidates;
 
                 for (i = 0; i < reference_limit; i++) {
-                    if (reference_candidates[i]->distance < sai_distance_threshold) {
+                    if (no_ra_regions > 0) {
+                        curr_ra_region = get_random_access_region(no_ra_regions, vu, sai_coord[HEIGHT], sai_coord[WIDTH],NULL);
+                        ref_ra_region = get_random_access_region(no_ra_regions, vu, reference_candidates[i]->coordinates[HEIGHT],
+                                                                 reference_candidates[i]->coordinates[WIDTH], sai_coord);
+                    }
+
+                    if (reference_candidates[i]->distance < sai_distance_threshold &&
+                        (no_ra_regions == 0 || (no_ra_regions > 0 && curr_ra_region == ref_ra_region))) {
                         reference_list[no_refsai++] = reference_candidates[i]->sai;
                     }
                 }
@@ -3964,8 +3986,9 @@ int main(int argc, char **argv) {
                 print_header = false;
 
                 // Write header to file
-                header = write_header(enc, vu, no_hilevels, use_current, use_disp, disp_bsize, max_disparity, prd_order,
-                                      sai_prd_order, sai_references, sai_distance_threshold, fp);
+                header = write_header(enc, vu, no_hilevels, no_ra_regions, use_current, use_disp, disp_bsize,
+                                      max_disparity, prd_order, sai_prd_order, sai_references, sai_distance_threshold,
+                                      fp);
 
                 // Write histogram packing table to file
                 if (forward_table != NULL) {
