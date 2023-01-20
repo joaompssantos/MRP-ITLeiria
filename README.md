@@ -76,8 +76,8 @@ In the source code of each prediction mode a CMakeLists.txt file is provided. Th
 
 [1] J. M. Santos, A. F. R. Guarda, L. A. da Silva Cruz, N. M. M. Rodrigues, S. M. M. Faria, **[Compression of medical images using MRP with bi-directional prediction and histogram packing](https://ieeexplore.ieee.org/document/7906386)**, in: Picture Coding Symposium (PCS), Nuremberg, Germany, 2016, pp. 1–5.
 
-[2] J. M. Santos, L. A. Thomaz, P. A. A. Assunção, L. A. da Silva Cruz, L. Távora, S. M. M. Faria, Lossless Coding of Light Fields based on 4D Minimum Rate Predictors, [Online]. Available: https://arxiv.org/abs/2104.06252 (2021). arXiv:2104.06252 (In review process).
+[2] J. M. Santos, L. A. Thomaz, P. A. A. Assunção, L. A. da Silva Cruz, L. Távora, S. M. M. Faria, **[Lossless Coding of Light Fields based on 4D Minimum Rate Predictors](https://ieeexplore.ieee.org/document/9697976)**, in: IEEE Transactions on Image Processing, vol. 31, pp. 1708-1722, 2022.
 
 [3] J. M. Santos, P. A. A. Assuncao, L. A. da S. Cruz, L. M. N. Tavora, R. Fonseca-Pinto, S. M. M. Faria,  **[Lossless compression of Light Fields using multi-reference Minimum Rate Predictors](https://ieeexplore.ieee.org/document/8712634)**, in: Data Compression Conference (DCC), Snowbird, UT, USA, 2019, pp. 408–417.
 
-[4] Submitted for publishing.
+[4] J. M. Santos, L. A. Thomaz, P. A. A. Assuncao, L. A. da S. Cruz, L. M. N. Tavora, S. M. M. Faria, **[Hierarchical Lossless Coding of Light Fields with Improved Random Access](https://www.sciencedirect.com/science/article/abs/pii/S0923596522000364)**, in: Signal Processing: Image Communication, vol. 105, pp. 116687-116687, 2022.
