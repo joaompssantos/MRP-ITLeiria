@@ -2,12 +2,12 @@
 
 Working implementations of various codecs based on Minimum Rate Predictors (MRP) resulting from my research activities at Instituto de Telecomunicações - Leiria Branch.
 
-Codecs implemented in this code:
-- MRP Video [1]
-- 4D-MRP [2]
-- DT-4D-MRP [2]
-- M-MRP [3]
-- H-MRP [4]
+Codecs implemented in this code (each in a different branch):
+- MRP Video [1], master branch
+- 4D-MRP [2], 4DMRP branch
+- DT-4D-MRP [2], 4DMRP-DUAL-QUADTREE branch
+- M-MRP [3], lenslet branch
+- H-MRP [4], HiMRP branch
 
 ## Requirements
 
